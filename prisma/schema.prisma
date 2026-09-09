@@ -1,0 +1,327 @@
+// Familientisch — Datenmodell (Grundgerüst)
+// Deckt alle in fahrplan_v2.md / fragenkatalog.md entschiedenen Bereiche ab.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------- Personen & Login ----------
+
+enum Rolle {
+  ELTERN
+  KIND
+  KIND_OHNE_ZUGANG // z.B. Ayla: verwaltet, aber kein eigener Login
+}
+
+model Person {
+  id          String   @id @default(cuid())
+  name        String
+  rolle       Rolle
+  farbe       String   @default("#8a7a63")
+  pinHash     String? // nur gesetzt, wenn rolle Login erlaubt
+  aktiv       Boolean  @default(true)
+  reihenfolge Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  sessions           Session[]
+  termineErstellt    Termin[]           @relation("TerminErsteller")
+  termine            Termin[]           @relation("TerminPerson")
+  terminHistorie     AenderungsLog[]    @relation("AenderungVon")
+  aufgaben           Aufgabe[]          @relation("AufgabePerson")
+  aufgabenErstellt   Aufgabe[]          @relation("AufgabeErsteller")
+  einkaufsWuensche   EinkaufsWunsch[]
+  faecher            Fach[]
+  noten              Note[]
+  taschengeld        TaschengeldTransaktion[]
+  sparziel           Sparziel?
+  dienstZuweisungen  DienstZuweisung[]
+  dienstTauscheVon   DienstTausch[]     @relation("DienstTauschVon")
+  dienstTauscheMit   DienstTausch[]     @relation("DienstTauschMit")
+  badZuweisungen     BadZuweisung[]
+  schulEintraege     SchulEintrag[]     @relation("SchulEintragPerson")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  personId  String
+  person    Person   @relation(fields: [personId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+}
+
+// ---------- Generische Änderungshistorie ----------
+// Umfang laut Entscheidung (Runde 5): Noten, Taschengeld, Termine, Aufgaben,
+// Dienst-Tausch, Einkaufs-Wünsche — NICHT die laufende Einkaufslisten-Pflege selbst.
+
+enum EntityTyp {
+  TERMIN
+  AUFGABE
+  NOTE
+  TASCHENGELD
+  DIENST_TAUSCH
+  EINKAUFS_WUNSCH
+}
+
+model AenderungsLog {
+  id          String    @id @default(cuid())
+  entityTyp   EntityTyp
+  entityId    String
+  aktion      String // z.B. "erstellt", "geaendert", "geloescht", "genehmigt", "abgelehnt"
+  feld        String? // bei "geaendert": welches Feld
+  alterWert   String?
+  neuerWert   String?
+  geaendertVonId String
+  geaendertVon   Person @relation("AenderungVon", fields: [geaendertVonId], references: [id])
+  zeitpunkt   DateTime  @default(now())
+
+  @@index([entityTyp, entityId])
+}
+
+// ---------- Kalender ----------
+
+enum TerminKategorie {
+  TERMIN
+  HOBBY
+  AUSFLUG
+  SCHULE
+  DIENST
+}
+
+enum Wiederholung {
+  KEINE
+  TAEGLICH
+  WOECHENTLICH
+  ZWEIWOECHENTLICH
+  MONATLICH
+}
+
+model Termin {
+  id               String          @id @default(cuid())
+  titel            String
+  beschreibung     String?
+  start            DateTime
+  ende             DateTime?
+  ganztaegig       Boolean         @default(false)
+  kategorie        TerminKategorie @default(TERMIN)
+  personId         String? // null = familienweit
+  person           Person?         @relation("TerminPerson", fields: [personId], references: [id])
+  seriesId         String?
+  wiederholung     Wiederholung    @default(KEINE)
+  wiederholungBis  DateTime?
+  erstelltVonId    String
+  erstelltVon      Person          @relation("TerminErsteller", fields: [erstelltVonId], references: [id])
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+}
+
+// ---------- Aufgaben ----------
+
+model Aufgabe {
+  id              String       @id @default(cuid())
+  titel           String
+  faelligkeit     DateTime?
+  personId        String? // null = familienweit
+  person          Person?      @relation("AufgabePerson", fields: [personId], references: [id])
+  erledigt        Boolean      @default(false)
+  seriesId        String?
+  wiederholung    Wiederholung @default(KEINE)
+  wiederholungBis DateTime?
+  erstelltVonId   String
+  erstelltVon     Person       @relation("AufgabeErsteller", fields: [erstelltVonId], references: [id])
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+}
+
+// ---------- Einkaufsliste ----------
+
+model EinkaufsKategorie {
+  id          String            @id @default(cuid())
+  name        String            @unique
+  reihenfolge Int               @default(0)
+  artikel     EinkaufsArtikel[]
+}
+
+model EinkaufsArtikel {
+  id           String             @id @default(cuid())
+  name         String
+  menge        String?
+  kategorieId  String?
+  kategorie    EinkaufsKategorie? @relation(fields: [kategorieId], references: [id])
+  erledigt     Boolean            @default(false)
+  quelle       String             @default("manuell") // "manuell" | "essensplan" | "wunsch"
+  vonWunschId  String?
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+}
+
+enum WunschStatus {
+  OFFEN
+  GENEHMIGT
+  ABGELEHNT
+}
+
+model EinkaufsWunsch {
+  id             String       @id @default(cuid())
+  artikelName    String
+  menge          String?
+  kindId         String
+  kind           Person       @relation(fields: [kindId], references: [id])
+  status         WunschStatus @default(OFFEN)
+  entschiedenAm  DateTime?
+  notiz          String?
+  createdAt      DateTime     @default(now())
+}
+
+// ---------- Schule & Noten & Taschengeld ----------
+
+model Fach {
+  id      String  @id @default(cuid())
+  name    String
+  kindId  String
+  kind    Person  @relation(fields: [kindId], references: [id])
+  noten   Note[]
+
+  @@unique([kindId, name])
+}
+
+enum NoteArt {
+  KLASSENARBEIT
+  HAUSAUFGABEN_KONTROLLE
+  EPOCHALNOTE
+}
+
+enum NoteStatus {
+  OFFEN
+  GENEHMIGT
+  ABGELEHNT
+}
+
+model Note {
+  id            String     @id @default(cuid())
+  kindId        String
+  kind          Person     @relation(fields: [kindId], references: [id])
+  fachId        String
+  fach          Fach       @relation(fields: [fachId], references: [id])
+  art           NoteArt
+  note          Int
+  datum         DateTime
+  notiz         String?
+  gewichtung    Float      @default(1)
+  status        NoteStatus @default(OFFEN)
+  eingetragenVonId String  // Kind selbst oder Elternteil
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  taschengeld   TaschengeldTransaktion[]
+}
+
+enum TransaktionsTyp {
+  GUTSCHRIFT
+  AUSZAHLUNG
+}
+
+model TaschengeldTransaktion {
+  id            String          @id @default(cuid())
+  kindId        String
+  kind          Person          @relation(fields: [kindId], references: [id])
+  betrag        Float // Auszahlungen negativ oder typ beachten
+  typ           TransaktionsTyp
+  grund         String?
+  noteId        String?
+  note          Note?           @relation(fields: [noteId], references: [id])
+  erstelltVonId String
+  createdAt     DateTime        @default(now())
+}
+
+model Sparziel {
+  id          String @id @default(cuid())
+  kindId      String @unique
+  kind        Person @relation(fields: [kindId], references: [id])
+  bezeichnung String
+  zielbetrag  Float
+}
+
+model SchulEintrag {
+  id           String   @id @default(cuid())
+  titel        String
+  fachName     String?
+  art          NoteArt
+  datum        DateTime
+  personId     String
+  person       Person   @relation("SchulEintragPerson", fields: [personId], references: [id])
+  createdAt    DateTime @default(now())
+}
+
+// ---------- Dienstplan ----------
+
+model DienstDefinition {
+  id            String @id @default(cuid())
+  schichtNummer Int // 1, 2 oder 3
+  reihenfolge   Int
+  bezeichnung   String
+  beschreibung  String?
+
+  zuweisungen DienstZuweisung[]
+}
+
+model DienstZuweisung {
+  id            String   @id @default(cuid())
+  wocheStart    DateTime // Montag der jeweiligen Woche
+  schichtNummer Int
+  kindId        String
+  kind          Person   @relation(fields: [kindId], references: [id])
+
+  @@unique([wocheStart, schichtNummer])
+}
+
+model DienstTausch {
+  id            String    @id @default(cuid())
+  wocheStart    DateTime
+  tag           DateTime? // null = ganze Woche
+  vonKindId     String
+  vonKind       Person    @relation("DienstTauschVon", fields: [vonKindId], references: [id])
+  mitKindId     String
+  mitKind       Person    @relation("DienstTauschMit", fields: [mitKindId], references: [id])
+  aufgehoben    Boolean   @default(false)
+  erstelltVonId String
+  createdAt     DateTime  @default(now())
+}
+
+model BadZuweisung {
+  id         String   @id @default(cuid())
+  wocheStart DateTime
+  zeitpunkt  String // "morgens" | "abends"
+  position   Int
+  kindId     String
+  kind       Person   @relation(fields: [kindId], references: [id])
+
+  @@unique([wocheStart, zeitpunkt, position])
+}
+
+// ---------- Rezepte & Essensplan ----------
+
+model Rezept {
+  id        String   @id @default(cuid())
+  name      String
+  zutaten   String // eine Zutat pro Zeile, "Menge Einheit Name"
+  zubereitung String?
+  createdAt DateTime @default(now())
+
+  planEintraege EssensplanEintrag[]
+}
+
+model EssensplanEintrag {
+  id          String   @id @default(cuid())
+  wocheStart  DateTime // Samstag der jeweiligen Woche
+  tag         DateTime
+  rezeptId    String
+  rezept      Rezept   @relation(fields: [rezeptId], references: [id])
+  esserFaktor Float    @default(1)
+  gelockt     Boolean  @default(false)
+}
