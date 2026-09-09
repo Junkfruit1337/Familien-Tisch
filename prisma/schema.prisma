@@ -266,8 +266,6 @@ model DienstDefinition {
   reihenfolge   Int
   bezeichnung   String
   beschreibung  String?
-
-  zuweisungen DienstZuweisung[]
 }
 
 model DienstZuweisung {
