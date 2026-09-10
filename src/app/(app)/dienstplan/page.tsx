@@ -35,6 +35,7 @@ export default async function DienstplanPage() {
         vonName: t.vonKind.name,
         mitName: t.mitKind.name,
         tag: t.tag?.toISOString() ?? null,
+        modus: t.modus,
       }))}
       kinder={kinder.map((k) => ({ id: k.id, name: k.name }))}
       badplan={{

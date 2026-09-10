@@ -63,7 +63,13 @@ export async function listAktiveTausche(wocheStartIso: string) {
   });
 }
 
-export async function erstelleTausch(data: { wocheStartIso: string; tag?: string; vonKindId: string; mitKindId: string }) {
+export async function erstelleTausch(data: {
+  wocheStartIso: string;
+  tag?: string;
+  vonKindId: string;
+  mitKindId: string;
+  modus: "ABGEBEN" | "TAUSCH";
+}) {
   const person = await requireParent();
   if (data.vonKindId === data.mitKindId) throw new Error("Man kann nicht mit sich selbst tauschen.");
 
@@ -71,6 +77,7 @@ export async function erstelleTausch(data: { wocheStartIso: string; tag?: string
     data: {
       wocheStart: new Date(data.wocheStartIso),
       tag: data.tag ? new Date(data.tag) : null,
+      modus: data.modus,
       vonKindId: data.vonKindId,
       mitKindId: data.mitKindId,
       erstelltVonId: person.id,
@@ -81,7 +88,7 @@ export async function erstelleTausch(data: { wocheStartIso: string; tag?: string
     entityTyp: "DIENST_TAUSCH",
     entityId: tausch.id,
     aktion: "erstellt",
-    neuerWert: `${data.vonKindId} -> ${data.mitKindId}`,
+    neuerWert: `${data.modus}: ${data.vonKindId} -> ${data.mitKindId}`,
     geaendertVonId: person.id,
   });
 

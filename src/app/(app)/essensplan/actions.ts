@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { requireParent } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
+import { autoKategorieId, findeOffenenArtikel, mergeMenge } from "../einkaufsliste/actions";
 
 function getSamstagWocheStart(date: Date): Date {
   // Essensplan-Woche läuft Samstag–Samstag.
@@ -69,14 +70,27 @@ export async function zutatenUebernehmen(eintragId: string) {
   await requireParent();
   const eintrag = await prisma.essensplanEintrag.findUnique({ where: { id: eintragId }, include: { rezept: true } });
   if (!eintrag) return;
+  // Nutzt dieselbe Auto-Kategorisierung + Dedup/Merge-Logik wie die manuelle Eingabe
+  // in der Einkaufsliste, damit Zutaten aus dem Essensplan nicht mehr garantiert in
+  // "Sonstiges" und garantiert als doppelte Zeile landen (Gap-Analyse 10.09.2026, Bug B1).
   const zeilen = eintrag.rezept.zutaten.split("\n").map((z) => z.trim()).filter(Boolean);
   for (const zeile of zeilen) {
     const match = zeile.match(/^([\d.,]+\s*\S+)\s+(.+)$/);
     const menge = match ? match[1] : undefined;
     const name = match ? match[2] : zeile;
-    await prisma.einkaufsArtikel.create({
-      data: { name, menge, quelle: "essensplan" },
-    });
+
+    const bestehender = await findeOffenenArtikel(name);
+    if (bestehender) {
+      await prisma.einkaufsArtikel.update({
+        where: { id: bestehender.id },
+        data: { menge: mergeMenge(bestehender.menge, menge) },
+      });
+    } else {
+      const kategorieId = await autoKategorieId(name);
+      await prisma.einkaufsArtikel.create({
+        data: { name, menge, kategorieId: kategorieId || null, quelle: "essensplan" },
+      });
+    }
   }
   revalidatePath("/essensplan");
   revalidatePath("/einkaufsliste");

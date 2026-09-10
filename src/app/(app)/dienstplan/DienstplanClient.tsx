@@ -14,7 +14,8 @@ type Schicht = {
   tage: Tag[];
 };
 const WOCHENTAGE_KURZ = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
-type Tausch = { id: string; vonName: string; mitName: string; tag: string | null };
+type Modus = "ABGEBEN" | "TAUSCH";
+type Tausch = { id: string; vonName: string; mitName: string; tag: string | null; modus: Modus };
 type Kind = { id: string; name: string };
 type BadPosition = { position: number; kindName: string; kindFarbe: string };
 type BadPlan = { morgens: BadPosition[]; abends: BadPosition[] };
@@ -36,9 +37,10 @@ export default function DienstplanClient({
 }) {
   const [pending, startTransition] = useTransition();
   const [zeigeTausch, setZeigeTausch] = useState(false);
+  const [modus, setModus] = useState<Modus>("ABGEBEN");
   const [vonKindId, setVonKindId] = useState("");
   const [mitKindId, setMitKindId] = useState("");
-  const [ganzeWoche, setGanzeWoche] = useState(true);
+  const [scope, setScope] = useState<"woche" | "tag">("woche");
   const [tag, setTag] = useState("");
   const [badAuswahl, setBadAuswahl] = useState<{ zeitpunkt: "morgens" | "abends"; position: number } | null>(null);
 
@@ -64,14 +66,20 @@ export default function DienstplanClient({
       </p>
 
       {tausche.length > 0 && (
-        <div className="card" style={{ background: "#f0dfa8", border: "none" }}>
+        <div className="card" style={{ background: "#f0dfa8", color: "#6b5117", border: "none", display: "flex", flexDirection: "column", gap: 6 }}>
           {tausche.map((t) => (
             <div key={t.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 13 }}>
               <span>
-                🔄 {t.vonName} ↔ {t.mitName} {t.tag ? `am ${new Date(t.tag).toLocaleDateString("de-DE")}` : "(ganze Woche)"}
+                {t.modus === "TAUSCH" ? "🔄" : "➡️"} {t.vonName} {t.modus === "TAUSCH" ? "↔" : "→"} {t.mitName}{" "}
+                {t.tag ? `am ${new Date(t.tag).toLocaleDateString("de-DE")}` : "(ganze Woche)"}{" "}
+                <span style={{ opacity: 0.8 }}>({t.modus === "TAUSCH" ? "Tausch" : "Abgabe"})</span>
               </span>
               {istEltern && (
-                <button className="btn-secondary" style={{ fontSize: 12, padding: "2px 8px" }} onClick={() => startTransition(() => hebeTauschAuf(t.id))}>
+                <button
+                  className="btn-secondary"
+                  style={{ fontSize: 12, padding: "2px 8px", color: "#6b5117", borderColor: "#6b5117" }}
+                  onClick={() => startTransition(() => hebeTauschAuf(t.id))}
+                >
                   aufheben
                 </button>
               )}
@@ -124,25 +132,32 @@ export default function DienstplanClient({
         {(["morgens", "abends"] as const).map((zeitpunkt) => (
           <div key={zeitpunkt} style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
             <span style={{ fontSize: 13, color: "var(--text-muted)", width: 70 }}>{zeitpunkt === "morgens" ? "Morgens" : "Abends"}</span>
-            {badplan[zeitpunkt].map((b, i) => (
-              <span key={b.position} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                {i > 0 && <span style={{ color: "var(--text-muted)" }}>→</span>}
-                <button
-                  className="btn-secondary"
-                  disabled={!istEltern}
-                  onClick={() => badKlick(zeitpunkt, b.position)}
-                  style={{
-                    padding: "4px 10px",
-                    fontSize: 13,
-                    background: badAuswahl?.zeitpunkt === zeitpunkt && badAuswahl.position === b.position ? b.kindFarbe : undefined,
-                    color: badAuswahl?.zeitpunkt === zeitpunkt && badAuswahl.position === b.position ? "#fff" : undefined,
-                    borderColor: b.kindFarbe,
-                  }}
-                >
-                  {b.kindName}
-                </button>
-              </span>
-            ))}
+            {badplan[zeitpunkt].map((b, i) =>
+              istEltern ? (
+                <span key={b.position} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  {i > 0 && <span style={{ color: "var(--text-muted)" }}>→</span>}
+                  <button
+                    className="btn-secondary"
+                    onClick={() => badKlick(zeitpunkt, b.position)}
+                    style={{
+                      padding: "4px 10px",
+                      fontSize: 13,
+                      background: badAuswahl?.zeitpunkt === zeitpunkt && badAuswahl.position === b.position ? b.kindFarbe : undefined,
+                      color: badAuswahl?.zeitpunkt === zeitpunkt && badAuswahl.position === b.position ? "#fff" : undefined,
+                      borderColor: b.kindFarbe,
+                    }}
+                  >
+                    {b.kindName}
+                  </button>
+                </span>
+              ) : (
+                // Kinder sehen nur die Reihenfolge, kein Tausch-Element (Fahrplan Log 28.08.2026).
+                <span key={b.position} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
+                  {i > 0 && <span style={{ color: "var(--text-muted)" }}>→</span>}
+                  <span style={{ padding: "4px 10px", borderRadius: 8, border: `1px solid ${b.kindFarbe}` }}>{b.kindName}</span>
+                </span>
+              )
+            )}
           </div>
         ))}
       </div>
@@ -153,9 +168,32 @@ export default function DienstplanClient({
             Dienste tauschen
           </button>
           {zeigeTausch && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 10 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 10 }}>
+              <div style={{ display: "flex", gap: 6 }}>
+                <button
+                  type="button"
+                  className={modus === "ABGEBEN" ? "btn" : "btn-secondary"}
+                  style={{ flex: 1, fontSize: 13 }}
+                  onClick={() => setModus("ABGEBEN")}
+                >
+                  Abgeben
+                </button>
+                <button
+                  type="button"
+                  className={modus === "TAUSCH" ? "btn" : "btn-secondary"}
+                  style={{ flex: 1, fontSize: 13 }}
+                  onClick={() => setModus("TAUSCH")}
+                >
+                  Tauschen
+                </button>
+              </div>
+              <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>
+                {modus === "ABGEBEN"
+                  ? "Eine Person gibt ihren Dienst komplett ab, die andere übernimmt ihn zusätzlich."
+                  : "Beide Personen tauschen ihre Dienste gegenseitig."}
+              </p>
               <select value={vonKindId} onChange={(e) => setVonKindId(e.target.value)}>
-                <option value="">Wer gibt ab?</option>
+                <option value="">{modus === "ABGEBEN" ? "Wer gibt ab?" : "Erste Person"}</option>
                 {kinder.map((k) => (
                   <option key={k.id} value={k.id} disabled={k.id === mitKindId}>
                     {k.name}
@@ -163,36 +201,53 @@ export default function DienstplanClient({
                 ))}
               </select>
               <select value={mitKindId} onChange={(e) => setMitKindId(e.target.value)}>
-                <option value="">Wer übernimmt?</option>
+                <option value="">{modus === "ABGEBEN" ? "Wer übernimmt?" : "Zweite Person"}</option>
                 {kinder.map((k) => (
                   <option key={k.id} value={k.id} disabled={k.id === vonKindId}>
                     {k.name}
                   </option>
                 ))}
               </select>
-              <label style={{ fontSize: 13, display: "flex", gap: 6, alignItems: "center" }}>
-                <input type="checkbox" checked={ganzeWoche} onChange={(e) => setGanzeWoche(e.target.checked)} style={{ width: "auto" }} />
-                Ganze Woche
-              </label>
-              {!ganzeWoche && <input type="date" value={tag} onChange={(e) => setTag(e.target.value)} />}
+              <div style={{ display: "flex", gap: 6 }}>
+                <button
+                  type="button"
+                  className={scope === "woche" ? "btn" : "btn-secondary"}
+                  style={{ flex: 1, fontSize: 13 }}
+                  onClick={() => setScope("woche")}
+                >
+                  Ganze Woche
+                </button>
+                <button
+                  type="button"
+                  className={scope === "tag" ? "btn" : "btn-secondary"}
+                  style={{ flex: 1, fontSize: 13 }}
+                  onClick={() => setScope("tag")}
+                >
+                  Einzelner Tag
+                </button>
+              </div>
+              {scope === "tag" && <input type="date" value={tag} onChange={(e) => setTag(e.target.value)} />}
               <button
                 className="btn"
-                disabled={pending || !vonKindId || !mitKindId}
+                disabled={pending || !vonKindId || !mitKindId || (scope === "tag" && !tag)}
                 onClick={() =>
                   startTransition(async () => {
                     await erstelleTausch({
                       wocheStartIso: wocheStart,
-                      tag: ganzeWoche ? undefined : tag,
+                      tag: scope === "woche" ? undefined : tag,
                       vonKindId,
                       mitKindId,
+                      modus,
                     });
                     setZeigeTausch(false);
                     setVonKindId("");
                     setMitKindId("");
+                    setScope("woche");
+                    setTag("");
                   })
                 }
               >
-                Tausch anlegen
+                {modus === "ABGEBEN" ? "Abgabe anlegen" : "Tausch anlegen"}
               </button>
             </div>
           )}

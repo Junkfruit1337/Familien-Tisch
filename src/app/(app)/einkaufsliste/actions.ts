@@ -8,7 +8,7 @@ import { revalidatePath } from "next/cache";
 
 // Ermittelt automatisch eine Kategorie-ID anhand des Artikelnamens (Stichwort-Erkennung).
 // Wird nur genutzt, wenn keine Kategorie manuell ausgewählt wurde.
-async function autoKategorieId(name: string): Promise<string | null> {
+export async function autoKategorieId(name: string): Promise<string | null> {
   const erkannt = erkenneKategorie(name);
   if (!erkannt) return null;
   const kategorie = await prisma.einkaufsKategorie.findUnique({ where: { name: erkannt } });
@@ -17,7 +17,7 @@ async function autoKategorieId(name: string): Promise<string | null> {
 
 // Findet einen bereits offenen (nicht erledigten) Artikel mit gleichem Namen,
 // damit gleiche Artikel nicht als doppelte Zeilen auf der Liste landen.
-async function findeOffenenArtikel(name: string) {
+export async function findeOffenenArtikel(name: string) {
   return prisma.einkaufsArtikel.findFirst({
     where: { erledigt: false, name: { equals: name.trim(), mode: "insensitive" } },
   });
@@ -25,7 +25,7 @@ async function findeOffenenArtikel(name: string) {
 
 // Führt zwei Mengenangaben zusammen. Da "Menge" freier Text ist (z. B. "3 kg", "1 Packung"),
 // wird nicht gerechnet, sondern lesbar zusammengehängt statt eine zweite Zeile anzulegen.
-function mergeMenge(bestehend: string | null, neu?: string | null): string | null {
+export function mergeMenge(bestehend: string | null, neu?: string | null): string | null {
   if (!neu) return bestehend;
   if (!bestehend) return neu;
   if (bestehend === neu || bestehend.includes(neu)) return bestehend;
@@ -39,8 +39,13 @@ export async function listArtikel() {
   });
 }
 
+// Eltern sehen alle Wünsche, ein Kind sieht ausschließlich seine eigenen —
+// serverseitig gefiltert, damit nicht jeder eingeloggte Nutzer den kompletten
+// Datensatz (Namen, Artikel, Status aller Kinder) im Server-Payload erhält.
 export async function listWuensche() {
-  return prisma.einkaufsWunsch.findMany({ include: { kind: true }, orderBy: { createdAt: "desc" } });
+  const person = await requirePerson();
+  const where = person.rolle === "ELTERN" ? {} : { kindId: person.id };
+  return prisma.einkaufsWunsch.findMany({ where, include: { kind: true }, orderBy: { createdAt: "desc" } });
 }
 
 export async function listKategorien() {

@@ -278,17 +278,23 @@ model DienstZuweisung {
   @@unique([wocheStart, schichtNummer])
 }
 
+enum DienstTauschModus {
+  ABGEBEN // vonKind gibt den Dienst ab, mitKind übernimmt zusätzlich zum eigenen (einseitig)
+  TAUSCH // vonKind und mitKind tauschen ihre Dienste gegenseitig (beidseitig)
+}
+
 model DienstTausch {
-  id            String    @id @default(cuid())
+  id            String            @id @default(cuid())
   wocheStart    DateTime
   tag           DateTime? // null = ganze Woche
+  modus         DienstTauschModus @default(ABGEBEN)
   vonKindId     String
-  vonKind       Person    @relation("DienstTauschVon", fields: [vonKindId], references: [id])
+  vonKind       Person            @relation("DienstTauschVon", fields: [vonKindId], references: [id])
   mitKindId     String
-  mitKind       Person    @relation("DienstTauschMit", fields: [mitKindId], references: [id])
-  aufgehoben    Boolean   @default(false)
+  mitKind       Person            @relation("DienstTauschMit", fields: [mitKindId], references: [id])
+  aufgehoben    Boolean           @default(false)
   erstelltVonId String
-  createdAt     DateTime  @default(now())
+  createdAt     DateTime          @default(now())
 }
 
 model BadZuweisung {

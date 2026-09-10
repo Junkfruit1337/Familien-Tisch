@@ -75,24 +75,47 @@ export async function getEffectiveWeek(wocheStart: Date) {
   });
 
   // 1. Basis + wochenweite Tausche -> gilt für die ganze Woche.
+  // ABGEBEN: nur vonKind -> mitKind (einseitig, mitKind macht zusätzlich zu seinem eigenen Dienst).
+  // TAUSCH: vonKind und mitKind tauschen ihre Dienste gegenseitig.
   const effektivWoche: Record<number, string> = {};
   for (const b of basis) effektivWoche[b.schichtNummer] = b.kindId;
   for (const t of wochenweiteTausche) {
-    const schicht = Object.entries(effektivWoche).find(([, kindId]) => kindId === t.vonKindId)?.[0];
-    if (schicht) effektivWoche[Number(schicht)] = t.mitKindId;
+    const vonSchicht = Object.entries(effektivWoche).find(([, kindId]) => kindId === t.vonKindId)?.[0];
+    if (t.modus === "TAUSCH") {
+      const mitSchicht = Object.entries(effektivWoche).find(([, kindId]) => kindId === t.mitKindId)?.[0];
+      if (vonSchicht) effektivWoche[Number(vonSchicht)] = t.mitKindId;
+      if (mitSchicht) effektivWoche[Number(mitSchicht)] = t.vonKindId;
+    } else if (vonSchicht) {
+      effektivWoche[Number(vonSchicht)] = t.mitKindId;
+    }
   }
 
-  // 2. Pro Tag zusätzlich tagesgenaue Tausche einrechnen.
+  // 2. Pro Tag zusätzlich tagesgenaue Tausche einrechnen — über alle Schichten hinweg
+  //    berechnet, damit ein "TAUSCH" auch die Gegenseite an diesem einen Tag korrekt umdreht.
   const tage: Date[] = [];
   for (let i = 0; i < 7; i++) tage.push(addTage(wocheStart, i));
 
+  const zuweisungProTag: Record<string, Record<number, string>> = {};
+  for (const datum of tage) {
+    const key = tagKey(datum);
+    const zuweisung: Record<number, string> = { ...effektivWoche };
+    for (const t of tagesTausche) {
+      if (!t.tag || tagKey(t.tag) !== key) continue;
+      const vonSchicht = Object.entries(zuweisung).find(([, kindId]) => kindId === t.vonKindId)?.[0];
+      if (t.modus === "TAUSCH") {
+        const mitSchicht = Object.entries(zuweisung).find(([, kindId]) => kindId === t.mitKindId)?.[0];
+        if (vonSchicht) zuweisung[Number(vonSchicht)] = t.mitKindId;
+        if (mitSchicht) zuweisung[Number(mitSchicht)] = t.vonKindId;
+      } else if (vonSchicht) {
+        zuweisung[Number(vonSchicht)] = t.mitKindId;
+      }
+    }
+    zuweisungProTag[key] = zuweisung;
+  }
+
   return [1, 2, 3].map((schicht) => {
     const tagesZuweisung = tage.map((datum) => {
-      let kindId = effektivWoche[schicht];
-      for (const t of tagesTausche) {
-        if (!t.tag || tagKey(t.tag) !== tagKey(datum)) continue;
-        if (kindId === t.vonKindId) kindId = t.mitKindId;
-      }
+      const kindId = zuweisungProTag[tagKey(datum)][schicht];
       return {
         datum: datum.toISOString(),
         kind: personById[kindId] ?? null,

@@ -3,7 +3,22 @@
 import { prisma } from "@/lib/prisma";
 import { requirePerson } from "@/lib/auth";
 import { logAenderung } from "@/lib/history";
+import { erkenneTerminKategorie } from "@/lib/terminkategorisierung";
+import { getEffectiveWeek, getWeekStart } from "@/lib/dienstplan";
 import { revalidatePath } from "next/cache";
+import { randomUUID } from "crypto";
+
+// Sicherheitsgrenze gegen versehentliche Endlos-Serien (z. B. "täglich, bis 2099").
+const MAX_SERIEN_TERMINE = 200;
+
+function naechsterTermin(datum: Date, wiederholung: string): Date {
+  const d = new Date(datum);
+  if (wiederholung === "TAEGLICH") d.setDate(d.getDate() + 1);
+  else if (wiederholung === "WOECHENTLICH") d.setDate(d.getDate() + 7);
+  else if (wiederholung === "ZWEIWOECHENTLICH") d.setDate(d.getDate() + 14);
+  else if (wiederholung === "MONATLICH") d.setMonth(d.getMonth() + 1);
+  return d;
+}
 
 export async function listTermine() {
   const person = await requirePerson();
@@ -41,52 +56,142 @@ export async function createTermin(data: {
   start: string;
   ende?: string;
   ganztaegig: boolean;
-  kategorie: string;
   personId: string | null;
+  wiederholung?: string;
+  wiederholungBis?: string;
 }) {
   const person = await requirePerson();
   const personId = person.rolle === "ELTERN" ? data.personId : person.id;
+  // Kategorie wird nicht mehr manuell ausgewählt, sondern serverseitig erkannt
+  // (Fragenkatalog Frage 3: "die App soll das selbst erkennen/zuordnen").
+  const kategorie = erkenneTerminKategorie(data.titel);
 
-  const termin = await prisma.termin.create({
-    data: {
-      titel: data.titel,
-      start: new Date(data.start),
-      ende: data.ende ? new Date(data.ende) : null,
-      ganztaegig: data.ganztaegig,
-      kategorie: data.kategorie as any,
-      personId,
-      erstelltVonId: person.id,
-    },
-  });
+  const wiederholung = data.wiederholung && data.wiederholung !== "KEINE" && data.wiederholungBis ? data.wiederholung : "KEINE";
+  const seriesId = wiederholung !== "KEINE" ? randomUUID() : null;
+  const wiederholungBis = wiederholung !== "KEINE" && data.wiederholungBis ? new Date(data.wiederholungBis) : null;
+
+  const startDaten: Date[] = [new Date(data.start)];
+  if (wiederholung !== "KEINE" && wiederholungBis) {
+    let naechster = naechsterTermin(startDaten[0], wiederholung);
+    while (naechster <= wiederholungBis && startDaten.length < MAX_SERIEN_TERMINE) {
+      startDaten.push(naechster);
+      naechster = naechsterTermin(naechster, wiederholung);
+    }
+  }
+
+  const enDauer = data.ende ? new Date(data.ende).getTime() - new Date(data.start).getTime() : null;
+
+  const erstellte = [];
+  for (const start of startDaten) {
+    const termin = await prisma.termin.create({
+      data: {
+        titel: data.titel,
+        start,
+        ende: enDauer !== null ? new Date(start.getTime() + enDauer) : null,
+        ganztaegig: data.ganztaegig,
+        kategorie,
+        personId,
+        seriesId,
+        wiederholung: wiederholung as any,
+        wiederholungBis,
+        erstelltVonId: person.id,
+      },
+    });
+    erstellte.push(termin);
+  }
 
   await logAenderung({
     entityTyp: "TERMIN",
-    entityId: termin.id,
+    entityId: erstellte[0].id,
     aktion: "erstellt",
-    neuerWert: termin.titel,
+    neuerWert: erstellte.length > 1 ? `${erstellte[0].titel} (Serie, ${erstellte.length}×)` : erstellte[0].titel,
     geaendertVonId: person.id,
   });
 
   revalidatePath("/kalender");
   revalidatePath("/dashboard");
-  return termin;
+  return erstellte[0];
 }
 
-export async function deleteTermin(id: string) {
+export async function updateTermin(id: string, data: { titel: string; start: string; ende?: string; personId: string | null }) {
+  const person = await requirePerson();
+  const termin = await prisma.termin.findUnique({ where: { id } });
+  if (!termin) return;
+  if (person.rolle !== "ELTERN" && termin.personId !== person.id) {
+    throw new Error("Das darfst du nicht bearbeiten.");
+  }
+  const personId = person.rolle === "ELTERN" ? data.personId : person.id;
+  const kategorie = erkenneTerminKategorie(data.titel);
+  await prisma.termin.update({
+    where: { id },
+    data: {
+      titel: data.titel,
+      start: new Date(data.start),
+      ende: data.ende ? new Date(data.ende) : null,
+      kategorie,
+      personId,
+    },
+  });
+  await logAenderung({
+    entityTyp: "TERMIN",
+    entityId: id,
+    aktion: "geaendert",
+    alterWert: termin.titel,
+    neuerWert: data.titel,
+    geaendertVonId: person.id,
+  });
+  revalidatePath("/kalender");
+  revalidatePath("/dashboard");
+}
+
+// scope "serie" löscht alle Termine derselben Serie (Outlook-Stil-Rückfrage, Fragenkatalog Frage 2).
+export async function deleteTermin(id: string, scope: "eins" | "serie" = "eins") {
   const person = await requirePerson();
   const termin = await prisma.termin.findUnique({ where: { id } });
   if (!termin) return;
   if (person.rolle !== "ELTERN" && termin.personId !== person.id) {
     throw new Error("Das darfst du nicht löschen.");
   }
-  await prisma.termin.delete({ where: { id } });
-  await logAenderung({
-    entityTyp: "TERMIN",
-    entityId: id,
-    aktion: "geloescht",
-    alterWert: termin.titel,
-    geaendertVonId: person.id,
-  });
+  if (scope === "serie" && termin.seriesId) {
+    await prisma.termin.deleteMany({ where: { seriesId: termin.seriesId } });
+    await logAenderung({
+      entityTyp: "TERMIN",
+      entityId: id,
+      aktion: "geloescht",
+      alterWert: `${termin.titel} (ganze Serie)`,
+      geaendertVonId: person.id,
+    });
+  } else {
+    await prisma.termin.delete({ where: { id } });
+    await logAenderung({
+      entityTyp: "TERMIN",
+      entityId: id,
+      aktion: "geloescht",
+      alterWert: termin.titel,
+      geaendertVonId: person.id,
+    });
+  }
   revalidatePath("/kalender");
   revalidatePath("/dashboard");
+}
+
+// Schul-Einträge (Klassenarbeiten/HÜ-Kontrollen) erscheinen automatisch im Kalender (read-only).
+export async function listSchulEintraegeFuerKalender() {
+  const person = await requirePerson();
+  const where = person.rolle === "ELTERN" ? {} : { personId: person.id };
+  return prisma.schulEintrag.findMany({ where, include: { person: true }, orderBy: { datum: "asc" } });
+}
+
+// Dienst-Zuweisungen der aktuellen Woche erscheinen automatisch im Kalender (read-only, nur diese Woche).
+export async function listDienstFuerKalender() {
+  const wocheStart = getWeekStart(new Date());
+  const woche = await getEffectiveWeek(wocheStart);
+  return woche.flatMap((schicht) =>
+    schicht.tage.map((t) => ({
+      datum: t.datum,
+      kindName: t.kind?.name ?? "—",
+      kindFarbe: t.kind?.farbe ?? "#8a7a63",
+      schichtNummer: schicht.schichtNummer,
+    }))
+  );
 }

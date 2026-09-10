@@ -52,6 +52,47 @@ button {
   padding: 16px;
 }
 
+/* Aufklappbare Bereiche app-weit als "richtige Kästchen" statt nackter
+   Browser-Default-<details> (Gap-Analyse 10.09.2026, Batch 6). */
+details {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0;
+  overflow: hidden;
+}
+
+details > summary {
+  padding: 12px 16px;
+  cursor: pointer;
+  font-weight: 600;
+  list-style: none;
+}
+
+details > summary::-webkit-details-marker {
+  display: none;
+}
+
+details > summary::before {
+  content: "▸";
+  display: inline-block;
+  margin-right: 8px;
+  color: var(--text-muted);
+  transition: transform 0.15s ease;
+}
+
+details[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+details > summary ~ * {
+  padding: 0 16px 16px;
+}
+
+details + details {
+  margin-top: 10px;
+}
+
 .btn {
   background: var(--accent);
   color: var(--accent-contrast);

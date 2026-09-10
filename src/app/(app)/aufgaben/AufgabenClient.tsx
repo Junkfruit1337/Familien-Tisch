@@ -27,6 +27,7 @@ export default function AufgabenClient({
   const [titel, setTitel] = useState("");
   const [faelligkeit, setFaelligkeit] = useState("");
   const [personId, setPersonId] = useState(istEltern ? "" : eigeneId);
+  const [filter, setFilter] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
   function submit() {
@@ -38,8 +39,9 @@ export default function AufgabenClient({
     });
   }
 
-  const offen = aufgaben.filter((a) => !a.erledigt);
-  const erledigt = aufgaben.filter((a) => a.erledigt);
+  const sichtbar = aufgaben.filter((a) => !filter || a.personId === filter);
+  const offen = sichtbar.filter((a) => !a.erledigt);
+  const erledigt = sichtbar.filter((a) => a.erledigt);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -62,6 +64,28 @@ export default function AufgabenClient({
           Hinzufügen
         </button>
       </div>
+
+      {istEltern && (
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <button
+            className="btn-secondary"
+            style={{ background: !filter ? "var(--accent)" : undefined, color: !filter ? "var(--accent-contrast)" : undefined }}
+            onClick={() => setFilter(null)}
+          >
+            Alle
+          </button>
+          {personen.map((p) => (
+            <button
+              key={p.id}
+              className="btn-secondary"
+              style={{ background: filter === p.id ? "var(--accent)" : undefined, color: filter === p.id ? "var(--accent-contrast)" : undefined }}
+              onClick={() => setFilter(p.id)}
+            >
+              {p.name}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {offen.map((a) => (
