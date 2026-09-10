@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { erstelleTausch, hebeTauschAuf, tauscheBadPosition } from "./actions";
 
+type Tag = { datum: string; kindName: string; kindFarbe: string; getauschtHeute: boolean };
 type Schicht = {
   schichtNummer: number;
   kindName: string;
@@ -10,7 +11,9 @@ type Schicht = {
   kindId: string;
   getauscht: boolean;
   dienste: { bezeichnung: string; beschreibung: string | null }[];
+  tage: Tag[];
 };
+const WOCHENTAGE_KURZ = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
 type Tausch = { id: string; vonName: string; mitName: string; tag: string | null };
 type Kind = { id: string; name: string };
 type BadPosition = { position: number; kindName: string; kindFarbe: string };
@@ -90,6 +93,23 @@ export default function DienstplanClient({
                 <li key={i}>{d.bezeichnung}</li>
               ))}
             </ul>
+            <div style={{ display: "flex", gap: 3, marginTop: 10 }}>
+              {s.tage.map((t, i) => (
+                <div key={t.datum} style={{ textAlign: "center", flex: 1 }} title={`${WOCHENTAGE_KURZ[i]}: ${t.kindName}`}>
+                  <div style={{ fontSize: 10, color: "var(--text-muted)" }}>{WOCHENTAGE_KURZ[i]}</div>
+                  <div
+                    style={{
+                      width: 10,
+                      height: 10,
+                      borderRadius: "50%",
+                      background: t.kindFarbe,
+                      margin: "2px auto 0",
+                      border: t.getauschtHeute ? "2px solid var(--accent)" : "none",
+                    }}
+                  />
+                </div>
+              ))}
+            </div>
           </div>
         ))}
       </div>

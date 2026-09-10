@@ -47,6 +47,18 @@ export async function ensureWeekAssignments(wocheStart: Date) {
   return created;
 }
 
+function addTage(d: Date, n: number): Date {
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + n));
+}
+
+function tagKey(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
+// Berechnet die effektive Zuordnung für die ganze Woche UND — Entscheidung vom 03.09.2026 —
+// tagesgenaue Tausche wirken sich tatsächlich auf die Zuordnung des jeweiligen Tages aus,
+// nicht mehr nur als Banner-Hinweis. Wochenweite Tausche gelten für alle 7 Tage, ein
+// tagesgenauer Tausch überschreibt zusätzlich nur den einen betroffenen Tag.
 export async function getEffectiveWeek(wocheStart: Date) {
   const basis = await ensureWeekAssignments(wocheStart);
   const definitionen = await prisma.dienstDefinition.findMany({
@@ -55,24 +67,47 @@ export async function getEffectiveWeek(wocheStart: Date) {
   const personen = await prisma.person.findMany();
   const personById = Object.fromEntries(personen.map((p) => [p.id, p]));
 
-  const tausche = await prisma.dienstTausch.findMany({
+  const wochenweiteTausche = await prisma.dienstTausch.findMany({
     where: { wocheStart, aufgehoben: false, tag: null },
   });
+  const tagesTausche = await prisma.dienstTausch.findMany({
+    where: { wocheStart, aufgehoben: false, tag: { not: null } },
+  });
 
-  const effektiv: Record<number, string> = {};
-  for (const b of basis) effektiv[b.schichtNummer] = b.kindId;
-
-  for (const t of tausche) {
-    const schicht = Object.entries(effektiv).find(([, kindId]) => kindId === t.vonKindId)?.[0];
-    if (schicht) effektiv[Number(schicht)] = t.mitKindId;
+  // 1. Basis + wochenweite Tausche -> gilt für die ganze Woche.
+  const effektivWoche: Record<number, string> = {};
+  for (const b of basis) effektivWoche[b.schichtNummer] = b.kindId;
+  for (const t of wochenweiteTausche) {
+    const schicht = Object.entries(effektivWoche).find(([, kindId]) => kindId === t.vonKindId)?.[0];
+    if (schicht) effektivWoche[Number(schicht)] = t.mitKindId;
   }
 
-  return [1, 2, 3].map((schicht) => ({
-    schichtNummer: schicht,
-    kind: personById[effektiv[schicht]] ?? null,
-    dienste: definitionen.filter((d) => d.schichtNummer === schicht),
-    getauscht: basis.find((b) => b.schichtNummer === schicht)?.kindId !== effektiv[schicht],
-  }));
+  // 2. Pro Tag zusätzlich tagesgenaue Tausche einrechnen.
+  const tage: Date[] = [];
+  for (let i = 0; i < 7; i++) tage.push(addTage(wocheStart, i));
+
+  return [1, 2, 3].map((schicht) => {
+    const tagesZuweisung = tage.map((datum) => {
+      let kindId = effektivWoche[schicht];
+      for (const t of tagesTausche) {
+        if (!t.tag || tagKey(t.tag) !== tagKey(datum)) continue;
+        if (kindId === t.vonKindId) kindId = t.mitKindId;
+      }
+      return {
+        datum: datum.toISOString(),
+        kind: personById[kindId] ?? null,
+        getauschtHeute: kindId !== effektivWoche[schicht],
+      };
+    });
+
+    return {
+      schichtNummer: schicht,
+      kind: personById[effektivWoche[schicht]] ?? null,
+      dienste: definitionen.filter((d) => d.schichtNummer === schicht),
+      getauscht: basis.find((b) => b.schichtNummer === schicht)?.kindId !== effektivWoche[schicht],
+      tage: tagesZuweisung,
+    };
+  });
 }
 
 // ---------- Bad-Reihenfolge morgens/abends ----------

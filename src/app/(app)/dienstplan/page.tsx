@@ -23,6 +23,12 @@ export default async function DienstplanPage() {
         kindId: w.kind?.id ?? "",
         getauscht: w.getauscht,
         dienste: w.dienste.map((d) => ({ bezeichnung: d.bezeichnung, beschreibung: d.beschreibung })),
+        tage: w.tage.map((t) => ({
+          datum: t.datum,
+          kindName: t.kind?.name ?? "—",
+          kindFarbe: t.kind?.farbe ?? "#8a7a63",
+          getauschtHeute: t.getauschtHeute,
+        })),
       }))}
       tausche={tausche.map((t) => ({
         id: t.id,
