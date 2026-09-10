@@ -22,6 +22,20 @@ export async function listPersonenFuerFilter() {
   return prisma.person.findMany({ where: { aktiv: true }, orderBy: { reihenfolge: "asc" } });
 }
 
+// Aufgaben mit Fälligkeitsdatum sollen automatisch im Kalender erscheinen.
+export async function listAufgabenMitFaelligkeit() {
+  const person = await requirePerson();
+  const where =
+    person.rolle === "ELTERN"
+      ? { faelligkeit: { not: null } }
+      : { faelligkeit: { not: null }, OR: [{ personId: person.id }, { personId: null }] };
+  return prisma.aufgabe.findMany({
+    where,
+    include: { person: true },
+    orderBy: { faelligkeit: "asc" },
+  });
+}
+
 export async function createTermin(data: {
   titel: string;
   start: string;

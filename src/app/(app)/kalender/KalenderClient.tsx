@@ -5,6 +5,7 @@ import { createTermin, deleteTermin } from "./actions";
 
 type Termin = {
   id: string;
+  typ: "termin" | "aufgabe";
   titel: string;
   start: string;
   ende: string | null;
@@ -13,6 +14,7 @@ type Termin = {
   personId: string | null;
   personName: string;
   personFarbe: string;
+  erledigt: boolean;
 };
 type Person = { id: string; name: string; farbe: string };
 
@@ -129,16 +131,31 @@ export default function KalenderClient({
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {gefiltert.length === 0 && <p style={{ color: "var(--text-muted)" }}>Keine Termine.</p>}
         {gefiltert.map((t) => (
-          <div key={t.id} className="card" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div
+            key={t.id}
+            className="card"
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              opacity: t.typ === "aufgabe" && t.erledigt ? 0.6 : 1,
+            }}
+          >
             <div>
-              <div style={{ fontWeight: 600 }}>{t.titel}</div>
+              <div style={{ fontWeight: 600, textDecoration: t.typ === "aufgabe" && t.erledigt ? "line-through" : undefined }}>
+                {t.typ === "aufgabe" ? "📌 " : ""}
+                {t.titel}
+              </div>
               <div style={{ fontSize: 13, color: "var(--text-muted)" }}>
-                {new Date(t.start).toLocaleString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                {t.typ === "aufgabe"
+                  ? `Fällig: ${new Date(t.start).toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit" })}`
+                  : new Date(t.start).toLocaleString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
                 {" · "}
                 <span style={{ color: t.personFarbe, fontWeight: 600 }}>{t.personName}</span>
+                {t.typ === "aufgabe" && <span> · Aufgabe</span>}
               </div>
             </div>
-            {(istEltern || t.personId === eigeneId) && (
+            {t.typ === "termin" && (istEltern || t.personId === eigeneId) && (
               <button
                 className="btn-secondary"
                 style={{ fontSize: 13 }}
