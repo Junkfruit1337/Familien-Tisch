@@ -1,9 +1,19 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { addArtikel, toggleArtikel, deleteArtikel, submitWunsch, entscheideWunsch, addKategorie } from "./actions";
+import {
+  addArtikel,
+  toggleArtikel,
+  deleteArtikel,
+  submitWunsch,
+  entscheideWunsch,
+  addKategorie,
+  updateArtikel,
+  verschiebeArtikelKategorie,
+} from "./actions";
+import { erkenneKategorie } from "@/lib/kategorisierung";
 
-type Artikel = { id: string; name: string; menge: string | null; erledigt: boolean; kategorieName: string };
+type Artikel = { id: string; name: string; menge: string | null; erledigt: boolean; kategorieId: string | null; kategorieName: string };
 type Wunsch = { id: string; artikelName: string; menge: string | null; status: string; kindName: string };
 type Kategorie = { id: string; name: string };
 
@@ -23,6 +33,24 @@ export default function EinkaufslisteClient({
   const [menge, setMenge] = useState("");
   const [kategorieId, setKategorieId] = useState("");
   const [neueKategorie, setNeueKategorie] = useState("");
+  const [bearbeiteId, setBearbeiteId] = useState<string | null>(null);
+  const [bearbeiteName, setBearbeiteName] = useState("");
+  const [bearbeiteMenge, setBearbeiteMenge] = useState("");
+  const [wunschKategorie, setWunschKategorie] = useState<Record<string, string>>({});
+
+  const kategorieNachName = useMemo(() => {
+    const m: Record<string, string> = {};
+    for (const k of kategorien) m[k.name] = k.id;
+    return m;
+  }, [kategorien]);
+
+  // Live-Vorschau: welche Kategorie würde "Automatisch" für den aktuell getippten Namen erkennen?
+  const erkannteKategorieName = useMemo(() => erkenneKategorie(name), [name]);
+
+  function erkannteKategorieFuer(artikelName: string): string | null {
+    if (!artikelName) return null;
+    return erkenneKategorie(artikelName);
+  }
 
   const nachKategorie = useMemo(() => {
     const offene = artikel.filter((a) => !a.erledigt);
@@ -37,6 +65,20 @@ export default function EinkaufslisteClient({
   const erledigt = artikel.filter((a) => a.erledigt);
   const offeneWuensche = wuensche.filter((w) => w.status === "OFFEN");
 
+  function beginneBearbeiten(a: Artikel) {
+    setBearbeiteId(a.id);
+    setBearbeiteName(a.name);
+    setBearbeiteMenge(a.menge ?? "");
+  }
+
+  function speichereBearbeiten() {
+    if (!bearbeiteId) return;
+    startTransition(async () => {
+      await updateArtikel(bearbeiteId, { name: bearbeiteName, menge: bearbeiteMenge || undefined });
+      setBearbeiteId(null);
+    });
+  }
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <h1 style={{ fontSize: 22, margin: 0 }}>Einkaufsliste</h1>
@@ -46,13 +88,20 @@ export default function EinkaufslisteClient({
           <input placeholder="Artikel" value={name} onChange={(e) => setName(e.target.value)} />
           <input placeholder="Menge (optional)" value={menge} onChange={(e) => setMenge(e.target.value)} />
           <select value={kategorieId} onChange={(e) => setKategorieId(e.target.value)}>
-            <option value="">Sonstiges</option>
+            <option value="">Automatisch{erkannteKategorieName ? ` (erkannt: ${erkannteKategorieName})` : ""}</option>
             {kategorien.map((k) => (
               <option key={k.id} value={k.id}>
                 {k.name}
               </option>
             ))}
           </select>
+          {!kategorieId && name && (
+            <p style={{ margin: 0, fontSize: 13, color: "var(--text-muted)" }}>
+              {erkannteKategorieName
+                ? `→ wird automatisch als ${erkannteKategorieName} einsortiert`
+                : `→ keine Kategorie erkannt, landet in Sonstiges (oben manuell wählbar)`}
+            </p>
+          )}
           <button
             className="btn"
             disabled={pending}
@@ -62,6 +111,7 @@ export default function EinkaufslisteClient({
                 await addArtikel({ name, menge: menge || undefined, kategorieId: kategorieId || undefined });
                 setName("");
                 setMenge("");
+                setKategorieId("");
               })
             }
           >
@@ -95,21 +145,47 @@ export default function EinkaufslisteClient({
       {istEltern && offeneWuensche.length > 0 && (
         <div className="card" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           <strong>Wünsche der Kinder</strong>
-          {offeneWuensche.map((w) => (
-            <div key={w.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-              <span>
-                {w.artikelName} {w.menge ? `(${w.menge})` : ""} — <em>{w.kindName}</em>
-              </span>
-              <div style={{ display: "flex", gap: 6 }}>
-                <button className="btn" style={{ padding: "6px 10px" }} onClick={() => startTransition(() => entscheideWunsch(w.id, true))}>
-                  ✓
-                </button>
-                <button className="btn-danger" style={{ padding: "6px 10px", borderRadius: 10, border: "none" }} onClick={() => startTransition(() => entscheideWunsch(w.id, false))}>
-                  ✕
-                </button>
+          {offeneWuensche.map((w) => {
+            const erkannt = erkannteKategorieFuer(w.artikelName);
+            const gewaehlt = wunschKategorie[w.id] ?? "";
+            return (
+              <div key={w.id} style={{ display: "flex", flexDirection: "column", gap: 6, paddingBottom: 8, borderBottom: "1px solid var(--border, rgba(255,255,255,0.08))" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                  <span>
+                    {w.artikelName} {w.menge ? `(${w.menge})` : ""} — <em>{w.kindName}</em>
+                  </span>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <button
+                      className="btn"
+                      style={{ padding: "6px 10px" }}
+                      onClick={() =>
+                        startTransition(() =>
+                          entscheideWunsch(w.id, true, gewaehlt || (erkannt ? kategorieNachName[erkannt] : undefined))
+                        )
+                      }
+                    >
+                      ✓
+                    </button>
+                    <button className="btn-danger" style={{ padding: "6px 10px", borderRadius: 10, border: "none" }} onClick={() => startTransition(() => entscheideWunsch(w.id, false))}>
+                      ✕
+                    </button>
+                  </div>
+                </div>
+                <select
+                  value={gewaehlt}
+                  onChange={(e) => setWunschKategorie((prev) => ({ ...prev, [w.id]: e.target.value }))}
+                  style={{ fontSize: 13 }}
+                >
+                  <option value="">Automatisch{erkannt ? ` (erkannt: ${erkannt})` : ""}</option>
+                  {kategorien.map((k) => (
+                    <option key={k.id} value={k.id}>
+                      {k.name}
+                    </option>
+                  ))}
+                </select>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -118,21 +194,54 @@ export default function EinkaufslisteClient({
           <strong>{kat}</strong>
           <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 8 }}>
             {items.map((a) => (
-              <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <input
-                  type="checkbox"
-                  checked={false}
-                  disabled={!istEltern}
-                  onChange={() => istEltern && startTransition(() => toggleArtikel(a.id))}
-                  style={{ width: 18, height: 18 }}
-                />
-                <span style={{ flex: 1 }}>
-                  {a.name} {a.menge ? <span style={{ color: "var(--text-muted)" }}>· {a.menge}</span> : null}
-                </span>
-                {istEltern && (
-                  <button className="btn-secondary" style={{ fontSize: 12, padding: "4px 8px" }} onClick={() => startTransition(() => deleteArtikel(a.id))}>
-                    ✕
-                  </button>
+              <div key={a.id} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                {bearbeiteId === a.id ? (
+                  <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+                    <input value={bearbeiteName} onChange={(e) => setBearbeiteName(e.target.value)} style={{ flex: "1 1 120px" }} />
+                    <input value={bearbeiteMenge} onChange={(e) => setBearbeiteMenge(e.target.value)} placeholder="Menge" style={{ flex: "0 1 100px" }} />
+                    <button className="btn" style={{ padding: "4px 10px", fontSize: 13 }} onClick={speichereBearbeiten} disabled={pending}>
+                      Speichern
+                    </button>
+                    <button className="btn-secondary" style={{ padding: "4px 10px", fontSize: 13 }} onClick={() => setBearbeiteId(null)}>
+                      Abbrechen
+                    </button>
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <input
+                      type="checkbox"
+                      checked={false}
+                      disabled={!istEltern}
+                      onChange={() => istEltern && startTransition(() => toggleArtikel(a.id))}
+                      style={{ width: 18, height: 18 }}
+                    />
+                    <span style={{ flex: 1 }}>
+                      {a.name} {a.menge ? <span style={{ color: "var(--text-muted)" }}>· {a.menge}</span> : null}
+                    </span>
+                    {istEltern && (
+                      <>
+                        <select
+                          value={a.kategorieId ?? ""}
+                          onChange={(e) => startTransition(() => verschiebeArtikelKategorie(a.id, e.target.value))}
+                          style={{ fontSize: 12, padding: "2px 4px" }}
+                          title="In andere Kategorie verschieben"
+                        >
+                          <option value="">Sonstiges</option>
+                          {kategorien.map((k) => (
+                            <option key={k.id} value={k.id}>
+                              {k.name}
+                            </option>
+                          ))}
+                        </select>
+                        <button className="btn-secondary" style={{ fontSize: 12, padding: "4px 8px" }} onClick={() => beginneBearbeiten(a)}>
+                          ✎
+                        </button>
+                        <button className="btn-secondary" style={{ fontSize: 12, padding: "4px 8px" }} onClick={() => startTransition(() => deleteArtikel(a.id))}>
+                          ✕
+                        </button>
+                      </>
+                    )}
+                  </div>
                 )}
               </div>
             ))}
