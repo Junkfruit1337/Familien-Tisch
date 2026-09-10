@@ -55,3 +55,32 @@ export async function getDashboardDaten() {
 }
 
 export { createSchulEintrag };
+
+// ---------- Änderungshistorie (nur für Eltern sichtbar) ----------
+
+const TYP_LABEL: Record<string, string> = {
+  TERMIN: "Termin",
+  AUFGABE: "Aufgabe",
+  NOTE: "Note",
+  TASCHENGELD: "Taschengeld",
+  DIENST_TAUSCH: "Dienst/Bad-Tausch",
+  EINKAUFS_WUNSCH: "Einkaufs-Wunsch",
+};
+
+export async function getAenderungshistorie(limit = 25) {
+  const person = await requirePerson();
+  if (person.rolle !== "ELTERN") return [];
+  const eintraege = await prisma.aenderungsLog.findMany({
+    orderBy: { zeitpunkt: "desc" },
+    take: limit,
+    include: { geaendertVon: true },
+  });
+  return eintraege.map((e) => ({
+    id: e.id,
+    zeitpunkt: e.zeitpunkt.toISOString(),
+    personName: e.geaendertVon.name,
+    typLabel: TYP_LABEL[e.entityTyp] ?? e.entityTyp,
+    aktion: e.aktion.replace("geloescht", "gelöscht"),
+    bezug: e.neuerWert ?? e.alterWert ?? null,
+  }));
+}

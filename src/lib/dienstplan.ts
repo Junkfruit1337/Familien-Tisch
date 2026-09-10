@@ -74,3 +74,49 @@ export async function getEffectiveWeek(wocheStart: Date) {
     getauscht: basis.find((b) => b.schichtNummer === schicht)?.kindId !== effektiv[schicht],
   }));
 }
+
+// ---------- Bad-Reihenfolge morgens/abends ----------
+// Wird aus der Basis-Schicht-Reihenfolge der Woche abgeleitet (unabhängig von Dienst-Tauschen):
+// morgens = Schicht 1→2→3, abends = Umkehrung. Danach unabhängig tauschbar (BadZuweisung.kindId).
+
+export async function ensureBadZuweisungen(wocheStart: Date) {
+  const bestehende = await prisma.badZuweisung.findMany({ where: { wocheStart } });
+  if (bestehende.length === 6) return bestehende;
+
+  const basis = await ensureWeekAssignments(wocheStart);
+  if (basis.length !== 3) return bestehende;
+
+  const sortiert = [...basis].sort((a, b) => a.schichtNummer - b.schichtNummer);
+  const morgensReihenfolge = sortiert.map((b) => b.kindId);
+  const abendsReihenfolge = [...morgensReihenfolge].reverse();
+
+  const rows = [];
+  for (let i = 0; i < 3; i++) {
+    const m = await prisma.badZuweisung.upsert({
+      where: { wocheStart_zeitpunkt_position: { wocheStart, zeitpunkt: "morgens", position: i + 1 } },
+      update: {},
+      create: { wocheStart, zeitpunkt: "morgens", position: i + 1, kindId: morgensReihenfolge[i] },
+    });
+    const a = await prisma.badZuweisung.upsert({
+      where: { wocheStart_zeitpunkt_position: { wocheStart, zeitpunkt: "abends", position: i + 1 } },
+      update: {},
+      create: { wocheStart, zeitpunkt: "abends", position: i + 1, kindId: abendsReihenfolge[i] },
+    });
+    rows.push(m, a);
+  }
+  return rows;
+}
+
+export async function getBadReihenfolge(wocheStart: Date) {
+  const rows = await ensureBadZuweisungen(wocheStart);
+  const personen = await prisma.person.findMany();
+  const personById = Object.fromEntries(personen.map((p) => [p.id, p]));
+
+  const bauen = (zeitpunkt: "morgens" | "abends") =>
+    rows
+      .filter((r) => r.zeitpunkt === zeitpunkt)
+      .sort((a, b) => a.position - b.position)
+      .map((r) => ({ position: r.position, kindId: r.kindId, kind: personById[r.kindId] ?? null }));
+
+  return { morgens: bauen("morgens"), abends: bauen("abends") };
+}

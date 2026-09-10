@@ -1,13 +1,16 @@
 import { getCurrentPerson } from "@/lib/auth";
-import { getWoche, listAktiveTausche } from "./actions";
+import { getWoche, listAktiveTausche, getBadplan } from "./actions";
 import { prisma } from "@/lib/prisma";
 import DienstplanClient from "./DienstplanClient";
 
 export default async function DienstplanPage() {
   const person = await getCurrentPerson();
   const { wocheStart, woche } = await getWoche();
-  const tausche = await listAktiveTausche(wocheStart);
-  const kinder = await prisma.person.findMany({ where: { rolle: "KIND" }, orderBy: { reihenfolge: "asc" } });
+  const [tausche, badplan, kinder] = await Promise.all([
+    listAktiveTausche(wocheStart),
+    getBadplan(wocheStart),
+    prisma.person.findMany({ where: { rolle: "KIND" }, orderBy: { reihenfolge: "asc" } }),
+  ]);
 
   return (
     <DienstplanClient
@@ -28,6 +31,10 @@ export default async function DienstplanPage() {
         tag: t.tag?.toISOString() ?? null,
       }))}
       kinder={kinder.map((k) => ({ id: k.id, name: k.name }))}
+      badplan={{
+        morgens: badplan.morgens.map((b) => ({ position: b.position, kindName: b.kind?.name ?? "—", kindFarbe: b.kind?.farbe ?? "#8a7a63" })),
+        abends: badplan.abends.map((b) => ({ position: b.position, kindName: b.kind?.name ?? "—", kindFarbe: b.kind?.farbe ?? "#8a7a63" })),
+      }}
     />
   );
 }

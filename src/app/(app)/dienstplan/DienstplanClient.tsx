@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { erstelleTausch, hebeTauschAuf } from "./actions";
+import { erstelleTausch, hebeTauschAuf, tauscheBadPosition } from "./actions";
 
 type Schicht = {
   schichtNummer: number;
@@ -13,6 +13,8 @@ type Schicht = {
 };
 type Tausch = { id: string; vonName: string; mitName: string; tag: string | null };
 type Kind = { id: string; name: string };
+type BadPosition = { position: number; kindName: string; kindFarbe: string };
+type BadPlan = { morgens: BadPosition[]; abends: BadPosition[] };
 
 export default function DienstplanClient({
   istEltern,
@@ -20,12 +22,14 @@ export default function DienstplanClient({
   woche,
   tausche,
   kinder,
+  badplan,
 }: {
   istEltern: boolean;
   wocheStart: string;
   woche: Schicht[];
   tausche: Tausch[];
   kinder: Kind[];
+  badplan: BadPlan;
 }) {
   const [pending, startTransition] = useTransition();
   const [zeigeTausch, setZeigeTausch] = useState(false);
@@ -33,6 +37,21 @@ export default function DienstplanClient({
   const [mitKindId, setMitKindId] = useState("");
   const [ganzeWoche, setGanzeWoche] = useState(true);
   const [tag, setTag] = useState("");
+  const [badAuswahl, setBadAuswahl] = useState<{ zeitpunkt: "morgens" | "abends"; position: number } | null>(null);
+
+  function badKlick(zeitpunkt: "morgens" | "abends", position: number) {
+    if (!istEltern) return;
+    if (!badAuswahl) {
+      setBadAuswahl({ zeitpunkt, position });
+      return;
+    }
+    if (badAuswahl.zeitpunkt === zeitpunkt && badAuswahl.position !== position) {
+      startTransition(() =>
+        tauscheBadPosition({ wocheStartIso: wocheStart, zeitpunkt, positionA: badAuswahl.position, positionB: position })
+      );
+    }
+    setBadAuswahl(null);
+  }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -71,6 +90,39 @@ export default function DienstplanClient({
                 <li key={i}>{d.bezeichnung}</li>
               ))}
             </ul>
+          </div>
+        ))}
+      </div>
+
+      <div className="card">
+        <strong>🛁 Bad-Reihenfolge</strong>
+        {istEltern && (
+          <p style={{ margin: "4px 0 8px", fontSize: 12, color: "var(--text-muted)" }}>
+            Zum Tauschen: zwei Namen in derselben Zeile nacheinander anklicken.
+          </p>
+        )}
+        {(["morgens", "abends"] as const).map((zeitpunkt) => (
+          <div key={zeitpunkt} style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+            <span style={{ fontSize: 13, color: "var(--text-muted)", width: 70 }}>{zeitpunkt === "morgens" ? "Morgens" : "Abends"}</span>
+            {badplan[zeitpunkt].map((b, i) => (
+              <span key={b.position} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                {i > 0 && <span style={{ color: "var(--text-muted)" }}>→</span>}
+                <button
+                  className="btn-secondary"
+                  disabled={!istEltern}
+                  onClick={() => badKlick(zeitpunkt, b.position)}
+                  style={{
+                    padding: "4px 10px",
+                    fontSize: 13,
+                    background: badAuswahl?.zeitpunkt === zeitpunkt && badAuswahl.position === b.position ? b.kindFarbe : undefined,
+                    color: badAuswahl?.zeitpunkt === zeitpunkt && badAuswahl.position === b.position ? "#fff" : undefined,
+                    borderColor: b.kindFarbe,
+                  }}
+                >
+                  {b.kindName}
+                </button>
+              </span>
+            ))}
           </div>
         ))}
       </div>

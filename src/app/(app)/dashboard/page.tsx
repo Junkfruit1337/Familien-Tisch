@@ -1,4 +1,4 @@
-import { getDashboardDaten } from "./actions";
+import { getDashboardDaten, getAenderungshistorie } from "./actions";
 import { prisma } from "@/lib/prisma";
 import { getCurrentPerson } from "@/lib/auth";
 import DashboardClient from "./DashboardClient";
@@ -6,7 +6,16 @@ import DashboardClient from "./DashboardClient";
 export default async function DashboardPage() {
   const daten = await getDashboardDaten();
   const person = await getCurrentPerson();
-  const kinder = person?.rolle === "ELTERN" ? await prisma.person.findMany({ where: { rolle: "KIND" } }) : [];
+  const istEltern = person?.rolle === "ELTERN";
+  const kinder = istEltern ? await prisma.person.findMany({ where: { rolle: "KIND" } }) : [];
+  const historie = istEltern ? await getAenderungshistorie() : [];
 
-  return <DashboardClient daten={daten} istEltern={person?.rolle === "ELTERN"} kinder={kinder.map((k) => ({ id: k.id, name: k.name }))} />;
+  return (
+    <DashboardClient
+      daten={daten}
+      istEltern={istEltern}
+      kinder={kinder.map((k) => ({ id: k.id, name: k.name }))}
+      historie={historie}
+    />
+  );
 }
