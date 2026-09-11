@@ -7,7 +7,7 @@ import HistorieVerlauf from "@/components/HistorieVerlauf";
 
 type Termin = {
   id: string;
-  typ: "termin" | "aufgabe" | "schule" | "dienst";
+  typ: "termin" | "aufgabe" | "schule";
   titel: string;
   start: string;
   ende: string | null;
@@ -189,7 +189,7 @@ export default function KalenderClient({
       >
         <div>
           <div style={{ fontWeight: 600, textDecoration: t.typ === "aufgabe" && t.erledigt ? "line-through" : undefined }}>
-            {t.typ === "aufgabe" ? "📌 " : t.typ === "schule" ? "🎓 " : t.typ === "dienst" ? "🧹 " : ""}
+            {t.typ === "aufgabe" ? "📌 " : t.typ === "schule" ? "🎓 " : ""}
             {t.titel}
             {t.seriesId ? " 🔁" : ""}
           </div>
@@ -201,7 +201,6 @@ export default function KalenderClient({
             <span style={{ color: t.personFarbe, fontWeight: 600 }}>{t.personName}</span>
             {t.typ === "aufgabe" && <span> · Aufgabe</span>}
             {t.typ === "schule" && <span> · Schule</span>}
-            {t.typ === "dienst" && <span> · Dienst</span>}
           </div>
           {loeschAuswahl?.id === t.id && (
             <div style={{ display: "flex", gap: 6, marginTop: 8, alignItems: "center", fontSize: 12 }}>

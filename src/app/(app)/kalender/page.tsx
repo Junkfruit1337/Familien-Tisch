@@ -1,11 +1,5 @@
 import { getCurrentPerson } from "@/lib/auth";
-import {
-  listTermine,
-  listPersonenFuerFilter,
-  listAufgabenMitFaelligkeit,
-  listSchulEintraegeFuerKalender,
-  listDienstFuerKalender,
-} from "./actions";
+import { listTermine, listPersonenFuerFilter, listAufgabenMitFaelligkeit, listSchulEintraegeFuerKalender } from "./actions";
 import KalenderClient from "./KalenderClient";
 
 const SCHUL_ART_LABEL: Record<string, string> = {
@@ -16,12 +10,11 @@ const SCHUL_ART_LABEL: Record<string, string> = {
 
 export default async function KalenderPage() {
   const person = await getCurrentPerson();
-  const [termine, aufgaben, personen, schulEintraege, diensteHeute] = await Promise.all([
+  const [termine, aufgaben, personen, schulEintraege] = await Promise.all([
     listTermine(),
     listAufgabenMitFaelligkeit(),
     listPersonenFuerFilter(),
     listSchulEintraegeFuerKalender(),
-    listDienstFuerKalender(),
   ]);
 
   const terminEintraege = termine.map((t) => ({
@@ -69,22 +62,7 @@ export default async function KalenderPage() {
     seriesId: null,
   }));
 
-  const dienstEintraege = diensteHeute.map((d, i) => ({
-    id: `dienst-${d.datum}-${d.schichtNummer}`,
-    typ: "dienst" as const,
-    titel: `Dienst (Schicht ${d.schichtNummer}): ${d.kindName}`,
-    start: d.datum,
-    ende: null,
-    ganztaegig: true,
-    kategorie: "DIENST",
-    personId: null,
-    personName: d.kindName,
-    personFarbe: d.kindFarbe,
-    erledigt: false,
-    seriesId: null,
-  }));
-
-  const alleEintraege = [...terminEintraege, ...aufgabenEintraege, ...schulEintraegeEintraege, ...dienstEintraege].sort(
+  const alleEintraege = [...terminEintraege, ...aufgabenEintraege, ...schulEintraegeEintraege].sort(
     (a, b) => new Date(a.start).getTime() - new Date(b.start).getTime()
   );
 

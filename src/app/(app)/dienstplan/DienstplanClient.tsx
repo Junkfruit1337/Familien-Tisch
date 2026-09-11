@@ -78,6 +78,7 @@ export default function DienstplanClient({
 
   const [bearbeiteDienstId, setBearbeiteDienstId] = useState<string | null>(null);
   const [dienstText, setDienstText] = useState("");
+  const [zeigeDienstDetails, setZeigeDienstDetails] = useState(false);
 
   const [neueRoutineKategorie, setNeueRoutineKategorie] = useState("");
   const [neueRoutineText, setNeueRoutineText] = useState("");
@@ -185,6 +186,12 @@ export default function DienstplanClient({
         </div>
       )}
 
+      <div style={{ display: "flex", justifyContent: "flex-end" }}>
+        <button className="btn-secondary" style={{ fontSize: 12 }} onClick={() => setZeigeDienstDetails((v) => !v)}>
+          {zeigeDienstDetails ? "Regeltexte ausblenden" : "Regeltexte anzeigen"}
+        </button>
+      </div>
+
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
         {woche.map((s) => (
           <div key={s.schichtNummer} className="card" style={{ flex: "1 0 200px" }}>
@@ -197,45 +204,46 @@ export default function DienstplanClient({
               {s.dienste.map((d) => (
                 <li key={d.id}>
                   {d.bezeichnung}
-                  {bearbeiteDienstId === d.id ? (
-                    <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 4 }}>
-                      <textarea rows={2} value={dienstText} onChange={(e) => setDienstText(e.target.value)} style={{ fontSize: 13 }} />
-                      <div style={{ display: "flex", gap: 6 }}>
-                        <button
-                          className="btn"
-                          style={{ fontSize: 12, padding: "3px 8px" }}
-                          onClick={() =>
-                            startTransition(async () => {
-                              await updateDienstBeschreibung(d.id, dienstText);
-                              setBearbeiteDienstId(null);
-                              await ladeWoche(wocheStart);
-                            })
-                          }
-                        >
-                          Speichern
-                        </button>
-                        <button className="btn-secondary" style={{ fontSize: 12, padding: "3px 8px" }} onClick={() => setBearbeiteDienstId(null)}>
-                          Abbrechen
-                        </button>
+                  {zeigeDienstDetails &&
+                    (bearbeiteDienstId === d.id ? (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 4 }}>
+                        <textarea rows={2} value={dienstText} onChange={(e) => setDienstText(e.target.value)} style={{ fontSize: 13 }} />
+                        <div style={{ display: "flex", gap: 6 }}>
+                          <button
+                            className="btn"
+                            style={{ fontSize: 12, padding: "3px 8px" }}
+                            onClick={() =>
+                              startTransition(async () => {
+                                await updateDienstBeschreibung(d.id, dienstText);
+                                setBearbeiteDienstId(null);
+                                await ladeWoche(wocheStart);
+                              })
+                            }
+                          >
+                            Speichern
+                          </button>
+                          <button className="btn-secondary" style={{ fontSize: 12, padding: "3px 8px" }} onClick={() => setBearbeiteDienstId(null)}>
+                            Abbrechen
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  ) : (
-                    <>
-                      {d.beschreibung && <div style={{ fontSize: 12, color: "var(--text-muted)" }}>{d.beschreibung}</div>}
-                      {istEltern && (
-                        <button
-                          className="btn-secondary"
-                          style={{ fontSize: 11, padding: "2px 6px", marginTop: 2 }}
-                          onClick={() => {
-                            setBearbeiteDienstId(d.id);
-                            setDienstText(d.beschreibung ?? "");
-                          }}
-                        >
-                          ✎ Regeltext
-                        </button>
-                      )}
-                    </>
-                  )}
+                    ) : (
+                      <>
+                        {d.beschreibung && <div style={{ fontSize: 12, color: "var(--text-muted)" }}>{d.beschreibung}</div>}
+                        {istEltern && (
+                          <button
+                            className="btn-secondary"
+                            style={{ fontSize: 11, padding: "2px 6px", marginTop: 2 }}
+                            onClick={() => {
+                              setBearbeiteDienstId(d.id);
+                              setDienstText(d.beschreibung ?? "");
+                            }}
+                          >
+                            ✎ Regeltext
+                          </button>
+                        )}
+                      </>
+                    ))}
                 </li>
               ))}
             </ul>
@@ -302,8 +310,11 @@ export default function DienstplanClient({
       {istEltern && (
         <div className="card">
           <button className="btn-secondary" onClick={() => setZeigeTausch((v) => !v)}>
-            Dienste tauschen
+            Dienst abgeben oder tauschen
           </button>
+          <p style={{ margin: "6px 0 0", fontSize: 12, color: "var(--text-muted)" }}>
+            Z. B. wenn ein Kind krank ist, im Urlaub ist, oder dauerhaft mit jemandem tauschen möchte.
+          </p>
           {zeigeTausch && (
             <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 10 }}>
               <div style={{ display: "flex", gap: 6 }}>

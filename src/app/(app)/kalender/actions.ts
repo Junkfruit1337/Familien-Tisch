@@ -4,7 +4,6 @@ import { prisma } from "@/lib/prisma";
 import { requirePerson } from "@/lib/auth";
 import { logAenderung } from "@/lib/history";
 import { erkenneTerminKategorie } from "@/lib/terminkategorisierung";
-import { getEffectiveWeek, getWeekStart } from "@/lib/dienstplan";
 import { revalidatePath } from "next/cache";
 import { randomUUID } from "crypto";
 
@@ -182,16 +181,3 @@ export async function listSchulEintraegeFuerKalender() {
   return prisma.schulEintrag.findMany({ where, include: { person: true }, orderBy: { datum: "asc" } });
 }
 
-// Dienst-Zuweisungen der aktuellen Woche erscheinen automatisch im Kalender (read-only, nur diese Woche).
-export async function listDienstFuerKalender() {
-  const wocheStart = getWeekStart(new Date());
-  const woche = await getEffectiveWeek(wocheStart);
-  return woche.flatMap((schicht) =>
-    schicht.tage.map((t) => ({
-      datum: t.datum,
-      kindName: t.kind?.name ?? "—",
-      kindFarbe: t.kind?.farbe ?? "#8a7a63",
-      schichtNummer: schicht.schichtNummer,
-    }))
-  );
-}
