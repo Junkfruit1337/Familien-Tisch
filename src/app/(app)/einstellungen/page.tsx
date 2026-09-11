@@ -1,15 +1,36 @@
 import { getCurrentPerson } from "@/lib/auth";
 import { listPersonen } from "./actions";
+import { listKategorien } from "../einkaufsliste/actions";
+import { listKinder, listFaecher, listNotenGewichtung } from "../schule/actions";
 import EinstellungenClient from "./EinstellungenClient";
 
 export default async function EinstellungenPage() {
   const person = await getCurrentPerson();
+  const istEltern = person?.rolle === "ELTERN";
   const personen = await listPersonen();
+
+  const kategorien = istEltern ? await listKategorien() : [];
+  const kinder = istEltern ? await listKinder() : [];
+  const kinderDaten = istEltern
+    ? await Promise.all(
+        kinder.map(async (k) => {
+          const [faecher, gewichtung] = await Promise.all([listFaecher(k.id), listNotenGewichtung(k.id)]);
+          return {
+            id: k.id,
+            name: k.name,
+            faecher: faecher.map((f) => ({ id: f.id, name: f.name })),
+            gewichtung,
+          };
+        })
+      )
+    : [];
 
   return (
     <EinstellungenClient
-      istEltern={person?.rolle === "ELTERN"}
+      istEltern={!!istEltern}
       personen={personen.map((p) => ({ id: p.id, name: p.name, rolle: p.rolle, farbe: p.farbe, aktiv: p.aktiv, hatPin: !!p.pinHash }))}
+      kategorien={kategorien.map((k) => ({ id: k.id, name: k.name, reihenfolge: k.reihenfolge }))}
+      kinder={kinderDaten}
     />
   );
 }

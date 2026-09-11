@@ -11,9 +11,6 @@ import {
   pruefeNotenDuplikat,
   korrigiereNote,
   erneutEinreichen,
-  setNotenGewichtung,
-  uebertrageGewichtungAufFaecher,
-  uebertrageGewichtungAufKinder,
   createSchulEintrag,
   updateSchulEintrag,
   deleteSchulEintrag,
@@ -33,7 +30,6 @@ type Note = {
   fotoBase64: string | null;
 };
 type Transaktion = { id: string; betrag: number; typ: string; grund: string | null; createdAt: string };
-type Gewichtung = { fachId: string; fachName: string; gewichtungen: { art: string; gewichtung: number }[] };
 type Kind = {
   id: string;
   name: string;
@@ -43,7 +39,6 @@ type Kind = {
   kontostand: number;
   taschengeld: Transaktion[];
   sparziel: { bezeichnung: string; zielbetrag: number } | null;
-  gewichtung: Gewichtung[];
 };
 type SchulEintrag = {
   id: string;
@@ -358,94 +353,6 @@ function SchulEintraegeSektion({
         })}
       </div>
     </div>
-  );
-}
-
-function NotengewichtungSektion({ kind, alleKinder }: { kind: Kind; alleKinder: { id: string; name: string }[] }) {
-  const [pending, startTransition] = useTransition();
-  const [werte, setWerte] = useState<Record<string, number>>(() => {
-    const init: Record<string, number> = {};
-    kind.gewichtung.forEach((g) => g.gewichtungen.forEach((x) => (init[`${g.fachId}_${x.art}`] = x.gewichtung)));
-    return init;
-  });
-
-  const andereKinder = alleKinder.filter((k) => k.id !== kind.id);
-
-  return (
-    <details>
-      <summary>Notengewichtung ({kind.name})</summary>
-      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        <p style={{ fontSize: 13, color: "var(--text-muted)", margin: 0 }}>
-          Legt fest, wie stark eine neue Note dieser Art in den Fach-Durchschnitt einfließt (z. B. Klassenarbeit = 2, Hausaufgaben-Kontrolle = 1).
-          Wirkt sich nur auf künftig eingetragene Noten aus.
-        </p>
-        {kind.gewichtung.map((g) => (
-          <div key={g.fachId} style={{ borderTop: "1px solid var(--border)", paddingTop: 8 }}>
-            <strong style={{ fontSize: 14 }}>{g.fachName}</strong>
-            <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 6 }}>
-              {g.gewichtungen.map((x) => {
-                const key = `${g.fachId}_${x.art}`;
-                return (
-                  <div key={key} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <span style={{ fontSize: 13, flex: 1 }}>{ART_LABEL[x.art]}</span>
-                    <input
-                      type="number"
-                      step="0.5"
-                      min="0"
-                      style={{ width: 70 }}
-                      value={werte[key] ?? 1}
-                      onChange={(e) => setWerte((prev) => ({ ...prev, [key]: parseFloat(e.target.value) || 0 }))}
-                      onBlur={() =>
-                        startTransition(() => setNotenGewichtung(kind.id, g.fachId, x.art, werte[key] ?? 1))
-                      }
-                    />
-                    <button
-                      className="btn-secondary"
-                      style={{ fontSize: 11, padding: "4px 6px" }}
-                      disabled={pending}
-                      title="Diesen Wert auf alle Fächer dieses Kindes übertragen"
-                      onClick={() =>
-                        startTransition(() =>
-                          uebertrageGewichtungAufFaecher(
-                            kind.id,
-                            x.art,
-                            werte[key] ?? 1,
-                            kind.gewichtung.map((f) => f.fachId)
-                          )
-                        )
-                      }
-                    >
-                      → andere Fächer
-                    </button>
-                    {andereKinder.length > 0 && (
-                      <button
-                        className="btn-secondary"
-                        style={{ fontSize: 11, padding: "4px 6px" }}
-                        disabled={pending}
-                        title="Diesen Wert für das gleichnamige Fach bei anderen Kindern übertragen"
-                        onClick={() =>
-                          startTransition(() =>
-                            uebertrageGewichtungAufKinder(
-                              g.fachName,
-                              x.art,
-                              werte[key] ?? 1,
-                              andereKinder.map((k) => k.id)
-                            )
-                          )
-                        }
-                      >
-                        → andere Kinder
-                      </button>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        ))}
-        {kind.gewichtung.length === 0 && <p style={{ color: "var(--text-muted)", margin: 0 }}>Noch keine Fächer angelegt.</p>}
-      </div>
-    </details>
   );
 }
 
@@ -859,8 +766,6 @@ export default function SchuleClient({
         })}
         {kind.noten.length === 0 && <p style={{ color: "var(--text-muted)" }}>Noch keine Noten.</p>}
       </div>
-
-      {istEltern && <NotengewichtungSektion kind={kind} alleKinder={kinder.map((k) => ({ id: k.id, name: k.name }))} />}
 
       <details>
         <summary style={{ cursor: "pointer", color: "var(--text-muted)" }}>Verlauf Taschengeld</summary>

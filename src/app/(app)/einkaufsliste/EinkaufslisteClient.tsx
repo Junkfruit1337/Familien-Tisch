@@ -7,7 +7,6 @@ import {
   deleteArtikel,
   submitWunsch,
   entscheideWunsch,
-  addKategorie,
   updateArtikel,
   verschiebeArtikelKategorie,
 } from "./actions";
@@ -33,7 +32,6 @@ export default function EinkaufslisteClient({
   const [name, setName] = useState("");
   const [menge, setMenge] = useState("");
   const [kategorieId, setKategorieId] = useState("");
-  const [neueKategorie, setNeueKategorie] = useState("");
   const [bearbeiteId, setBearbeiteId] = useState<string | null>(null);
   const [bearbeiteName, setBearbeiteName] = useState("");
   const [bearbeiteMenge, setBearbeiteMenge] = useState("");
@@ -291,24 +289,9 @@ export default function EinkaufslisteClient({
       )}
 
       {istEltern && (
-        <details>
-          <summary style={{ cursor: "pointer", color: "var(--text-muted)" }}>Kategorien verwalten</summary>
-          <div className="card" style={{ display: "flex", gap: 8, marginTop: 8 }}>
-            <input placeholder="Neue Kategorie" value={neueKategorie} onChange={(e) => setNeueKategorie(e.target.value)} />
-            <button
-              className="btn"
-              onClick={() =>
-                startTransition(async () => {
-                  if (!neueKategorie) return;
-                  await addKategorie(neueKategorie);
-                  setNeueKategorie("");
-                })
-              }
-            >
-              +
-            </button>
-          </div>
-        </details>
+        <p style={{ fontSize: 12, color: "var(--text-muted)", margin: 0 }}>
+          Kategorien verwalten (hinzufügen, Reihenfolge ändern) geht jetzt zentral in den Einstellungen.
+        </p>
       )}
     </div>
   );

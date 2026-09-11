@@ -24,6 +24,28 @@
   }
 }
 
+/* Manueller Hell/Dunkel-Umschalter (Fahrplan §3, Batch 6) — überstimmt die automatische
+   Geräte-Einstellung oben, pro Gerät in localStorage gemerkt (kein Sync über die Familie). */
+:root[data-theme="light"] {
+  --bg: #f6f1e7;
+  --surface: #fffdf8;
+  --border: #e5dcc8;
+  --text: #3a332a;
+  --text-muted: #8a7f6c;
+  --accent: #a97155;
+  --accent-contrast: #fffdf8;
+}
+
+:root[data-theme="dark"] {
+  --bg: #221d17;
+  --surface: #2c2620;
+  --border: #453c30;
+  --text: #f1e9db;
+  --text-muted: #b3a794;
+  --accent: #c98a68;
+  --accent-contrast: #221d17;
+}
+
 * {
   box-sizing: border-box;
 }

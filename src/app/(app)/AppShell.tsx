@@ -2,9 +2,17 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import { logout } from "./actions";
 
 type Person = { id: string; name: string; farbe: string; rolle: string };
+type Theme = "hell" | "dunkel";
+
+const THEME_KEY = "familientisch-theme";
+
+function anwendenTheme(theme: Theme) {
+  document.documentElement.setAttribute("data-theme", theme === "hell" ? "light" : "dark");
+}
 
 const NAV = [
   { href: "/dashboard", label: "Heute", icon: "🏠" },
@@ -20,6 +28,26 @@ const NAV = [
 export default function AppShell({ person, children }: { person: Person; children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
+  const [theme, setTheme] = useState<Theme | null>(null);
+
+  useEffect(() => {
+    let gespeichert: Theme | null = null;
+    try {
+      gespeichert = localStorage.getItem(THEME_KEY) as Theme | null;
+    } catch {}
+    const startwert: Theme = gespeichert ?? (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dunkel" : "hell");
+    setTheme(startwert);
+    anwendenTheme(startwert);
+  }, []);
+
+  function themeUmschalten() {
+    const neu: Theme = theme === "dunkel" ? "hell" : "dunkel";
+    setTheme(neu);
+    anwendenTheme(neu);
+    try {
+      localStorage.setItem(THEME_KEY, neu);
+    } catch {}
+  }
 
   return (
     <div style={{ minHeight: "100dvh", display: "flex", flexDirection: "column" }}>
@@ -38,6 +66,15 @@ export default function AppShell({ person, children }: { person: Person; childre
       >
         <strong>Familientisch</strong>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <button
+            className="btn-secondary"
+            style={{ padding: "6px 10px", fontSize: 15, lineHeight: 1 }}
+            onClick={themeUmschalten}
+            title="Hell/Dunkel umschalten"
+            aria-label="Hell/Dunkel umschalten"
+          >
+            {theme === "dunkel" ? "🌙" : "☀️"}
+          </button>
           <span
             style={{
               width: 28,

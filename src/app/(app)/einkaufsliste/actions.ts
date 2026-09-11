@@ -201,6 +201,7 @@ export async function addKategorie(name: string) {
   const anzahl = await prisma.einkaufsKategorie.count();
   await prisma.einkaufsKategorie.create({ data: { name, reihenfolge: anzahl } });
   revalidatePath("/einkaufsliste");
+  revalidatePath("/einstellungen");
 }
 
 // Kategorie-Reihenfolge in der App änderbar machen (Fragenkatalog Frage 7).
@@ -218,4 +219,5 @@ export async function verschiebeKategorie(id: string, richtung: "hoch" | "runter
     prisma.einkaufsKategorie.update({ where: { id: b.id }, data: { reihenfolge: a.reihenfolge } }),
   ]);
   revalidatePath("/einkaufsliste");
+  revalidatePath("/einstellungen");
 }

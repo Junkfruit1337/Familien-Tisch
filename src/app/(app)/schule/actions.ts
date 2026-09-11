@@ -24,6 +24,18 @@ export async function addFach(kindId: string, name: string) {
   if (person.rolle !== "ELTERN" && person.id !== kindId) throw new Error("Nicht erlaubt.");
   await prisma.fach.create({ data: { kindId, name } });
   revalidatePath("/schule");
+  revalidatePath("/einstellungen");
+}
+
+export async function deleteFach(id: string) {
+  await requireParent();
+  try {
+    await prisma.fach.delete({ where: { id } });
+  } catch {
+    throw new Error("Fach kann nicht gelöscht werden, solange noch Noten dafür eingetragen sind.");
+  }
+  revalidatePath("/schule");
+  revalidatePath("/einstellungen");
 }
 
 export async function listNoten(kindId?: string) {
@@ -246,7 +258,7 @@ export async function setNotenGewichtung(kindId: string, fachId: string, art: st
     update: { gewichtung },
     create: { kindId, fachId, art: art as any, gewichtung },
   });
-  revalidatePath("/schule");
+  revalidatePath("/einstellungen");
 }
 
 export async function uebertrageGewichtungAufFaecher(kindId: string, art: string, gewichtung: number, zielFachIds: string[]) {
@@ -260,7 +272,7 @@ export async function uebertrageGewichtungAufFaecher(kindId: string, art: string
       })
     )
   );
-  revalidatePath("/schule");
+  revalidatePath("/einstellungen");
 }
 
 export async function uebertrageGewichtungAufKinder(fachName: string, art: string, gewichtung: number, zielKindIds: string[]) {
@@ -275,7 +287,7 @@ export async function uebertrageGewichtungAufKinder(fachName: string, art: strin
       })
     )
   );
-  revalidatePath("/schule");
+  revalidatePath("/einstellungen");
 }
 
 // ---------- Klassenarbeiten & Hausaufgaben-Kontrollen (SchulEintrag) ----------

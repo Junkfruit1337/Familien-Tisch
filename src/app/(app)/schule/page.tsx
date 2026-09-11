@@ -1,15 +1,5 @@
 import { getCurrentPerson } from "@/lib/auth";
-import {
-  listKinder,
-  listFaecher,
-  listNoten,
-  kontostand,
-  listTaschengeld,
-  getSparziel,
-  listNotenGewichtung,
-  listSchulEintraege,
-  listFachNamenFuerKinder,
-} from "./actions";
+import { listKinder, listFaecher, listNoten, kontostand, listTaschengeld, getSparziel, listSchulEintraege, listFachNamenFuerKinder } from "./actions";
 import SchuleClient from "./SchuleClient";
 
 export default async function SchulePage() {
@@ -19,13 +9,12 @@ export default async function SchulePage() {
 
   const kinderDaten = await Promise.all(
     kinder.map(async (k) => {
-      const [faecher, noten, stand, taschengeld, sparziel, gewichtung] = await Promise.all([
+      const [faecher, noten, stand, taschengeld, sparziel] = await Promise.all([
         listFaecher(k.id),
         listNoten(k.id),
         kontostand(k.id),
         listTaschengeld(k.id),
         getSparziel(k.id),
-        istEltern ? listNotenGewichtung(k.id) : Promise.resolve([]),
       ]);
       return {
         id: k.id,
@@ -53,7 +42,6 @@ export default async function SchulePage() {
           createdAt: t.createdAt.toISOString(),
         })),
         sparziel: sparziel ? { bezeichnung: sparziel.bezeichnung, zielbetrag: sparziel.zielbetrag } : null,
-        gewichtung,
       };
     })
   );
