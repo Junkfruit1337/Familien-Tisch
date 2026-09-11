@@ -162,6 +162,28 @@ model EinkaufsArtikel {
   updatedAt    DateTime           @updatedAt
 
   essensplanHerkuenfte EssensplanHerkunft[]
+  quellen              ArtikelQuelle[]
+}
+
+// Quellen-Aufschlüsselung je Artikel (Fahrplan §3, Batch 2) — für manuelle
+// Hinzufügungen und genehmigte Kind-Wünsche. Essensplan-Herkünfte werden nicht
+// hier zusätzlich gespeichert, sondern aus `EssensplanHerkunft` mitgelesen
+// (keine doppelte Datenhaltung).
+model ArtikelQuelle {
+  id           String          @id @default(cuid())
+  artikelId    String
+  artikel      EinkaufsArtikel @relation(fields: [artikelId], references: [id], onDelete: Cascade)
+  beschreibung String // z.B. "Manuell hinzugefügt" oder "Wunsch von Emma"
+  menge        String?
+  createdAt    DateTime        @default(now())
+}
+
+// Vorschlagsliste häufig gekaufter Artikel (Fahrplan §3, Batch 2) — Dämpfungsfaktor
+// für weggewischte Vorschläge, per Reset-Button wieder auf null setzbar.
+model VorschlagDismiss {
+  id     String @id @default(cuid())
+  name   String @unique // kleingeschriebener, getrimmter Artikelname
+  anzahl Int    @default(1)
 }
 
 enum WunschStatus {

@@ -1,14 +1,20 @@
 import { getCurrentPerson } from "@/lib/auth";
-import { listArtikel, listWuensche, listKategorien } from "./actions";
+import { listArtikel, listWuensche, listKategorien, listVorschlaege } from "./actions";
 import EinkaufslisteClient from "./EinkaufslisteClient";
 
 export default async function EinkaufslistePage() {
   const person = await getCurrentPerson();
-  const [artikel, wuensche, kategorien] = await Promise.all([listArtikel(), listWuensche(), listKategorien()]);
+  const istEltern = person?.rolle === "ELTERN";
+  const [artikel, wuensche, kategorien, vorschlaege] = await Promise.all([
+    listArtikel(),
+    listWuensche(),
+    listKategorien(),
+    istEltern ? listVorschlaege() : Promise.resolve([]),
+  ]);
 
   return (
     <EinkaufslisteClient
-      istEltern={person?.rolle === "ELTERN"}
+      istEltern={istEltern}
       artikel={artikel.map((a) => ({
         id: a.id,
         name: a.name,
@@ -26,6 +32,7 @@ export default async function EinkaufslistePage() {
         entschiedenAm: w.entschiedenAm?.toISOString() ?? null,
       }))}
       kategorien={kategorien.map((k) => ({ id: k.id, name: k.name }))}
+      vorschlaege={vorschlaege}
     />
   );
 }

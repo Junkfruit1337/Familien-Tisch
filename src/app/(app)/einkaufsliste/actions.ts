@@ -96,19 +96,22 @@ export async function addArtikel(data: { name: string; menge?: string; kategorie
   await requireParent();
 
   const bestehender = await findeOffenenArtikel(data.name);
+  let artikelId: string;
+  let artikel;
   if (bestehender) {
-    const artikel = await prisma.einkaufsArtikel.update({
+    artikel = await prisma.einkaufsArtikel.update({
       where: { id: bestehender.id },
       data: { menge: await mergeMenge(bestehender.menge, data.menge) },
     });
-    revalidatePath("/einkaufsliste");
-    return artikel;
+    artikelId = artikel.id;
+  } else {
+    const kategorieId = data.kategorieId || (await autoKategorieId(data.name));
+    artikel = await prisma.einkaufsArtikel.create({
+      data: { name: data.name, menge: data.menge, kategorieId: kategorieId || null },
+    });
+    artikelId = artikel.id;
   }
-
-  const kategorieId = data.kategorieId || (await autoKategorieId(data.name));
-  const artikel = await prisma.einkaufsArtikel.create({
-    data: { name: data.name, menge: data.menge, kategorieId: kategorieId || null },
-  });
+  await prisma.artikelQuelle.create({ data: { artikelId, beschreibung: "Manuell hinzugefügt", menge: data.menge } });
   revalidatePath("/einkaufsliste");
   return artikel;
 }
@@ -162,9 +165,11 @@ export async function entscheideWunsch(id: string, genehmigt: boolean, kategorie
   const wunsch = await prisma.einkaufsWunsch.update({
     where: { id },
     data: { status: genehmigt ? "GENEHMIGT" : "ABGELEHNT", entschiedenAm: new Date() },
+    include: { kind: true },
   });
   if (genehmigt) {
     const bestehender = await findeOffenenArtikel(wunsch.artikelName);
+    let artikelId: string;
     if (bestehender) {
       await prisma.einkaufsArtikel.update({
         where: { id: bestehender.id },
@@ -174,9 +179,10 @@ export async function entscheideWunsch(id: string, genehmigt: boolean, kategorie
           kategorieId: bestehender.kategorieId || kategorieId || (await autoKategorieId(wunsch.artikelName)),
         },
       });
+      artikelId = bestehender.id;
     } else {
       const finalKategorieId = kategorieId || (await autoKategorieId(wunsch.artikelName));
-      await prisma.einkaufsArtikel.create({
+      const neu = await prisma.einkaufsArtikel.create({
         data: {
           name: wunsch.artikelName,
           menge: wunsch.menge,
@@ -185,7 +191,9 @@ export async function entscheideWunsch(id: string, genehmigt: boolean, kategorie
           vonWunschId: wunsch.id,
         },
       });
+      artikelId = neu.id;
     }
+    await prisma.artikelQuelle.create({ data: { artikelId, beschreibung: `Wunsch von ${wunsch.kind.name}`, menge: wunsch.menge } });
   }
   await logAenderung({
     entityTyp: "EINKAUFS_WUNSCH",
@@ -193,6 +201,81 @@ export async function entscheideWunsch(id: string, genehmigt: boolean, kategorie
     aktion: genehmigt ? "genehmigt" : "abgelehnt",
     geaendertVonId: person.id,
   });
+  revalidatePath("/einkaufsliste");
+}
+
+// ---------- Quellen-Aufschlüsselung je Artikel (Fahrplan §3, Batch 2) ----------
+
+export async function listArtikelQuellen(artikelId: string) {
+  await requireParent();
+  const [quellen, essensplanHerkuenfte] = await Promise.all([
+    prisma.artikelQuelle.findMany({ where: { artikelId } }),
+    prisma.essensplanHerkunft.findMany({ where: { artikelId }, include: { eintrag: { include: { rezept: true } } } }),
+  ]);
+  const kombiniert = [
+    ...quellen.map((q) => ({ id: q.id, beschreibung: q.beschreibung, menge: q.menge, zeitpunkt: q.createdAt.toISOString() })),
+    ...essensplanHerkuenfte.map((h) => ({
+      id: h.id,
+      beschreibung: `Essensplan: ${h.eintrag.rezept.name} (${h.eintrag.tag.toLocaleDateString("de-DE")})`,
+      menge: h.menge,
+      zeitpunkt: h.createdAt.toISOString(),
+    })),
+  ];
+  kombiniert.sort((a, b) => new Date(b.zeitpunkt).getTime() - new Date(a.zeitpunkt).getTime());
+  return kombiniert;
+}
+
+// ---------- Vorschlagsliste häufig gekaufter Artikel (Fahrplan §3, Batch 2) ----------
+// Nutzt die bestehende Einkaufslisten-Historie (jeder abgeschlossene Einkaufszyklus
+// erzeugt beim erneuten Hinzufügen einen neuen Artikel-Datensatz, da findeOffenenArtikel
+// nur unerledigte Artikel matcht) statt eines separaten Kauf-Historie-Modells.
+export async function listVorschlaege() {
+  await requireParent();
+  const [alleArtikel, offene, dismisses] = await Promise.all([
+    prisma.einkaufsArtikel.findMany({ select: { name: true, menge: true, createdAt: true } }),
+    prisma.einkaufsArtikel.findMany({ where: { erledigt: false }, select: { name: true } }),
+    prisma.vorschlagDismiss.findMany(),
+  ]);
+  const dismissMap = new Map(dismisses.map((d) => [d.name, d.anzahl]));
+  const offeneNamen = new Set(offene.map((a) => a.name.trim().toLowerCase()));
+
+  const gruppen = new Map<string, { anzahl: number; menge: string | null; zeitpunkt: number; anzeigeName: string }>();
+  for (const a of alleArtikel) {
+    const key = a.name.trim().toLowerCase();
+    const bestehend = gruppen.get(key);
+    if (!bestehend) {
+      gruppen.set(key, { anzahl: 1, menge: a.menge, zeitpunkt: a.createdAt.getTime(), anzeigeName: a.name.trim() });
+    } else {
+      bestehend.anzahl += 1;
+      if (a.createdAt.getTime() > bestehend.zeitpunkt) {
+        bestehend.menge = a.menge;
+        bestehend.zeitpunkt = a.createdAt.getTime();
+      }
+    }
+  }
+
+  return Array.from(gruppen.entries())
+    .filter(([key, g]) => g.anzahl >= 2 && !offeneNamen.has(key))
+    .map(([key, g]) => ({ name: g.anzeigeName, menge: g.menge, score: g.anzahl / (1 + (dismissMap.get(key) ?? 0)) }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 8)
+    .map(({ name, menge }) => ({ name, menge }));
+}
+
+export async function verwirfVorschlag(name: string) {
+  await requireParent();
+  const key = name.trim().toLowerCase();
+  await prisma.vorschlagDismiss.upsert({
+    where: { name: key },
+    update: { anzahl: { increment: 1 } },
+    create: { name: key, anzahl: 1 },
+  });
+  revalidatePath("/einkaufsliste");
+}
+
+export async function setzeVorschlaegeZurueck() {
+  await requireParent();
+  await prisma.vorschlagDismiss.deleteMany({});
   revalidatePath("/einkaufsliste");
 }
 

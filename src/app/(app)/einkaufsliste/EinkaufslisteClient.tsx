@@ -9,6 +9,10 @@ import {
   entscheideWunsch,
   updateArtikel,
   verschiebeArtikelKategorie,
+  listArtikelQuellen,
+  listVorschlaege,
+  verwirfVorschlag,
+  setzeVorschlaegeZurueck,
 } from "./actions";
 import { erkenneKategorie } from "@/lib/kategorisierung";
 import HistorieVerlauf from "@/components/HistorieVerlauf";
@@ -16,17 +20,48 @@ import HistorieVerlauf from "@/components/HistorieVerlauf";
 type Artikel = { id: string; name: string; menge: string | null; erledigt: boolean; kategorieId: string | null; kategorieName: string };
 type Wunsch = { id: string; artikelName: string; menge: string | null; status: string; kindName: string; entschiedenAm: string | null };
 type Kategorie = { id: string; name: string };
+type Quelle = { id: string; beschreibung: string; menge: string | null; zeitpunkt: string };
+type Vorschlag = { name: string; menge: string | null };
+
+function ArtikelHerkunft({ artikelId }: { artikelId: string }) {
+  const [quellen, setQuellen] = useState<Quelle[] | null>(null);
+  const [pending, startTransition] = useTransition();
+  return (
+    <details
+      style={{ marginLeft: 28 }}
+      onToggle={(e) => {
+        if ((e.target as HTMLDetailsElement).open && quellen === null) {
+          startTransition(async () => setQuellen(await listArtikelQuellen(artikelId)));
+        }
+      }}
+    >
+      <summary style={{ cursor: "pointer", fontSize: 12, color: "var(--text-muted)" }}>Herkunft</summary>
+      <div style={{ display: "flex", flexDirection: "column", gap: 2, marginTop: 4 }}>
+        {pending && <span style={{ fontSize: 12, color: "var(--text-muted)" }}>Lädt …</span>}
+        {quellen?.length === 0 && <span style={{ fontSize: 12, color: "var(--text-muted)" }}>Keine Herkunft erfasst.</span>}
+        {quellen?.map((q) => (
+          <div key={q.id} style={{ fontSize: 12 }}>
+            {q.menge ? `${q.menge} · ` : ""}
+            {q.beschreibung}
+          </div>
+        ))}
+      </div>
+    </details>
+  );
+}
 
 export default function EinkaufslisteClient({
   istEltern,
   artikel,
   wuensche,
   kategorien,
+  vorschlaege,
 }: {
   istEltern: boolean;
   artikel: Artikel[];
   wuensche: Wunsch[];
   kategorien: Kategorie[];
+  vorschlaege: Vorschlag[];
 }) {
   const [pending, startTransition] = useTransition();
   const [name, setName] = useState("");
@@ -140,6 +175,46 @@ export default function EinkaufslisteClient({
             Wunsch einreichen
           </button>
         </div>
+      )}
+
+      {istEltern && vorschlaege.length > 0 && (
+        <details>
+          <summary style={{ cursor: "pointer", color: "var(--text-muted)" }}>Vorschläge ({vorschlaege.length})</summary>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 8 }}>
+            <p style={{ fontSize: 12, color: "var(--text-muted)", margin: 0 }}>Häufig gekaufte Artikel, die gerade nicht auf der Liste stehen.</p>
+            {vorschlaege.map((v) => (
+              <div key={v.name} className="card" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ fontSize: 14 }}>
+                  {v.name} {v.menge ? <span style={{ color: "var(--text-muted)" }}>· {v.menge}</span> : null}
+                </span>
+                <div style={{ display: "flex", gap: 6 }}>
+                  <button
+                    className="btn-secondary"
+                    style={{ fontSize: 12, padding: "3px 8px" }}
+                    onClick={() =>
+                      startTransition(async () => {
+                        await addArtikel({ name: v.name, menge: v.menge || undefined });
+                      })
+                    }
+                  >
+                    + Hinzufügen
+                  </button>
+                  <button
+                    className="btn-secondary"
+                    style={{ fontSize: 12, padding: "3px 8px" }}
+                    title="Seltener vorschlagen"
+                    onClick={() => startTransition(() => verwirfVorschlag(v.name))}
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+            ))}
+            <button className="btn-secondary" style={{ fontSize: 12, alignSelf: "flex-start" }} onClick={() => startTransition(() => setzeVorschlaegeZurueck())}>
+              Zurücksetzen
+            </button>
+          </div>
+        </details>
       )}
 
       {istEltern && offeneWuensche.length > 0 && (
@@ -262,6 +337,7 @@ export default function EinkaufslisteClient({
                     )}
                   </div>
                 )}
+                {istEltern && bearbeiteId !== a.id && <ArtikelHerkunft artikelId={a.id} />}
               </div>
             ))}
           </div>
