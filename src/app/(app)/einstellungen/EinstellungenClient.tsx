@@ -20,7 +20,6 @@ import {
   verschiebeDienstSchicht,
   verschiebeDienstReihenfolge,
   deleteDienst,
-  installiereSchichtsystemVorlage,
   addTagesroutine,
   updateTagesroutine,
   deleteTagesroutine,
@@ -762,25 +761,6 @@ export default function EinstellungenClient({
           <p style={{ fontSize: 12, color: "var(--text-muted)", margin: 0 }}>
             Änderungen hier wirken dauerhaft ab sofort — auch rückwirkend für die aktuelle Woche, nicht nur für zukünftige.
           </p>
-
-          <div className="card" style={{ display: "flex", flexDirection: "column", gap: 6, background: "var(--accent)", color: "var(--accent-contrast)" }}>
-            <strong>Einmalig: Vorlage aus Florians Dokument laden</strong>
-            <p style={{ fontSize: 13, margin: 0 }}>
-              Überträgt die echten Dienst-Bezeichnungen/-Regeltexte, Tagesroutinen und den Körperpflegeplan aus dem Schichtsystem-Dokument in
-              diese Datenbank. Überschreibt eventuell schon vorgenommene eigene Änderungen an diesen Bereichen.
-            </p>
-            <button
-              className="btn-secondary"
-              style={{ alignSelf: "flex-start", background: "var(--surface)", color: "var(--text)" }}
-              onClick={() => {
-                if (confirm("Dienstkatalog, Tagesroutinen und Körperpflegeplan wirklich mit der Vorlage überschreiben?")) {
-                  startTransition(() => installiereSchichtsystemVorlage());
-                }
-              }}
-            >
-              Jetzt laden
-            </button>
-          </div>
 
           {[1, 2, 3].map((schicht) => {
             const diensteDerSchicht = dienstkatalog.filter((d) => d.schichtNummer === schicht);
