@@ -1,21 +1,31 @@
 // Einfache Stichwort-Erkennung für die automatische Kategorisierung von Einkaufsartikeln.
-// Deckt die 7 Standard-Kategorien aus dem Seed ab (alles andere bleibt "Sonstiges").
+// Deckt die 8 Standard-Kategorien aus dem Seed ab (alles andere bleibt "Sonstiges").
+// Fix-Batch 28: Obst und Gemüse getrennt (Florians Wunsch), "dattel(n)" ergänzt, und das
+// bare Stichwort "ei" entfernt — es traf als Teilstring versehentlich auch "entsteint",
+// "Reis", "Seife" usw. und kategorisierte sie fälschlich als Milchprodukte.
 const REGELN: { kategorie: string; keywords: string[] }[] = [
   {
-    kategorie: "Obst & Gemüse",
+    kategorie: "Obst",
     keywords: [
-      "tomate", "gurke", "apfel", "banane", "kartoffel", "zwiebel", "salat",
-      "paprika", "karotte", "möhre", "zitrone", "orange", "birne", "traube",
-      "spinat", "brokkoli", "pilz", "knoblauch", "avocado", "beere",
-      "erdbeere", "himbeere", "blaubeere", "kohl", "lauch", "radieschen",
-      "kürbis", "zucchini", "mais", "sellerie",
+      "apfel", "banane", "zitrone", "limette", "orange", "mandarine", "clementine",
+      "birne", "traube", "beere", "erdbeere", "himbeere", "blaubeere", "heidelbeere",
+      "dattel", "datteln", "kiwi", "mango", "ananas", "melone", "pfirsich", "aprikose",
+      "pflaume", "kirsche", "avocado",
+    ],
+  },
+  {
+    kategorie: "Gemüse",
+    keywords: [
+      "tomate", "gurke", "kartoffel", "zwiebel", "salat", "paprika", "karotte",
+      "möhre", "spinat", "brokkoli", "pilz", "champignon", "knoblauch", "kohl",
+      "lauch", "radieschen", "kürbis", "zucchini", "mais", "sellerie",
     ],
   },
   {
     kategorie: "Milchprodukte",
     keywords: [
       "milch", "käse", "joghurt", "butter", "quark", "sahne", "frischkäse",
-      "buttermilch", "mozzarella", "ei", "eier", "schmand", "parmesan",
+      "buttermilch", "mozzarella", "eier", "schmand", "parmesan",
     ],
   },
   {

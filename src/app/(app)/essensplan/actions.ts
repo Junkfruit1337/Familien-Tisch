@@ -15,9 +15,16 @@ function getSamstagWocheStart(date: Date): Date {
   return d;
 }
 
+// Fix-Batch 28: erkennt jetzt auch Zeilen ohne eigenes Einheiten-Wort (z.B. "1 Knoblauchzehe(n)"
+// statt "500 g Spaghetti") — vorher fiel so eine Zeile komplett durch die erste Regel (die
+// verlangt Menge UND Einheit UND Name als drei Teile) und landete unsplittet als kompletter
+// Name ohne separate Menge auf der Einkaufsliste.
 function parseZutatZeile(zeile: string): { name: string; menge?: string } {
-  const match = zeile.match(/^([\d.,]+\s*\S+)\s+(.+)$/);
-  return match ? { menge: match[1], name: match[2] } : { name: zeile };
+  const mitEinheit = zeile.match(/^([\d.,]+\s*\S+)\s+(.+)$/);
+  if (mitEinheit) return { menge: mitEinheit[1], name: mitEinheit[2] };
+  const nurZahl = zeile.match(/^([\d.,]+)\s+(.+)$/);
+  if (nurZahl) return { menge: nurZahl[1], name: nurZahl[2] };
+  return { name: zeile };
 }
 
 // Skaliert eine Zutatenzeile mit dem Esser-Faktor des Tages (z. B. 3 von 6 Essern → Faktor 0,5).

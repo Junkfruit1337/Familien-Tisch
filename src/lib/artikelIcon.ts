@@ -25,6 +25,13 @@ const REGELN: { icon: string; keywords: string[] }[] = [
   { icon: "🍓", keywords: ["erdbeere"] },
   { icon: "🫐", keywords: ["blaubeere", "heidelbeere"] },
   { icon: "🍈", keywords: ["himbeere", "beere"] },
+  { icon: "🌴", keywords: ["dattel", "datteln"] },
+  { icon: "🥝", keywords: ["kiwi"] },
+  { icon: "🥭", keywords: ["mango"] },
+  { icon: "🍍", keywords: ["ananas"] },
+  { icon: "🍈", keywords: ["melone"] },
+  { icon: "🍑", keywords: ["pfirsich", "aprikose"] },
+  { icon: "🍒", keywords: ["kirsche", "pflaume"] },
   { icon: "🥦", keywords: ["brokkoli"] },
   { icon: "🍄", keywords: ["pilz", "champignon"] },
   { icon: "🧄", keywords: ["knoblauch"] },
@@ -89,7 +96,9 @@ export function erkenneArtikelIcon(artikelName: string): string {
   // wenigstens ein thematisch passendes Icon statt des allgemeinen Einkaufswagens zeigen.
   const kategorie = erkenneKategorie(artikelName);
   switch (kategorie) {
-    case "Obst & Gemüse":
+    case "Obst":
+      return "🍎";
+    case "Gemüse":
       return "🥬";
     case "Milchprodukte":
       return "🥛";

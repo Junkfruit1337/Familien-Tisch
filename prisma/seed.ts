@@ -2,6 +2,7 @@ import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { DIENSTE_VORLAGE, TAGESROUTINEN_VORLAGE, KOERPERPFLEGE_VORLAGE } from "../src/lib/schichtsystemVorlage";
 import { SCHULFERIEN } from "../src/lib/schulferienDaten";
+import { erkenneKategorie } from "../src/lib/kategorisierung";
 
 const prisma = new PrismaClient();
 
@@ -14,7 +15,7 @@ const FAMILIE = [
   { name: "Ayla", rolle: "KIND_OHNE_ZUGANG" as const, farbe: "#d9b25c" },
 ];
 
-const KATEGORIEN = ["Obst & Gemüse", "Milchprodukte", "Fleisch & Fisch", "Backwaren", "Tiefkühl", "Getränke", "Drogerie", "Sonstiges"];
+const KATEGORIEN = ["Obst", "Gemüse", "Milchprodukte", "Fleisch & Fisch", "Backwaren", "Tiefkühl", "Getränke", "Drogerie", "Sonstiges"];
 
 async function main() {
   console.log("Seed: Standard-PIN für alle Login-Personen ist 0000 — bitte in den Einstellungen sofort ändern!");
@@ -68,6 +69,28 @@ async function main() {
       update: {},
       create: { name: KATEGORIEN[i], reihenfolge: i },
     });
+  }
+
+  // Einmalige, aber gefahrlos wiederholbare Migration (Fix-Batch 28): "Obst & Gemüse" wurde
+  // in "Obst" und "Gemüse" aufgeteilt (Florians Wunsch). Bestehende Artikel der alten
+  // Kategorie werden anhand ihres Namens neu einsortiert, die alte Kategorie danach
+  // gelöscht — läuft bei jedem weiteren Deploy einfach ins Leere, da die alte Kategorie
+  // dann nicht mehr existiert.
+  const alteObstGemueseKategorie = await prisma.einkaufsKategorie.findUnique({ where: { name: "Obst & Gemüse" } });
+  if (alteObstGemueseKategorie) {
+    const [obst, gemuese] = await Promise.all([
+      prisma.einkaufsKategorie.findUnique({ where: { name: "Obst" } }),
+      prisma.einkaufsKategorie.findUnique({ where: { name: "Gemüse" } }),
+    ]);
+    const betroffeneArtikel = await prisma.einkaufsArtikel.findMany({ where: { kategorieId: alteObstGemueseKategorie.id } });
+    for (const artikel of betroffeneArtikel) {
+      const erkannt = erkenneKategorie(artikel.name);
+      const neueKategorieId = erkannt === "Obst" ? obst?.id : gemuese?.id;
+      if (neueKategorieId) {
+        await prisma.einkaufsArtikel.update({ where: { id: artikel.id }, data: { kategorieId: neueKategorieId } });
+      }
+    }
+    await prisma.einkaufsKategorie.delete({ where: { id: alteObstGemueseKategorie.id } });
   }
 
   // Schulferien-Referenzdaten (Fix-Batch 27) — jedes Jahr per Deploy neu synchronisiert,
