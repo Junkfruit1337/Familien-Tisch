@@ -242,6 +242,29 @@ export async function submitWunsch(data: { artikelName: string; menge?: string }
   revalidatePath("/einkaufsliste");
 }
 
+// Fix-Batch 30: ein Kind darf seinen eigenen Wunsch bearbeiten/zurückziehen, solange er noch
+// OFFEN ist (noch nicht genehmigt/abgelehnt) — danach nicht mehr, da schon in die Liste
+// übernommen bzw. entschieden.
+export async function updateWunsch(id: string, data: { artikelName?: string; menge?: string }) {
+  const person = await requirePerson();
+  const bestehend = await prisma.einkaufsWunsch.findUnique({ where: { id } });
+  if (!bestehend) throw new Error("Wunsch nicht gefunden.");
+  if (person.rolle !== "ELTERN" && bestehend.kindId !== person.id) throw new Error("Nicht erlaubt.");
+  if (bestehend.status !== "OFFEN") throw new Error("Nur ein noch nicht entschiedener Wunsch kann bearbeitet werden.");
+  await prisma.einkaufsWunsch.update({ where: { id }, data });
+  revalidatePath("/einkaufsliste");
+}
+
+export async function deleteWunsch(id: string) {
+  const person = await requirePerson();
+  const bestehend = await prisma.einkaufsWunsch.findUnique({ where: { id } });
+  if (!bestehend) throw new Error("Wunsch nicht gefunden.");
+  if (person.rolle !== "ELTERN" && bestehend.kindId !== person.id) throw new Error("Nicht erlaubt.");
+  if (person.rolle !== "ELTERN" && bestehend.status !== "OFFEN") throw new Error("Nur ein noch nicht entschiedener Wunsch kann zurückgezogen werden.");
+  await prisma.einkaufsWunsch.delete({ where: { id } });
+  revalidatePath("/einkaufsliste");
+}
+
 export async function entscheideWunsch(id: string, genehmigt: boolean, kategorieId?: string) {
   const person = await requireParent();
   const wunsch = await prisma.einkaufsWunsch.update({

@@ -230,10 +230,13 @@ export async function einreichenNote(data: {
   return { istKindEinreichung: !istEltern, note: note.note };
 }
 
+// Fix-Batch 30: Eltern dürfen jede offene Note korrigieren, ein Kind nur seine eigene —
+// und auch nur, solange sie noch nicht genehmigt/abgelehnt wurde (Florians Wunsch).
 export async function korrigiereNote(id: string, data: { note?: number; datum?: string; notiz?: string; fachId?: string }) {
-  const person = await requireParent();
+  const person = await requirePerson();
   const bestehend = await prisma.note.findUnique({ where: { id } });
   if (!bestehend) throw new Error("Note nicht gefunden.");
+  if (person.rolle !== "ELTERN" && bestehend.kindId !== person.id) throw new Error("Nicht erlaubt.");
   if (bestehend.status !== "OFFEN") throw new Error("Nur offene (noch nicht entschiedene) Noten können korrigiert werden.");
 
   const updateData: Record<string, unknown> = {};
@@ -316,8 +319,16 @@ export async function entscheideNote(id: string, genehmigt: boolean) {
   revalidatePath("/schule");
 }
 
+// Fix-Batch 30: ein Kind darf seine eigene Note selbst löschen, solange sie noch OFFEN ist
+// (noch nicht genehmigt/abgelehnt) — Eltern dürfen wie bisher jede Note jederzeit löschen.
 export async function loescheNote(id: string) {
-  const person = await requireParent();
+  const person = await requirePerson();
+  const bestehend = await prisma.note.findUnique({ where: { id } });
+  if (!bestehend) throw new Error("Note nicht gefunden.");
+  if (person.rolle !== "ELTERN") {
+    if (bestehend.kindId !== person.id) throw new Error("Nicht erlaubt.");
+    if (bestehend.status !== "OFFEN") throw new Error("Nur eine noch nicht entschiedene Note kannst du selbst löschen.");
+  }
   await prisma.taschengeldTransaktion.deleteMany({ where: { noteId: id } });
   await prisma.note.delete({ where: { id } });
   await logAenderung({ entityTyp: "NOTE", entityId: id, aktion: "geloescht", geaendertVonId: person.id });

@@ -7,12 +7,13 @@ import {
   setFarbe,
   setAktiv,
   setPortionsGewicht,
+  setGeburtsdatum,
   erstelleTicket,
   erkenneTicketAusText,
   setzeTicketStatus,
 } from "./actions";
 import { addKategorie, verschiebeKategorie } from "../einkaufsliste/actions";
-import { addFach, deleteFach, setSchulProfil } from "../schule/actions";
+import { addFach, updateFach, deleteFach, pruefeFachDuplikat, setSchulProfil } from "../schule/actions";
 import {
   addDienst,
   updateDienst,
@@ -20,12 +21,18 @@ import {
   verschiebeDienstReihenfolge,
   deleteDienst,
   installiereSchichtsystemVorlage,
+  addTagesroutine,
+  updateTagesroutine,
+  deleteTagesroutine,
+  setKoerperpflegetag,
 } from "../dienstplan/actions";
 import NotengewichtungSektion from "@/components/NotengewichtungSektion";
 import PushBenachrichtigungen from "@/components/PushBenachrichtigungen";
 import Spracheingabe from "@/components/Spracheingabe";
 
-type Person = { id: string; name: string; rolle: string; farbe: string; aktiv: boolean; hatPin: boolean; portionsGewicht: number };
+type Person = { id: string; name: string; rolle: string; farbe: string; aktiv: boolean; hatPin: boolean; portionsGewicht: number; geburtsdatum: string | null };
+type Tagesroutine = { id: string; kategorie: string; text: string };
+type Koerperpflegetag = { wochentag: number; text: string };
 type Kategorie = { id: string; name: string; reihenfolge: number };
 type Gewichtung = { fachId: string; fachName: string; gewichtungen: { art: string; gewichtung: number }[] };
 type Kind = {
@@ -77,19 +84,25 @@ const TICKET_STATUS_LABEL: Record<string, string> = {
 
 export default function EinstellungenClient({
   istEltern,
+  eigeneId,
   personen,
   kategorien,
   kinder,
   dienstkatalog,
+  tagesroutinen,
+  koerperpflegeplan,
   historie,
   meineTickets,
   alleTickets,
 }: {
   istEltern: boolean;
+  eigeneId: string;
   personen: Person[];
   kategorien: Kategorie[];
   kinder: Kind[];
   dienstkatalog: Dienst[];
+  tagesroutinen: Tagesroutine[];
+  koerperpflegeplan: Koerperpflegetag[];
   historie: HistorieEintrag[];
   meineTickets: Ticket[];
   alleTickets: TicketMitErsteller[];
@@ -104,12 +117,22 @@ export default function EinstellungenClient({
   const [neueKategorie, setNeueKategorie] = useState("");
   const [ausgewaehltesKind, setAusgewaehltesKind] = useState(kinder[0]?.id ?? "");
   const [neuesFach, setNeuesFach] = useState("");
+  const [bearbeiteFachId, setBearbeiteFachId] = useState<string | null>(null);
+  const [bearbeiteFachName, setBearbeiteFachName] = useState("");
   const [klassenstufeEntwuerfe, setKlassenstufeEntwuerfe] = useState<Record<string, string>>({});
   const [klasseEntwuerfe, setKlasseEntwuerfe] = useState<Record<string, string>>({});
+  const [geburtstagEntwuerfe, setGeburtstagEntwuerfe] = useState<Record<string, string>>({});
   const [bearbeiteDienstId, setBearbeiteDienstId] = useState<string | null>(null);
   const [dienstBezeichnung, setDienstBezeichnung] = useState("");
   const [dienstBeschreibung, setDienstBeschreibung] = useState("");
   const [neuerDienst, setNeuerDienst] = useState<Record<number, string>>({});
+
+  const [neueRoutineKategorie, setNeueRoutineKategorie] = useState("");
+  const [neueRoutineText, setNeueRoutineText] = useState("");
+  const [bearbeiteRoutineId, setBearbeiteRoutineId] = useState<string | null>(null);
+  const [routineText, setRoutineText] = useState("");
+  const [bearbeiteWochentag, setBearbeiteWochentag] = useState<number | null>(null);
+  const [wochentagText, setWochentagText] = useState("");
 
   const [ticketTitel, setTicketTitel] = useState("");
   const [ticketBeschreibung, setTicketBeschreibung] = useState("");
@@ -129,6 +152,181 @@ export default function EinstellungenClient({
     } finally {
       setTicketVerarbeitung(false);
     }
+  }
+
+  // KI-gestützter Duplikat-Check vorm Anlegen (Fix-Batch 30, Florians Wunsch) — erkennt auch
+  // Schreibvarianten/Abkürzungen ("Bio" vs. "Biologie"), nicht nur exakte Übereinstimmungen
+  // (die addFach serverseitig ohnehin hart blockiert).
+  async function fachAnlegen(kindId: string) {
+    if (!neuesFach.trim()) return;
+    const pruefung = await pruefeFachDuplikat(kindId, neuesFach);
+    if (pruefung.istVermutlichDuplikat) {
+      const weiter = confirm(
+        `Meinst du vielleicht das schon vorhandene Fach „${pruefung.aehnlichesFach}"? Trotzdem „${neuesFach}" als neues, eigenständiges Fach anlegen?`
+      );
+      if (!weiter) return;
+    }
+    startTransition(async () => {
+      try {
+        await addFach(kindId, neuesFach);
+        setNeuesFach("");
+      } catch (e: any) {
+        alert(e.message);
+      }
+    });
+  }
+
+  // Schulprofil + Fächer (Fix-Batch 30) — gemeinsam genutzt von Eltern- und Kind-Ansicht,
+  // damit Kinder ihre eigene Klasse/ABC und Fächer selbst pflegen können (mit KI-Duplikat-Check
+  // und Bestätigung, da diese Daten selten geändert werden).
+  function schulprofilUndFaecherKarten(k: Kind) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <div className="card" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <strong style={{ fontSize: 14 }}>Schulprofil ({k.name})</strong>
+          <label style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: -6 }}>Bundesland</label>
+          <select
+            value={k.bundesland ?? ""}
+            onChange={(e) => {
+              if (!confirm(`Bundesland wirklich auf „${e.target.value}" ändern?`)) return;
+              startTransition(() => setSchulProfil(k.id, { bundesland: e.target.value }));
+            }}
+          >
+            <option value="">– wählen –</option>
+            {BUNDESLAENDER.map((b) => (
+              <option key={b} value={b}>
+                {b}
+              </option>
+            ))}
+          </select>
+          <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>
+            Grundlage für die echten Ferientermine/den Ferien-Countdown im Schule-Tab.
+          </p>
+          <div style={{ display: "flex", gap: 8 }}>
+            <label style={{ flex: 1, display: "flex", flexDirection: "column", gap: 4 }}>
+              <span style={{ fontSize: 12, color: "var(--text-muted)" }}>Klassenstufe</span>
+              <input
+                type="number"
+                min={1}
+                max={13}
+                value={klassenstufeEntwuerfe[k.id] ?? (k.klassenstufe ? String(k.klassenstufe) : "")}
+                onChange={(e) => setKlassenstufeEntwuerfe((prev) => ({ ...prev, [k.id]: e.target.value }))}
+                onBlur={(e) => {
+                  const wert = parseInt(e.target.value, 10);
+                  if (!wert || wert === k.klassenstufe) return;
+                  if (k.klassenstufe && !confirm(`Klassenstufe wirklich von ${k.klassenstufe} auf ${wert} ändern?`)) {
+                    setKlassenstufeEntwuerfe((prev) => ({ ...prev, [k.id]: String(k.klassenstufe) }));
+                    return;
+                  }
+                  startTransition(() => setSchulProfil(k.id, { klassenstufe: wert }));
+                }}
+              />
+            </label>
+            <label style={{ flex: 1, display: "flex", flexDirection: "column", gap: 4 }}>
+              <span style={{ fontSize: 12, color: "var(--text-muted)" }}>Klasse (z. B. 5a)</span>
+              <input
+                value={klasseEntwuerfe[k.id] ?? k.klasse ?? ""}
+                onChange={(e) => setKlasseEntwuerfe((prev) => ({ ...prev, [k.id]: e.target.value }))}
+                onBlur={(e) => {
+                  if (!e.target.value || e.target.value === k.klasse) return;
+                  if (k.klasse && !confirm(`Klasse wirklich von „${k.klasse}" auf „${e.target.value}" ändern?`)) {
+                    setKlasseEntwuerfe((prev) => ({ ...prev, [k.id]: k.klasse ?? "" }));
+                    return;
+                  }
+                  startTransition(() => setSchulProfil(k.id, { klasse: e.target.value }));
+                }}
+              />
+            </label>
+          </div>
+        </div>
+        <div className="card" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <strong style={{ fontSize: 14 }}>Fächer ({k.name})</strong>
+          {k.faecher.map((f) => (
+            <div key={f.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+              {bearbeiteFachId === f.id ? (
+                <>
+                  <input
+                    style={{ flex: 1, fontSize: 14 }}
+                    value={bearbeiteFachName}
+                    onChange={(e) => setBearbeiteFachName(e.target.value)}
+                    autoFocus
+                  />
+                  <button
+                    className="btn-secondary"
+                    style={{ fontSize: 12, padding: "2px 8px" }}
+                    onClick={() =>
+                      startTransition(async () => {
+                        try {
+                          if (bearbeiteFachName.trim() && bearbeiteFachName.trim() !== f.name) {
+                            const pruefung = await pruefeFachDuplikat(k.id, bearbeiteFachName);
+                            if (
+                              pruefung.istVermutlichDuplikat &&
+                              !confirm(`Meinst du vielleicht das schon vorhandene Fach „${pruefung.aehnlichesFach}"? Trotzdem umbenennen?`)
+                            ) {
+                              return;
+                            }
+                            await updateFach(f.id, bearbeiteFachName);
+                          }
+                          setBearbeiteFachId(null);
+                        } catch (e: any) {
+                          alert(e.message);
+                        }
+                      })
+                    }
+                  >
+                    ✓
+                  </button>
+                  <button className="btn-secondary" style={{ fontSize: 12, padding: "2px 8px" }} onClick={() => setBearbeiteFachId(null)}>
+                    ✕
+                  </button>
+                </>
+              ) : (
+                <>
+                  <span style={{ fontSize: 14 }}>{f.name}</span>
+                  <div style={{ display: "flex", gap: 4 }}>
+                    <button
+                      className="btn-secondary"
+                      style={{ fontSize: 12, padding: "2px 8px" }}
+                      onClick={() => {
+                        setBearbeiteFachId(f.id);
+                        setBearbeiteFachName(f.name);
+                      }}
+                    >
+                      ✎
+                    </button>
+                    {istEltern && (
+                      <button
+                        className="btn-secondary"
+                        style={{ fontSize: 12, padding: "2px 8px" }}
+                        onClick={() => {
+                          if (!confirm(`Fach „${f.name}" wirklich löschen?`)) return;
+                          startTransition(async () => {
+                            try {
+                              await deleteFach(f.id);
+                            } catch (e: any) {
+                              alert(e.message);
+                            }
+                          });
+                        }}
+                      >
+                        🗑
+                      </button>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          ))}
+          {k.faecher.length === 0 && <p style={{ fontSize: 13, color: "var(--text-muted)", margin: 0 }}>Noch keine Fächer.</p>}
+          <div style={{ display: "flex", gap: 8, borderTop: "1px solid var(--border)", paddingTop: 8 }}>
+            <input placeholder="Neues Fach" value={neuesFach} onChange={(e) => setNeuesFach(e.target.value)} />
+            <button className="btn" onClick={() => fachAnlegen(k.id)}>
+              +
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   const fehlerMeldenSektion = (
@@ -177,18 +375,49 @@ export default function EinstellungenClient({
     </details>
   );
 
+  const kind = kinder.find((k) => k.id === ausgewaehltesKind) ?? kinder[0];
+  const eigenePerson = personen.find((p) => p.id === eigeneId);
+
+  // Geburtstag (Fix-Batch 30) — jede Person (auch Kinder ohne Eltern-Rechte) trägt hier
+  // ihren eigenen Geburtstag ein; erscheint danach automatisch im Kalender ALLER.
+  const geburtstagSektion = eigenePerson && (
+    <details>
+      <summary style={{ cursor: "pointer", fontWeight: 600 }}>🎂 Mein Geburtstag</summary>
+      <div className="card" style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
+        <input
+          type="date"
+          value={geburtstagEntwuerfe[eigenePerson.id] ?? eigenePerson.geburtsdatum?.slice(0, 10) ?? ""}
+          onChange={(e) => setGeburtstagEntwuerfe((prev) => ({ ...prev, [eigenePerson.id]: e.target.value }))}
+          onBlur={(e) => {
+            if (e.target.value) startTransition(() => setGeburtsdatum(eigenePerson.id, e.target.value));
+          }}
+        />
+        <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>
+          Erscheint danach jedes Jahr automatisch im Kalender der ganzen Familie.
+        </p>
+      </div>
+    </details>
+  );
+
   if (!istEltern) {
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
         <h1 style={{ fontSize: 22, margin: 0 }}>Einstellungen</h1>
         <PushBenachrichtigungen />
         {fehlerMeldenSektion}
+        {geburtstagSektion}
+        {kinder.length > 0 && (
+          <details open>
+            <summary style={{ cursor: "pointer", fontWeight: 600 }}>🎓 Meine Schule</summary>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 8 }}>
+              {schulprofilUndFaecherKarten(kind)}
+            </div>
+          </details>
+        )}
         <p style={{ color: "var(--text-muted)" }}>Der Rest dieses Bereichs ist nur für Eltern.</p>
       </div>
     );
   }
-
-  const kind = kinder.find((k) => k.id === ausgewaehltesKind) ?? kinder[0];
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -197,6 +426,8 @@ export default function EinstellungenClient({
       <PushBenachrichtigungen />
 
       {fehlerMeldenSektion}
+
+      {geburtstagSektion}
 
       {alleTickets.length > 0 && (
         <details>
@@ -408,105 +639,14 @@ export default function EinstellungenClient({
                 </div>
               </details>
             )}
+            {kind && schulprofilUndFaecherKarten(kind)}
             {kind && (
-              <>
-                <div className="card" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  <strong style={{ fontSize: 14 }}>Schulprofil ({kind.name})</strong>
-                  <label style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: -6 }}>Bundesland</label>
-                  <select
-                    value={kind.bundesland ?? ""}
-                    onChange={(e) => startTransition(() => setSchulProfil(kind.id, { bundesland: e.target.value }))}
-                  >
-                    <option value="">– wählen –</option>
-                    {BUNDESLAENDER.map((b) => (
-                      <option key={b} value={b}>
-                        {b}
-                      </option>
-                    ))}
-                  </select>
-                  <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>
-                    Grundlage für die echten Ferientermine/den Ferien-Countdown im Schule-Tab.
-                  </p>
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <label style={{ flex: 1, display: "flex", flexDirection: "column", gap: 4 }}>
-                      <span style={{ fontSize: 12, color: "var(--text-muted)" }}>Klassenstufe</span>
-                      <input
-                        type="number"
-                        min={1}
-                        max={13}
-                        value={klassenstufeEntwuerfe[kind.id] ?? (kind.klassenstufe ? String(kind.klassenstufe) : "")}
-                        onChange={(e) => setKlassenstufeEntwuerfe((prev) => ({ ...prev, [kind.id]: e.target.value }))}
-                        onBlur={(e) => {
-                          const wert = parseInt(e.target.value, 10);
-                          if (!wert || wert === kind.klassenstufe) return;
-                          if (kind.klassenstufe && !confirm(`Klassenstufe wirklich von ${kind.klassenstufe} auf ${wert} ändern?`)) {
-                            setKlassenstufeEntwuerfe((prev) => ({ ...prev, [kind.id]: String(kind.klassenstufe) }));
-                            return;
-                          }
-                          startTransition(() => setSchulProfil(kind.id, { klassenstufe: wert }));
-                        }}
-                      />
-                    </label>
-                    <label style={{ flex: 1, display: "flex", flexDirection: "column", gap: 4 }}>
-                      <span style={{ fontSize: 12, color: "var(--text-muted)" }}>Klasse (z. B. 5a)</span>
-                      <input
-                        value={klasseEntwuerfe[kind.id] ?? kind.klasse ?? ""}
-                        onChange={(e) => setKlasseEntwuerfe((prev) => ({ ...prev, [kind.id]: e.target.value }))}
-                        onBlur={(e) => startTransition(() => setSchulProfil(kind.id, { klasse: e.target.value }))}
-                      />
-                    </label>
-                  </div>
-                </div>
-                <div className="card" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  <strong style={{ fontSize: 14 }}>Fächer ({kind.name})</strong>
-                  {kind.faecher.map((f) => (
-                    <div key={f.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <span style={{ fontSize: 14 }}>{f.name}</span>
-                      <button
-                        className="btn-secondary"
-                        style={{ fontSize: 12, padding: "2px 8px" }}
-                        onClick={() =>
-                          startTransition(async () => {
-                            try {
-                              await deleteFach(f.id);
-                            } catch (e: any) {
-                              alert(e.message);
-                            }
-                          })
-                        }
-                      >
-                        🗑
-                      </button>
-                    </div>
-                  ))}
-                  {kind.faecher.length === 0 && <p style={{ fontSize: 13, color: "var(--text-muted)", margin: 0 }}>Noch keine Fächer.</p>}
-                  <div style={{ display: "flex", gap: 8, borderTop: "1px solid var(--border)", paddingTop: 8 }}>
-                    <input placeholder="Neues Fach" value={neuesFach} onChange={(e) => setNeuesFach(e.target.value)} />
-                    <button
-                      className="btn"
-                      onClick={() =>
-                        startTransition(async () => {
-                          if (!neuesFach) return;
-                          try {
-                            await addFach(kind.id, neuesFach);
-                            setNeuesFach("");
-                          } catch (e: any) {
-                            alert(e.message);
-                          }
-                        })
-                      }
-                    >
-                      +
-                    </button>
-                  </div>
-                </div>
-                <NotengewichtungSektion
-                  kindId={kind.id}
-                  kindName={kind.name}
-                  gewichtung={kind.gewichtung}
-                  alleKinder={kinder.map((k) => ({ id: k.id, name: k.name }))}
-                />
-              </>
+              <NotengewichtungSektion
+                kindId={kind.id}
+                kindName={kind.name}
+                gewichtung={kind.gewichtung}
+                alleKinder={kinder.map((k) => ({ id: k.id, name: k.name }))}
+              />
             )}
           </div>
         </details>
@@ -646,6 +786,156 @@ export default function EinstellungenClient({
               </div>
             );
           })}
+        </div>
+      </details>
+
+      <details className="card">
+        <summary style={{ cursor: "pointer", fontWeight: 600 }}>🧴 Tagesroutinen &amp; Körperpflege-Plan bearbeiten</summary>
+        <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 10 }}>
+          <p style={{ fontSize: 12, color: "var(--text-muted)", margin: 0 }}>
+            Diese Texte werden im Dienstplan nur noch angezeigt — bearbeitet werden sie ab jetzt hier.
+          </p>
+          {Object.entries(
+            tagesroutinen.reduce<Record<string, typeof tagesroutinen>>((acc, r) => {
+              (acc[r.kategorie] ??= []).push(r);
+              return acc;
+            }, {})
+          ).map(([kategorie, eintraege]) => (
+            <div key={kategorie} className="card" style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <strong style={{ fontSize: 14 }}>{kategorie}</strong>
+              {eintraege.map((r) => (
+                <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  {bearbeiteRoutineId === r.id ? (
+                    <>
+                      <input style={{ flex: 1 }} value={routineText} onChange={(e) => setRoutineText(e.target.value)} autoFocus />
+                      <button
+                        className="btn-secondary"
+                        style={{ fontSize: 12, padding: "2px 8px" }}
+                        onClick={() =>
+                          startTransition(async () => {
+                            if (routineText.trim()) await updateTagesroutine(r.id, routineText.trim());
+                            setBearbeiteRoutineId(null);
+                          })
+                        }
+                      >
+                        ✓
+                      </button>
+                      <button className="btn-secondary" style={{ fontSize: 12, padding: "2px 8px" }} onClick={() => setBearbeiteRoutineId(null)}>
+                        ✕
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <span style={{ flex: 1, fontSize: 14 }}>{r.text}</span>
+                      <button
+                        className="btn-secondary"
+                        style={{ fontSize: 12, padding: "2px 8px" }}
+                        onClick={() => {
+                          setBearbeiteRoutineId(r.id);
+                          setRoutineText(r.text);
+                        }}
+                      >
+                        ✎
+                      </button>
+                      <button
+                        className="btn-secondary"
+                        style={{ fontSize: 12, padding: "2px 8px" }}
+                        onClick={() => {
+                          if (confirm(`Eintrag „${r.text}" wirklich löschen?`)) startTransition(() => deleteTagesroutine(r.id));
+                        }}
+                      >
+                        🗑
+                      </button>
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+          ))}
+          <div className="card" style={{ display: "flex", gap: 8 }}>
+            <input
+              placeholder="Kategorie (z. B. Morgens)"
+              style={{ width: 140 }}
+              value={neueRoutineKategorie}
+              onChange={(e) => setNeueRoutineKategorie(e.target.value)}
+              list="routine-kategorien"
+            />
+            <datalist id="routine-kategorien">
+              {Object.keys(
+                tagesroutinen.reduce<Record<string, true>>((acc, r) => {
+                  acc[r.kategorie] = true;
+                  return acc;
+                }, {})
+              ).map((k) => (
+                <option key={k} value={k} />
+              ))}
+            </datalist>
+            <input
+              style={{ flex: 1 }}
+              placeholder="Neuer Punkt"
+              value={neueRoutineText}
+              onChange={(e) => setNeueRoutineText(e.target.value)}
+            />
+            <button
+              className="btn"
+              onClick={() =>
+                startTransition(async () => {
+                  if (!neueRoutineKategorie.trim() || !neueRoutineText.trim()) return;
+                  await addTagesroutine(neueRoutineKategorie.trim(), neueRoutineText.trim());
+                  setNeueRoutineText("");
+                })
+              }
+            >
+              +
+            </button>
+          </div>
+
+          <div className="card" style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <strong style={{ fontSize: 14 }}>Körperpflege nach Wochentag</strong>
+            {["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"].map((name, i) => {
+              const wt = i + 1;
+              const eintrag = koerperpflegeplan.find((k) => k.wochentag === wt);
+              return (
+                <div key={wt} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ width: 90, color: "var(--text-muted)", fontSize: 13 }}>{name}</span>
+                  {bearbeiteWochentag === wt ? (
+                    <>
+                      <input style={{ flex: 1 }} value={wochentagText} onChange={(e) => setWochentagText(e.target.value)} autoFocus />
+                      <button
+                        className="btn-secondary"
+                        style={{ fontSize: 12, padding: "2px 8px" }}
+                        onClick={() =>
+                          startTransition(async () => {
+                            await setKoerperpflegetag(wt, wochentagText.trim());
+                            setBearbeiteWochentag(null);
+                          })
+                        }
+                      >
+                        ✓
+                      </button>
+                      <button className="btn-secondary" style={{ fontSize: 12, padding: "2px 8px" }} onClick={() => setBearbeiteWochentag(null)}>
+                        ✕
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <span style={{ flex: 1, fontSize: 14 }}>{eintrag?.text ?? "—"}</span>
+                      <button
+                        className="btn-secondary"
+                        style={{ fontSize: 12, padding: "2px 8px" }}
+                        onClick={() => {
+                          setBearbeiteWochentag(wt);
+                          setWochentagText(eintrag?.text ?? "");
+                        }}
+                      >
+                        ✎
+                      </button>
+                    </>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
       </details>
 

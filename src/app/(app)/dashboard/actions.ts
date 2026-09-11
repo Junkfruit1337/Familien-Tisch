@@ -34,6 +34,17 @@ export async function getDashboardDaten() {
     person.rolle === "ELTERN" ? { erledigt: false } : { erledigt: false, OR: [{ personId: person.id }, { personId: null }] };
   const offeneAufgaben = await prisma.aufgabe.count({ where: aufgabenWhere as any });
 
+  // Fix-Batch 30: Eltern sehen auf dem Dashboard alle offenen Kinder-Anfragen gesammelt
+  // (Noten-Einreichungen + Einkaufs-Wünsche), um direkt von dort zu genehmigen/ablehnen.
+  const offeneNoten =
+    person.rolle === "ELTERN"
+      ? await prisma.note.findMany({ where: { status: "OFFEN" }, include: { fach: true, kind: true }, orderBy: { datum: "desc" } })
+      : [];
+  const offeneWuensche =
+    person.rolle === "ELTERN"
+      ? await prisma.einkaufsWunsch.findMany({ where: { status: "OFFEN" }, include: { kind: true }, orderBy: { createdAt: "desc" } })
+      : [];
+
   return {
     person: { name: person.name, rolle: person.rolle },
     heutigesEssen: heutigesEssen?.eintrag?.rezeptName ?? null,
@@ -51,6 +62,23 @@ export async function getDashboardDaten() {
     }),
     termineHeute: termineHeute.map((t) => ({ id: t.id, titel: t.titel, start: t.start.toISOString(), personName: t.person?.name ?? "Familie" })),
     offeneAufgaben,
+    offeneNoten: offeneNoten.map((n) => ({
+      id: n.id,
+      kindName: n.kind.name,
+      fachName: n.fach.name,
+      art: n.art,
+      note: n.note,
+      datum: n.datum.toISOString(),
+      notiz: n.notiz,
+      fotoBase64: n.fotoBase64,
+    })),
+    offeneWuensche: offeneWuensche.map((w) => ({
+      id: w.id,
+      kindName: w.kind.name,
+      artikelName: w.artikelName,
+      menge: w.menge,
+      createdAt: w.createdAt.toISOString(),
+    })),
   };
 }
 

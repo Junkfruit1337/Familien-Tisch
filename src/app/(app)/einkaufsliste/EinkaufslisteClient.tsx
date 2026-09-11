@@ -6,6 +6,8 @@ import {
   toggleArtikel,
   deleteArtikel,
   submitWunsch,
+  updateWunsch,
+  deleteWunsch,
   entscheideWunsch,
   updateArtikel,
   verschiebeArtikelKategorie,
@@ -138,6 +140,9 @@ export default function EinkaufslisteClient({
   const [bearbeiteName, setBearbeiteName] = useState("");
   const [bearbeiteMenge, setBearbeiteMenge] = useState("");
   const [wunschKategorie, setWunschKategorie] = useState<Record<string, string>>({});
+  const [wunschBearbeitenId, setWunschBearbeitenId] = useState<string | null>(null);
+  const [wunschBearbeitenName, setWunschBearbeitenName] = useState("");
+  const [wunschBearbeitenMenge, setWunschBearbeitenMenge] = useState("");
 
   const [unbestaetigt, setUnbestaetigt] = useState(initialUnbestaetigt);
   const [unbestaetigtMengen, setUnbestaetigtMengen] = useState<Record<string, string>>({});
@@ -287,6 +292,70 @@ export default function EinkaufslisteClient({
           >
             Wunsch einreichen
           </button>
+          {offeneWuensche.length > 0 && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, borderTop: "1px solid var(--border)", paddingTop: 10 }}>
+              <strong style={{ fontSize: 13 }}>Meine offenen Wünsche</strong>
+              {offeneWuensche.map((w) =>
+                wunschBearbeitenId === w.id ? (
+                  <div key={w.id} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    <input value={wunschBearbeitenName} onChange={(e) => setWunschBearbeitenName(e.target.value)} autoFocus />
+                    <input placeholder="Menge (optional)" value={wunschBearbeitenMenge} onChange={(e) => setWunschBearbeitenMenge(e.target.value)} />
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <button
+                        className="btn"
+                        style={{ fontSize: 12, padding: "4px 10px" }}
+                        onClick={() =>
+                          startTransition(async () => {
+                            if (!wunschBearbeitenName.trim()) return;
+                            try {
+                              await updateWunsch(w.id, { artikelName: wunschBearbeitenName.trim(), menge: wunschBearbeitenMenge || undefined });
+                              setWunschBearbeitenId(null);
+                            } catch (e: any) {
+                              alert(e.message);
+                            }
+                          })
+                        }
+                      >
+                        Speichern
+                      </button>
+                      <button className="btn-secondary" style={{ fontSize: 12, padding: "4px 10px" }} onClick={() => setWunschBearbeitenId(null)}>
+                        Abbrechen
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div key={w.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, fontSize: 14 }}>
+                    <span>
+                      {w.artikelName}
+                      {w.menge ? ` (${w.menge})` : ""}
+                    </span>
+                    <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                      <button
+                        className="btn-secondary"
+                        style={{ fontSize: 12, padding: "3px 8px" }}
+                        onClick={() => {
+                          setWunschBearbeitenId(w.id);
+                          setWunschBearbeitenName(w.artikelName);
+                          setWunschBearbeitenMenge(w.menge ?? "");
+                        }}
+                      >
+                        ✎
+                      </button>
+                      <button
+                        className="btn-secondary"
+                        style={{ fontSize: 12, padding: "3px 8px" }}
+                        onClick={() => {
+                          if (confirm(`Wunsch „${w.artikelName}" wirklich zurückziehen?`)) startTransition(() => deleteWunsch(w.id));
+                        }}
+                      >
+                        🗑
+                      </button>
+                    </div>
+                  </div>
+                )
+              )}
+            </div>
+          )}
         </div>
       )}
 

@@ -53,6 +53,16 @@ export async function setPortionsGewicht(personId: string, portionsGewicht: numb
   revalidatePath("/essensplan");
 }
 
+// Geburtstag (Fix-Batch 30) — jede Person trägt ihr eigenes Geburtsdatum ein (auch Kinder
+// ohne Eltern-Rechte), damit es automatisch jedes Jahr im Kalender der ganzen Familie erscheint.
+export async function setGeburtsdatum(personId: string, datum: string) {
+  const person = await requirePerson();
+  if (person.rolle !== "ELTERN" && person.id !== personId) throw new Error("Nicht erlaubt.");
+  await prisma.person.update({ where: { id: personId }, data: { geburtsdatum: new Date(datum) } });
+  revalidatePath("/einstellungen");
+  revalidatePath("/kalender");
+}
+
 // ---------- Ticketsystem: Fehlermeldungen/Verbesserungsvorschläge (Fix-Batch 26) ----------
 
 // Spracheingabe → Titel/Beschreibung-Entwurf, wird erst nach Prüfung durch den Nutzer

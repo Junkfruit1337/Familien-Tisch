@@ -19,6 +19,7 @@ import {
 } from "./actions";
 import HistorieVerlauf from "@/components/HistorieVerlauf";
 import Spracheingabe from "@/components/Spracheingabe";
+import { erkenneSparzielIcon } from "@/lib/sparzielIcon";
 
 type Note = {
   id: string;
@@ -571,21 +572,26 @@ export default function SchuleClient({
                     </div>
                   </div>
                 ) : (
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                       {n.fotoBase64 && (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
                           src={n.fotoBase64}
                           alt="Notenzettel"
-                          style={{ width: 44, height: 44, objectFit: "cover", borderRadius: 8, cursor: "pointer" }}
+                          style={{ width: 56, height: 56, objectFit: "cover", borderRadius: 8, cursor: "pointer", flexShrink: 0 }}
                           onClick={() => setGrossesBild(n.fotoBase64)}
                         />
                       )}
-                      <span>
-                        {(n as any).kindName} — {n.fachName}: Note {n.note} ({ART_LABEL[n.art]})
-                        {n.notiz && <span style={{ color: "var(--text-muted)" }}> · „{n.notiz}"</span>}
-                      </span>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                        <span style={{ fontWeight: 600 }}>
+                          {(n as any).kindName} — {n.fachName}: Note {n.note}
+                        </span>
+                        <span style={{ fontSize: 13, color: "var(--text-muted)" }}>
+                          {ART_LABEL[n.art]} · {new Date(n.datum).toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit", year: "numeric" })}
+                        </span>
+                        {n.notiz && <span style={{ fontSize: 13 }}>Thema: „{n.notiz}"</span>}
+                      </div>
                     </div>
                     <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
                       <button
@@ -617,30 +623,48 @@ export default function SchuleClient({
       <div className="card">
         <strong>Kontostand: {kind.kontostand.toFixed(2)} €</strong>
         {kind.sparziel && (
-          <div style={{ marginTop: 8 }}>
-            <div style={{ fontSize: 13, color: "var(--text-muted)" }}>
-              Sparziel: {kind.sparziel.bezeichnung} ({kind.sparziel.zielbetrag} €)
-            </div>
-            <div style={{ background: "var(--border)", borderRadius: 8, height: 10, marginTop: 4 }}>
-              <div
-                style={{
-                  width: `${Math.min(100, (kind.kontostand / kind.sparziel.zielbetrag) * 100)}%`,
-                  background: "var(--accent)",
-                  height: "100%",
-                  borderRadius: 8,
-                }}
-              />
+          <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 12 }}>
+            <span style={{ fontSize: 32, flexShrink: 0 }}>{erkenneSparzielIcon(kind.sparziel.bezeichnung)}</span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "var(--text-muted)" }}>
+                <span>{kind.sparziel.bezeichnung}</span>
+                <span>
+                  {kind.kontostand.toFixed(2)} / {kind.sparziel.zielbetrag} €
+                </span>
+              </div>
+              <div style={{ background: "var(--border)", borderRadius: 8, height: 10, marginTop: 4 }}>
+                <div
+                  style={{
+                    width: `${Math.min(100, (kind.kontostand / kind.sparziel.zielbetrag) * 100)}%`,
+                    background: "var(--accent)",
+                    height: "100%",
+                    borderRadius: 8,
+                  }}
+                />
+              </div>
             </div>
           </div>
         )}
         {(istEltern || kind.id === eigeneId) && (
           <details style={{ marginTop: 10 }}>
             <summary style={{ cursor: "pointer", fontSize: 13 }}>Sparziel bearbeiten</summary>
-            <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-              <input placeholder="Bezeichnung" value={zielBezeichnung} onChange={(e) => setZielBezeichnung(e.target.value)} />
-              <input type="number" placeholder="Zielbetrag €" value={zielBetrag} onChange={(e) => setZielBetrag(e.target.value)} />
+            <div className="card" style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
+              <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                <span style={{ fontSize: 12, color: "var(--text-muted)" }}>Wofür sparst du?</span>
+                <input placeholder="z. B. Fahrrad" value={zielBezeichnung} onChange={(e) => setZielBezeichnung(e.target.value)} />
+              </label>
+              <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                <span style={{ fontSize: 12, color: "var(--text-muted)" }}>Zielbetrag in €</span>
+                <input type="number" placeholder="z. B. 150" value={zielBetrag} onChange={(e) => setZielBetrag(e.target.value)} />
+              </label>
+              {zielBezeichnung.trim() && (
+                <p style={{ margin: 0, fontSize: 13, color: "var(--text-muted)" }}>
+                  Vorschau-Icon: <span style={{ fontSize: 20, verticalAlign: "middle" }}>{erkenneSparzielIcon(zielBezeichnung)}</span>
+                </p>
+              )}
               <button
                 className="btn"
+                style={{ alignSelf: "flex-start" }}
                 onClick={() =>
                   startTransition(() => setSparziel(kind.id, zielBezeichnung, parseFloat(zielBetrag) || 0))
                 }
@@ -819,6 +843,38 @@ export default function SchuleClient({
                         </button>
                       </div>
                     </div>
+                  ) : korrekturId === n.id ? (
+                    <div key={n.id} style={{ display: "flex", flexDirection: "column", gap: 8, borderTop: "1px solid var(--border)", paddingTop: 8 }}>
+                      <select value={korrekturNote} onChange={(e) => setKorrekturNote(Number(e.target.value))}>
+                        {[1, 2, 3, 4, 5, 6].map((v) => (
+                          <option key={v} value={v}>
+                            Note {v}
+                          </option>
+                        ))}
+                      </select>
+                      <input placeholder="Thema" value={korrekturNotiz} onChange={(e) => setKorrekturNotiz(e.target.value)} />
+                      <div style={{ display: "flex", gap: 6 }}>
+                        <button
+                          className="btn"
+                          style={{ padding: "6px 10px" }}
+                          onClick={() =>
+                            startTransition(async () => {
+                              try {
+                                await korrigiereNote(n.id, { note: korrekturNote, notiz: korrekturNotiz || undefined });
+                                setKorrekturId(null);
+                              } catch (e: any) {
+                                alert(e.message);
+                              }
+                            })
+                          }
+                        >
+                          Speichern
+                        </button>
+                        <button className="btn-secondary" style={{ padding: "6px 10px" }} onClick={() => setKorrekturId(null)}>
+                          Abbrechen
+                        </button>
+                      </div>
+                    </div>
                   ) : (
                     <div key={n.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, borderTop: "1px solid var(--border)", paddingTop: 8 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -856,6 +912,38 @@ export default function SchuleClient({
                           >
                             Erneut einreichen
                           </button>
+                        )}
+                        {n.status === "OFFEN" && !istEltern && kind.id === eigeneId && (
+                          <>
+                            <button
+                              className="btn-secondary"
+                              style={{ fontSize: 12 }}
+                              onClick={() => {
+                                setKorrekturId(n.id);
+                                setKorrekturNote(n.note);
+                                setKorrekturNotiz(n.notiz ?? "");
+                              }}
+                            >
+                              ✎
+                            </button>
+                            <button
+                              className="btn-secondary"
+                              style={{ fontSize: 12 }}
+                              onClick={() => {
+                                if (confirm("Diese noch offene Note wirklich löschen?")) {
+                                  startTransition(async () => {
+                                    try {
+                                      await loescheNote(n.id);
+                                    } catch (e: any) {
+                                      alert(e.message);
+                                    }
+                                  });
+                                }
+                              }}
+                            >
+                              🗑
+                            </button>
+                          </>
                         )}
                         {istEltern && (
                           <button className="btn-secondary" style={{ fontSize: 12 }} onClick={() => startTransition(() => loescheNote(n.id))}>
