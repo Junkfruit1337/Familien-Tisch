@@ -58,6 +58,7 @@ model Person {
   pushSubscriptions  PushSubscription[]
   schulEintraege     SchulEintrag[]     @relation("SchulEintragPerson")
   tickets            Ticket[]
+  dauerhafteZuordnungen DauerhafteZuordnung[]
 }
 
 model Session {
@@ -377,6 +378,28 @@ model BadZuweisung {
   kind       Person   @relation(fields: [kindId], references: [id])
 
   @@unique([wocheStart, zeitpunkt, position])
+}
+
+// Dauerhafte Tausche (Fix-Batch 35, Florians Wunsch) — im Unterschied zu DienstTausch/
+// BadZuweisung-Direktänderung (immer nur für EINE Woche bzw. EINEN Tag) legt das hier fest,
+// wer einen Slot ab sofort UNBEFRISTET innehat (überschreibt die algorithmische Rotation aus
+// lib/dienstplan.ts für neu erzeugte Wochen; bereits erzeugte aktuelle/zukünftige Wochen werden
+// beim Setzen einmalig nachträglich mit-aktualisiert, siehe setzeDauerhafteZuordnungIntern).
+enum DauerhaftArt {
+  DIENST
+  BAD_MORGENS
+  BAD_ABENDS
+}
+
+model DauerhafteZuordnung {
+  id        String       @id @default(cuid())
+  art       DauerhaftArt
+  slot      Int // schichtNummer (1-3) bei DIENST, position (1-3) bei BAD_*
+  kindId    String
+  kind      Person       @relation(fields: [kindId], references: [id])
+  updatedAt DateTime     @updatedAt
+
+  @@unique([art, slot])
 }
 
 // ---------- Dienstplan-Nachschlagewerk & Zusatzaufgaben (Fahrplan §3, Batch 4) ----------

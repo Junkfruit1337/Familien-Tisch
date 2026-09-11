@@ -20,6 +20,14 @@ function weeksSinceAnchor(wocheStart: Date): number {
 // Die drei rotierenden Kinder in fester Reihenfolge (Namen, wie im Fahrplan benannt).
 const ROTATIONS_KINDER_NAMEN = ["Lina", "Emil", "Emma"];
 
+// Dauerhafte Zuordnungen (Fix-Batch 35) überschreiben die algorithmische Rotation für neu
+// erzeugte Wochen-Zeilen — bereits erzeugte Zeilen werden separat beim Setzen einmalig
+// nachaktualisiert (siehe setzeDauerhafteZuordnungIntern in actions.ts).
+async function holeDauerhafteZuordnungen(art: "DIENST" | "BAD_MORGENS" | "BAD_ABENDS"): Promise<Record<number, string>> {
+  const rows = await prisma.dauerhafteZuordnung.findMany({ where: { art } });
+  return Object.fromEntries(rows.map((r) => [r.slot, r.kindId]));
+}
+
 export async function ensureWeekAssignments(wocheStart: Date) {
   const existing = await prisma.dienstZuweisung.findMany({ where: { wocheStart } });
   if (existing.length === 3) return existing;
@@ -31,16 +39,18 @@ export async function ensureWeekAssignments(wocheStart: Date) {
 
   const byName = Object.fromEntries(kinder.map((k) => [k.name, k]));
   const offset = ((weeksSinceAnchor(wocheStart) % 3) + 3) % 3;
+  const dauerhaft = await holeDauerhafteZuordnungen("DIENST");
 
   const created = [];
   for (let schicht = 1; schicht <= 3; schicht++) {
     const kindIndex = (offset + schicht - 1) % 3;
-    const kind = byName[ROTATIONS_KINDER_NAMEN[kindIndex]];
-    if (!kind) continue;
+    const berechnetesKindId = byName[ROTATIONS_KINDER_NAMEN[kindIndex]]?.id;
+    const kindId = dauerhaft[schicht] ?? berechnetesKindId;
+    if (!kindId) continue;
     const row = await prisma.dienstZuweisung.upsert({
       where: { wocheStart_schichtNummer: { wocheStart, schichtNummer: schicht } },
       update: {},
-      create: { wocheStart, schichtNummer: schicht, kindId: kind.id },
+      create: { wocheStart, schichtNummer: schicht, kindId },
     });
     created.push(row);
   }
@@ -147,18 +157,20 @@ export async function ensureBadZuweisungen(wocheStart: Date) {
   const sortiert = [...basis].sort((a, b) => a.schichtNummer - b.schichtNummer);
   const morgensReihenfolge = sortiert.map((b) => b.kindId);
   const abendsReihenfolge = [...morgensReihenfolge].reverse();
+  const dauerhaftMorgens = await holeDauerhafteZuordnungen("BAD_MORGENS");
+  const dauerhaftAbends = await holeDauerhafteZuordnungen("BAD_ABENDS");
 
   const rows = [];
   for (let i = 0; i < 3; i++) {
     const m = await prisma.badZuweisung.upsert({
       where: { wocheStart_zeitpunkt_position: { wocheStart, zeitpunkt: "morgens", position: i + 1 } },
       update: {},
-      create: { wocheStart, zeitpunkt: "morgens", position: i + 1, kindId: morgensReihenfolge[i] },
+      create: { wocheStart, zeitpunkt: "morgens", position: i + 1, kindId: dauerhaftMorgens[i + 1] ?? morgensReihenfolge[i] },
     });
     const a = await prisma.badZuweisung.upsert({
       where: { wocheStart_zeitpunkt_position: { wocheStart, zeitpunkt: "abends", position: i + 1 } },
       update: {},
-      create: { wocheStart, zeitpunkt: "abends", position: i + 1, kindId: abendsReihenfolge[i] },
+      create: { wocheStart, zeitpunkt: "abends", position: i + 1, kindId: dauerhaftAbends[i + 1] ?? abendsReihenfolge[i] },
     });
     rows.push(m, a);
   }

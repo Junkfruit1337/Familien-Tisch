@@ -55,6 +55,92 @@ export async function tauscheBadPosition(data: {
   revalidatePath("/dienstplan");
 }
 
+// ---------- Dauerhafte Zuordnungen (Fix-Batch 35, Florians Wunsch) ----------
+// Im Unterschied zu erstelleTausch (immer nur für eine Woche/einen Tag) bzw.
+// tauscheBadPosition (nur für die eine gerade angezeigte Woche) legt das hier fest, wer einen
+// Schicht-/Bad-Positions-Slot ab jetzt DAUERHAFT innehat. Überschreibt sowohl bereits erzeugte
+// aktuelle/zukünftige Wochen (rückwirkend ab der übergebenen Woche) als auch — über
+// lib/dienstplan.ts — alle danach neu erzeugten Wochen.
+
+async function setzeDauerhafteZuordnungIntern(
+  art: "DIENST" | "BAD_MORGENS" | "BAD_ABENDS",
+  slot: number,
+  kindId: string,
+  abWocheStart: Date
+) {
+  await prisma.dauerhafteZuordnung.upsert({
+    where: { art_slot: { art, slot } },
+    update: { kindId },
+    create: { art, slot, kindId },
+  });
+  if (art === "DIENST") {
+    await prisma.dienstZuweisung.updateMany({
+      where: { schichtNummer: slot, wocheStart: { gte: abWocheStart } },
+      data: { kindId },
+    });
+  } else {
+    await prisma.badZuweisung.updateMany({
+      where: { zeitpunkt: art === "BAD_MORGENS" ? "morgens" : "abends", position: slot, wocheStart: { gte: abWocheStart } },
+      data: { kindId },
+    });
+  }
+}
+
+export async function listDauerhafteZuordnungen() {
+  return prisma.dauerhafteZuordnung.findMany({ include: { kind: true } });
+}
+
+// Dienst dauerhaft abgeben/tauschen — ermittelt zuerst, welche Schicht von/mit gerade
+// (effektiv, inkl. bereits laufender Tausche) innehaben, und macht genau diese Zuordnung
+// dauerhaft (ABGEBEN: nur vonKind → mitKind; TAUSCH: beide Schichten wechseln dauerhaft).
+export async function erstelleDauerhaftenTausch(data: {
+  wocheStartIso: string;
+  vonKindId: string;
+  mitKindId: string;
+  modus: "ABGEBEN" | "TAUSCH";
+}) {
+  const person = await requireParent();
+  const wocheStart = new Date(data.wocheStartIso);
+  const effektiv = await getEffectiveWeek(wocheStart);
+  const vonSchicht = effektiv.find((s) => s.kind?.id === data.vonKindId)?.schichtNummer;
+  const mitSchicht = effektiv.find((s) => s.kind?.id === data.mitKindId)?.schichtNummer;
+  if (!vonSchicht) throw new Error("Diese Person hat aktuell keinen Dienst.");
+
+  await setzeDauerhafteZuordnungIntern("DIENST", vonSchicht, data.mitKindId, wocheStart);
+  if (data.modus === "TAUSCH" && mitSchicht) {
+    await setzeDauerhafteZuordnungIntern("DIENST", mitSchicht, data.vonKindId, wocheStart);
+  }
+
+  await logAenderung({
+    entityTyp: "DIENST_TAUSCH",
+    entityId: `dauerhaft-dienst-${vonSchicht}`,
+    aktion: "dauerhaft getauscht",
+    neuerWert: `Schicht ${vonSchicht}${mitSchicht && data.modus === "TAUSCH" ? ` ↔ Schicht ${mitSchicht}` : ""}`,
+    geaendertVonId: person.id,
+  });
+  revalidatePath("/dienstplan");
+}
+
+// Bad-Reihenfolge-Position dauerhaft neu besetzen.
+export async function setzeDauerhafteBadZuordnung(data: {
+  wocheStartIso: string;
+  zeitpunkt: "morgens" | "abends";
+  position: number;
+  kindId: string;
+}) {
+  const person = await requireParent();
+  const wocheStart = new Date(data.wocheStartIso);
+  await setzeDauerhafteZuordnungIntern(data.zeitpunkt === "morgens" ? "BAD_MORGENS" : "BAD_ABENDS", data.position, data.kindId, wocheStart);
+  await logAenderung({
+    entityTyp: "DIENST_TAUSCH",
+    entityId: `dauerhaft-bad-${data.zeitpunkt}-${data.position}`,
+    aktion: "Bad-Reihenfolge dauerhaft geändert",
+    neuerWert: `Position ${data.position} (${data.zeitpunkt})`,
+    geaendertVonId: person.id,
+  });
+  revalidatePath("/dienstplan");
+}
+
 export async function listAktiveTausche(wocheStartIso: string) {
   const wocheStart = new Date(wocheStartIso);
   return prisma.dienstTausch.findMany({

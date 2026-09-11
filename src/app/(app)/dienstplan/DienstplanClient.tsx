@@ -9,6 +9,8 @@ import {
   listAktiveTausche,
   getBadplan,
   updateDienstBeschreibung,
+  erstelleDauerhaftenTausch,
+  setzeDauerhafteBadZuordnung,
 } from "./actions";
 import HistorieVerlauf from "@/components/HistorieVerlauf";
 import SeitenTitel from "@/components/SeitenTitel";
@@ -64,9 +66,13 @@ export default function DienstplanClient({
   const [modus, setModus] = useState<Modus>("ABGEBEN");
   const [vonKindId, setVonKindId] = useState("");
   const [mitKindId, setMitKindId] = useState("");
-  const [scope, setScope] = useState<"woche" | "tag">("woche");
+  const [scope, setScope] = useState<"woche" | "tag" | "dauerhaft">("woche");
   const [tag, setTag] = useState("");
   const [badAuswahl, setBadAuswahl] = useState<{ zeitpunkt: "morgens" | "abends"; position: number } | null>(null);
+  const [zeigeBadDauerhaft, setZeigeBadDauerhaft] = useState(false);
+  const [badDauerhaftZeitpunkt, setBadDauerhaftZeitpunkt] = useState<"morgens" | "abends">("morgens");
+  const [badDauerhaftPosition, setBadDauerhaftPosition] = useState(1);
+  const [badDauerhaftKindId, setBadDauerhaftKindId] = useState("");
 
   const [bearbeiteDienstId, setBearbeiteDienstId] = useState<string | null>(null);
   const [dienstText, setDienstText] = useState("");
@@ -288,6 +294,69 @@ export default function DienstplanClient({
             )}
           </div>
         ))}
+        {istEltern && (
+          <div style={{ marginTop: 10 }}>
+            <button className="btn-secondary" style={{ fontSize: 12 }} onClick={() => setZeigeBadDauerhaft((v) => !v)}>
+              Position dauerhaft festlegen
+            </button>
+            {zeigeBadDauerhaft && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 8 }}>
+                <div style={{ display: "flex", gap: 6 }}>
+                  <button
+                    type="button"
+                    className={badDauerhaftZeitpunkt === "morgens" ? "btn" : "btn-secondary"}
+                    style={{ flex: 1, fontSize: 13 }}
+                    onClick={() => setBadDauerhaftZeitpunkt("morgens")}
+                  >
+                    Morgens
+                  </button>
+                  <button
+                    type="button"
+                    className={badDauerhaftZeitpunkt === "abends" ? "btn" : "btn-secondary"}
+                    style={{ flex: 1, fontSize: 13 }}
+                    onClick={() => setBadDauerhaftZeitpunkt("abends")}
+                  >
+                    Abends
+                  </button>
+                </div>
+                <select value={badDauerhaftPosition} onChange={(e) => setBadDauerhaftPosition(Number(e.target.value))}>
+                  {[1, 2, 3].map((p) => (
+                    <option key={p} value={p}>
+                      Position {p}
+                    </option>
+                  ))}
+                </select>
+                <select value={badDauerhaftKindId} onChange={(e) => setBadDauerhaftKindId(e.target.value)}>
+                  <option value="">Wer soll das dauerhaft übernehmen?</option>
+                  {kinder.map((k) => (
+                    <option key={k.id} value={k.id}>
+                      {k.name}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  className="btn"
+                  disabled={pending || !badDauerhaftKindId}
+                  onClick={() =>
+                    startTransition(async () => {
+                      await setzeDauerhafteBadZuordnung({
+                        wocheStartIso: wocheStart,
+                        zeitpunkt: badDauerhaftZeitpunkt,
+                        position: badDauerhaftPosition,
+                        kindId: badDauerhaftKindId,
+                      });
+                      setZeigeBadDauerhaft(false);
+                      setBadDauerhaftKindId("");
+                      await ladeWoche(wocheStart);
+                    })
+                  }
+                >
+                  Dauerhaft festlegen
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {istEltern && (
@@ -336,14 +405,26 @@ export default function DienstplanClient({
                 <button type="button" className={scope === "tag" ? "btn" : "btn-secondary"} style={{ flex: 1, fontSize: 13 }} onClick={() => setScope("tag")}>
                   Einzelner Tag
                 </button>
+                <button type="button" className={scope === "dauerhaft" ? "btn" : "btn-secondary"} style={{ flex: 1, fontSize: 13 }} onClick={() => setScope("dauerhaft")}>
+                  Dauerhaft
+                </button>
               </div>
               {scope === "tag" && <input type="date" value={tag} onChange={(e) => setTag(e.target.value)} />}
+              {scope === "dauerhaft" && (
+                <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>
+                  Gilt ab sofort dauerhaft, bis hier erneut geändert — nicht nur für diese eine Woche.
+                </p>
+              )}
               <button
                 className="btn"
                 disabled={pending || !vonKindId || !mitKindId || (scope === "tag" && !tag)}
                 onClick={() =>
                   startTransition(async () => {
-                    await erstelleTausch({ wocheStartIso: wocheStart, tag: scope === "woche" ? undefined : tag, vonKindId, mitKindId, modus });
+                    if (scope === "dauerhaft") {
+                      await erstelleDauerhaftenTausch({ wocheStartIso: wocheStart, vonKindId, mitKindId, modus });
+                    } else {
+                      await erstelleTausch({ wocheStartIso: wocheStart, tag: scope === "woche" ? undefined : tag, vonKindId, mitKindId, modus });
+                    }
                     setZeigeTausch(false);
                     setVonKindId("");
                     setMitKindId("");
@@ -353,7 +434,7 @@ export default function DienstplanClient({
                   })
                 }
               >
-                {modus === "ABGEBEN" ? "Abgabe anlegen" : "Tausch anlegen"}
+                {scope === "dauerhaft" ? "Dauerhaft ändern" : modus === "ABGEBEN" ? "Abgabe anlegen" : "Tausch anlegen"}
               </button>
             </div>
           )}
