@@ -1,7 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { createSchulEintrag } from "./actions";
+import Link from "next/link";
 
 type Daten = {
   person: { name: string; rolle: string };
@@ -15,21 +14,12 @@ type HistorieEintrag = { id: string; zeitpunkt: string; personName: string; typL
 export default function DashboardClient({
   daten,
   istEltern,
-  kinder,
   historie,
 }: {
   daten: Daten;
   istEltern: boolean;
-  kinder: { id: string; name: string }[];
   historie: HistorieEintrag[];
 }) {
-  const [pending, startTransition] = useTransition();
-  const [zeigeForm, setZeigeForm] = useState(false);
-  const [titel, setTitel] = useState("");
-  const [art, setArt] = useState("KLASSENARBEIT");
-  const [datum, setDatum] = useState("");
-  const [personId, setPersonId] = useState(kinder[0]?.id ?? "");
-
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <h1 style={{ fontSize: 22, margin: 0 }}>Hallo, {daten.person.name}!</h1>
@@ -53,55 +43,21 @@ export default function DashboardClient({
       <div className="card">
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <strong>🎓 Als Nächstes steht an</strong>
-          {istEltern && (
-            <button className="btn-secondary" style={{ fontSize: 12 }} onClick={() => setZeigeForm((v) => !v)}>
-              + Eintrag
-            </button>
-          )}
+          <Link href="/schule" style={{ fontSize: 12, color: "var(--accent)", textDecoration: "none" }}>
+            Verwalten →
+          </Link>
         </div>
-
-        {zeigeForm && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 10 }}>
-            <input placeholder="Titel (z.B. Mathe-Arbeit)" value={titel} onChange={(e) => setTitel(e.target.value)} />
-            <select value={art} onChange={(e) => setArt(e.target.value)}>
-              <option value="KLASSENARBEIT">Klassenarbeit</option>
-              <option value="HAUSAUFGABEN_KONTROLLE">Hausaufgaben-Kontrolle</option>
-            </select>
-            <select value={personId} onChange={(e) => setPersonId(e.target.value)}>
-              {kinder.map((k) => (
-                <option key={k.id} value={k.id}>
-                  {k.name}
-                </option>
-              ))}
-            </select>
-            <input type="date" value={datum} onChange={(e) => setDatum(e.target.value)} />
-            <button
-              className="btn"
-              disabled={pending}
-              onClick={() =>
-                startTransition(async () => {
-                  if (!titel || !datum) return;
-                  await createSchulEintrag({ titel, art, datum, personId });
-                  setTitel("");
-                  setDatum("");
-                  setZeigeForm(false);
-                })
-              }
-            >
-              Speichern
-            </button>
-          </div>
-        )}
 
         {daten.schulEintraege.length === 0 && <p style={{ margin: "4px 0 0", color: "var(--text-muted)" }}>Nichts Anstehendes.</p>}
         {daten.schulEintraege.map((s) => (
           <div key={s.id} className="card" style={{ marginTop: 8 }}>
-            <div style={{ fontWeight: 600 }}>
+            <div style={{ fontWeight: 700, fontSize: 15 }}>
+              {new Date(s.datum).toLocaleDateString("de-DE", { weekday: "long", day: "2-digit", month: "2-digit" })}
+            </div>
+            <div style={{ fontWeight: 600, marginTop: 2 }}>
               {s.titel} {istEltern && <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>· {s.personName}</span>}
             </div>
-            <div style={{ fontSize: 13, color: "var(--text-muted)" }}>
-              {new Date(s.datum).toLocaleDateString("de-DE", { weekday: "long", day: "2-digit", month: "2-digit" })} · noch {s.tageBis} Tag(e)
-            </div>
+            <div style={{ fontSize: 13, color: "var(--text-muted)" }}>noch {s.tageBis} Tag(e)</div>
             {s.lerntipp && <div style={{ fontSize: 13, marginTop: 4 }}>💡 {s.lerntipp}</div>}
           </div>
         ))}

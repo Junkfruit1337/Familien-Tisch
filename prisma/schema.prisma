@@ -38,6 +38,7 @@ model Person {
   einkaufsWuensche   EinkaufsWunsch[]
   faecher            Fach[]
   noten              Note[]
+  notenGewichtungen  NotenGewichtung[]
   taschengeld        TaschengeldTransaktion[]
   sparziel           Sparziel?
   dienstZuweisungen  DienstZuweisung[]
@@ -181,11 +182,12 @@ model EinkaufsWunsch {
 // ---------- Schule & Noten & Taschengeld ----------
 
 model Fach {
-  id      String  @id @default(cuid())
-  name    String
-  kindId  String
-  kind    Person  @relation(fields: [kindId], references: [id])
-  noten   Note[]
+  id           String            @id @default(cuid())
+  name         String
+  kindId       String
+  kind         Person            @relation(fields: [kindId], references: [id])
+  noten        Note[]
+  gewichtungen NotenGewichtung[]
 
   @@unique([kindId, name])
 }
@@ -202,6 +204,21 @@ enum NoteStatus {
   ABGELEHNT
 }
 
+// Voreinstellung für die Gewichtung, mit der neue Noten eines Fachs/einer Art
+// automatisch angelegt werden (Frage 21). Pro Kind + Fach + Art einzeln einstellbar,
+// mit Übertragen-Funktion auf andere Fächer/Kinder in der UI.
+model NotenGewichtung {
+  id         String  @id @default(cuid())
+  kindId     String
+  kind       Person  @relation(fields: [kindId], references: [id])
+  fachId     String
+  fach       Fach    @relation(fields: [fachId], references: [id])
+  art        NoteArt
+  gewichtung Float   @default(1)
+
+  @@unique([kindId, fachId, art])
+}
+
 model Note {
   id            String     @id @default(cuid())
   kindId        String
@@ -213,6 +230,7 @@ model Note {
   datum         DateTime
   notiz         String?
   gewichtung    Float      @default(1)
+  fotoBase64    String?    @db.Text
   status        NoteStatus @default(OFFEN)
   eingetragenVonId String  // Kind selbst oder Elternteil
   createdAt     DateTime   @default(now())

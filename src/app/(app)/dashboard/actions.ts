@@ -1,8 +1,8 @@
 "use server";
 
-import { getCurrentPerson, requirePerson } from "@/lib/auth";
+import { requirePerson } from "@/lib/auth";
 import { getWochenplan } from "../essensplan/actions";
-import { listAnstehendeSchulEintraege, createSchulEintrag } from "../schule/actions";
+import { listAnstehendeSchulEintraege } from "../schule/actions";
 import { prisma } from "@/lib/prisma";
 
 function lerntipp(tageBis: number): string {
@@ -53,8 +53,6 @@ export async function getDashboardDaten() {
     offeneAufgaben,
   };
 }
-
-export { createSchulEintrag };
 
 // ---------- Änderungshistorie (nur für Eltern sichtbar) ----------
 
