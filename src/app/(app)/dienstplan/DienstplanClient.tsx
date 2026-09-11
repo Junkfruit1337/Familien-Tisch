@@ -17,6 +17,7 @@ import {
   toggleZusatzAufgabe,
   deleteZusatzAufgabe,
 } from "./actions";
+import HistorieVerlauf from "@/components/HistorieVerlauf";
 
 type Dienst = { id: string; bezeichnung: string; beschreibung: string | null };
 type Tag = { datum: string; kindName: string; kindFarbe: string; getauschtHeute: boolean };
@@ -161,21 +162,24 @@ export default function DienstplanClient({
       {tausche.length > 0 && (
         <div className="card" style={{ background: "#f0dfa8", color: "#6b5117", border: "none", display: "flex", flexDirection: "column", gap: 6 }}>
           {tausche.map((t) => (
-            <div key={t.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 13 }}>
-              <span>
-                {t.modus === "TAUSCH" ? "🔄" : "➡️"} {t.vonName} {t.modus === "TAUSCH" ? "↔" : "→"} {t.mitName}{" "}
-                {t.tag ? `am ${new Date(t.tag).toLocaleDateString("de-DE")}` : "(ganze Woche)"}{" "}
-                <span style={{ opacity: 0.8 }}>({t.modus === "TAUSCH" ? "Tausch" : "Abgabe"})</span>
-              </span>
-              {istEltern && (
-                <button
-                  className="btn-secondary"
-                  style={{ fontSize: 12, padding: "2px 8px", color: "#6b5117", borderColor: "#6b5117" }}
-                  onClick={() => startTransition(() => hebeTauschAuf(t.id).then(() => ladeWoche(wocheStart)))}
-                >
-                  aufheben
-                </button>
-              )}
+            <div key={t.id} style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 13 }}>
+                <span>
+                  {t.modus === "TAUSCH" ? "🔄" : "➡️"} {t.vonName} {t.modus === "TAUSCH" ? "↔" : "→"} {t.mitName}{" "}
+                  {t.tag ? `am ${new Date(t.tag).toLocaleDateString("de-DE")}` : "(ganze Woche)"}{" "}
+                  <span style={{ opacity: 0.8 }}>({t.modus === "TAUSCH" ? "Tausch" : "Abgabe"})</span>
+                </span>
+                {istEltern && (
+                  <button
+                    className="btn-secondary"
+                    style={{ fontSize: 12, padding: "2px 8px", color: "#6b5117", borderColor: "#6b5117" }}
+                    onClick={() => startTransition(() => hebeTauschAuf(t.id).then(() => ladeWoche(wocheStart)))}
+                  >
+                    aufheben
+                  </button>
+                )}
+              </div>
+              {istEltern && <HistorieVerlauf entityTyp="DIENST_TAUSCH" entityId={t.id} />}
             </div>
           ))}
         </div>

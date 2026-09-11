@@ -12,9 +12,10 @@ import {
   verschiebeArtikelKategorie,
 } from "./actions";
 import { erkenneKategorie } from "@/lib/kategorisierung";
+import HistorieVerlauf from "@/components/HistorieVerlauf";
 
 type Artikel = { id: string; name: string; menge: string | null; erledigt: boolean; kategorieId: string | null; kategorieName: string };
-type Wunsch = { id: string; artikelName: string; menge: string | null; status: string; kindName: string };
+type Wunsch = { id: string; artikelName: string; menge: string | null; status: string; kindName: string; entschiedenAm: string | null };
 type Kategorie = { id: string; name: string };
 
 export default function EinkaufslisteClient({
@@ -64,6 +65,7 @@ export default function EinkaufslisteClient({
 
   const erledigt = artikel.filter((a) => a.erledigt);
   const offeneWuensche = wuensche.filter((w) => w.status === "OFFEN");
+  const entschiedeneWuensche = wuensche.filter((w) => w.status !== "OFFEN");
 
   function beginneBearbeiten(a: Artikel) {
     setBearbeiteId(a.id);
@@ -183,10 +185,29 @@ export default function EinkaufslisteClient({
                     </option>
                   ))}
                 </select>
+                <HistorieVerlauf entityTyp="EINKAUFS_WUNSCH" entityId={w.id} />
               </div>
             );
           })}
         </div>
+      )}
+
+      {entschiedeneWuensche.length > 0 && (
+        <details>
+          <summary style={{ cursor: "pointer", color: "var(--text-muted)" }}>Wunsch-Verlauf ({entschiedeneWuensche.length})</summary>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
+            {entschiedeneWuensche.map((w) => (
+              <div key={w.id} className="card" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ fontSize: 14 }}>
+                  {w.artikelName} {w.menge ? `(${w.menge})` : ""}
+                  {istEltern && <span style={{ color: "var(--text-muted)" }}> — {w.kindName}</span>}
+                  {w.entschiedenAm && <span style={{ color: "var(--text-muted)" }}> · {new Date(w.entschiedenAm).toLocaleDateString("de-DE")}</span>}
+                </span>
+                <span className={`pill pill-${w.status.toLowerCase()}`}>{w.status}</span>
+              </div>
+            ))}
+          </div>
+        </details>
       )}
 
       {Object.entries(nachKategorie).map(([kat, items]) => (

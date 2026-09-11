@@ -3,6 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import { createTermin, updateTermin, deleteTermin } from "./actions";
 import { erkenneTerminKategorie, TERMIN_KATEGORIE_LABEL } from "@/lib/terminkategorisierung";
+import HistorieVerlauf from "@/components/HistorieVerlauf";
 
 type Termin = {
   id: string;
@@ -230,6 +231,7 @@ export default function KalenderClient({
               </button>
             </div>
           )}
+          {istEltern && t.typ === "termin" && !loeschAuswahl && <HistorieVerlauf entityTyp="TERMIN" entityId={t.id} />}
         </div>
         {bearbeitbar && !loeschAuswahl && (
           <div style={{ display: "flex", gap: 6 }}>

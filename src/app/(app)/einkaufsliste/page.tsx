@@ -23,6 +23,7 @@ export default async function EinkaufslistePage() {
         menge: w.menge,
         status: w.status,
         kindName: w.kind.name,
+        entschiedenAm: w.entschiedenAm?.toISOString() ?? null,
       }))}
       kategorien={kategorien.map((k) => ({ id: k.id, name: k.name }))}
     />

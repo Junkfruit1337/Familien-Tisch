@@ -18,6 +18,7 @@ import {
   updateSchulEintrag,
   deleteSchulEintrag,
 } from "./actions";
+import HistorieVerlauf from "@/components/HistorieVerlauf";
 
 type Note = {
   id: string;
@@ -826,6 +827,7 @@ export default function SchuleClient({
                             {n.gewichtung !== 1 && ` · Gewichtung ${n.gewichtung}`}
                             {n.notiz && ` · „${n.notiz}"`}
                           </div>
+                          {istEltern && <HistorieVerlauf entityTyp="NOTE" entityId={n.id} />}
                         </div>
                       </div>
                       <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>

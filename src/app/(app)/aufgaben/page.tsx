@@ -19,6 +19,7 @@ export default async function AufgabenPage() {
         erledigt: a.erledigt,
         personId: a.personId,
         personName: a.person?.name ?? "Familie",
+        seriesId: a.seriesId,
       }))}
       personen={personen.map((p) => ({ id: p.id, name: p.name }))}
     />
