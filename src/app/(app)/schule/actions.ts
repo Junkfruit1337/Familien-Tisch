@@ -5,6 +5,7 @@ import { requirePerson, requireParent } from "@/lib/auth";
 import { logAenderung } from "@/lib/history";
 import { revalidatePath } from "next/cache";
 import { sendePushAnEltern, sendePushAnPerson } from "@/lib/push";
+import { erkenneNoteAusSprache, type ErkannteNote } from "@/lib/spracheErkennung";
 
 function betragFuerNote(note: number): number {
   if (note === 1) return 10;
@@ -14,6 +15,25 @@ function betragFuerNote(note: number): number {
 
 export async function listKinder() {
   return prisma.person.findMany({ where: { rolle: "KIND" }, orderBy: { reihenfolge: "asc" } });
+}
+
+// Spracheingabe fürs Noten-Formular (Fix-Batch 26) — füllt nur die Formularfelder vor,
+// Prüfung/Korrektur/Speichern bleibt beim Nutzer. Fehler als Ergebnis-Objekt statt Wurf
+// (analog Rezept-Foto/Termine/Aufgaben, siehe Fix-Batch 19).
+export async function erkenneNoteAusText(
+  text: string,
+  kindId: string
+): Promise<{ ok: true; note: ErkannteNote } | { ok: false; fehler: string }> {
+  await requirePerson();
+  try {
+    const faecher = await prisma.fach.findMany({ where: { kindId }, select: { id: true, name: true } });
+    const note = await erkenneNoteAusSprache(text, faecher);
+    return { ok: true, note };
+  } catch (err) {
+    console.error("Spracheingabe (Note) fehlgeschlagen:", err);
+    const fehler = err instanceof Error ? err.message : "Unbekannter Fehler bei der Spracherkennung.";
+    return { ok: false, fehler };
+  }
 }
 
 export async function listFaecher(kindId: string) {

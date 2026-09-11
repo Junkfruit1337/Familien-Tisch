@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { requireParent, requirePerson, hashPin } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
+import { erkenneTicketAusSprache, type ErkanntesTicket } from "@/lib/spracheErkennung";
 
 export async function listPersonen() {
   await requirePerson();
@@ -50,4 +51,48 @@ export async function setPortionsGewicht(personId: string, portionsGewicht: numb
   await prisma.person.update({ where: { id: personId }, data: { portionsGewicht } });
   revalidatePath("/einstellungen");
   revalidatePath("/essensplan");
+}
+
+// ---------- Ticketsystem: Fehlermeldungen/Verbesserungsvorschläge (Fix-Batch 26) ----------
+
+// Spracheingabe → Titel/Beschreibung-Entwurf, wird erst nach Prüfung durch den Nutzer
+// eingereicht (analog Rezept-Foto/Termine/Aufgaben/Noten). Ergebnis-Objekt statt Wurf,
+// damit Next.js' Fehler-Redaction in Server Actions die echte Meldung nicht verschluckt.
+export async function erkenneTicketAusText(text: string): Promise<{ ok: true; ticket: ErkanntesTicket } | { ok: false; fehler: string }> {
+  await requirePerson();
+  try {
+    const ticket = await erkenneTicketAusSprache(text);
+    return { ok: true, ticket };
+  } catch (err) {
+    console.error("Spracheingabe (Ticket) fehlgeschlagen:", err);
+    const fehler = err instanceof Error ? err.message : "Unbekannter Fehler bei der Spracherkennung.";
+    return { ok: false, fehler };
+  }
+}
+
+export async function erstelleTicket(titel: string, beschreibung: string) {
+  const person = await requirePerson();
+  if (!titel.trim() || !beschreibung.trim()) throw new Error("Titel und Beschreibung dürfen nicht leer sein.");
+  await prisma.ticket.create({ data: { titel: titel.trim(), beschreibung: beschreibung.trim(), erstelltVonId: person.id } });
+  revalidatePath("/einstellungen");
+}
+
+// Jede Person sieht nur ihre eigenen eingereichten Tickets mit Status (Fragenkatalog-
+// Anforderung: "Ticketersteller kann immer den Status seines Tickets anschauen").
+export async function listMeineTickets() {
+  const person = await requirePerson();
+  return prisma.ticket.findMany({ where: { erstelltVonId: person.id }, orderBy: { createdAt: "desc" } });
+}
+
+// Eltern sehen und bearbeiten alle Tickets — die App kennt keine Sonderrechte zwischen
+// einzelnen Elternteilen (Fragenkatalog), daher hier bewusst nicht auf Florian beschränkt.
+export async function listAlleTickets() {
+  await requireParent();
+  return prisma.ticket.findMany({ include: { erstelltVon: true }, orderBy: { createdAt: "desc" } });
+}
+
+export async function setzeTicketStatus(id: string, status: string, begruendung?: string) {
+  await requireParent();
+  await prisma.ticket.update({ where: { id }, data: { status: status as any, begruendung: begruendung || undefined } });
+  revalidatePath("/einstellungen");
 }

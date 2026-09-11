@@ -1,5 +1,5 @@
 import { getCurrentPerson } from "@/lib/auth";
-import { listPersonen } from "./actions";
+import { listPersonen, listMeineTickets, listAlleTickets } from "./actions";
 import { listKategorien } from "../einkaufsliste/actions";
 import { listKinder, listFaecher, listNotenGewichtung } from "../schule/actions";
 import { listDienstkatalog } from "../dienstplan/actions";
@@ -10,6 +10,8 @@ export default async function EinstellungenPage() {
   const person = await getCurrentPerson();
   const istEltern = person?.rolle === "ELTERN";
   const personen = await listPersonen();
+  const meineTickets = await listMeineTickets();
+  const alleTickets = istEltern ? await listAlleTickets() : [];
 
   const kategorien = istEltern ? await listKategorien() : [];
   const dienstkatalog = istEltern ? await listDienstkatalog() : [];
@@ -43,6 +45,23 @@ export default async function EinstellungenPage() {
         beschreibung: d.beschreibung,
       }))}
       historie={historie}
+      meineTickets={meineTickets.map((t) => ({
+        id: t.id,
+        titel: t.titel,
+        beschreibung: t.beschreibung,
+        status: t.status,
+        begruendung: t.begruendung,
+        createdAt: t.createdAt.toISOString(),
+      }))}
+      alleTickets={alleTickets.map((t) => ({
+        id: t.id,
+        titel: t.titel,
+        beschreibung: t.beschreibung,
+        status: t.status,
+        begruendung: t.begruendung,
+        erstellerName: t.erstelltVon.name,
+        createdAt: t.createdAt.toISOString(),
+      }))}
     />
   );
 }

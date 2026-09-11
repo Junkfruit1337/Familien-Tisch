@@ -51,6 +51,7 @@ model Person {
   zusatzAufgaben     ZusatzAufgabe[]
   pushSubscriptions  PushSubscription[]
   schulEintraege     SchulEintrag[]     @relation("SchulEintragPerson")
+  tickets            Ticket[]
 }
 
 model Session {
@@ -462,4 +463,31 @@ model PushSubscription {
   p256dh    String
   auth      String
   createdAt DateTime @default(now())
+}
+
+// ---------- Ticketsystem für Fehlermeldungen/Verbesserungsvorschläge (Fix-Batch 26) ----------
+// Jede Person kann per Spracheingabe oder Text ein Ticket einreichen (Einstellungen →
+// "Fehler melden"); Eltern (nicht auf Florian technisch beschränkbar, da die App keine
+// Sonderrechte zwischen einzelnen Elternteilen kennt, siehe Fragenkatalog) genehmigen/
+// lehnen ab/setzen auf "in Umsetzung". "Umgesetzt" wird nicht automatisch erkannt, sondern
+// von Claude Code beim tatsächlichen Umsetzen eines genehmigten Tickets manuell gesetzt
+// (Teil des normalen FAHRPLAN.md-Workflows dieses Projekts).
+enum TicketStatus {
+  EINGEREICHT
+  GENEHMIGT
+  ABGELEHNT
+  IN_UMSETZUNG
+  UMGESETZT
+}
+
+model Ticket {
+  id            String       @id @default(cuid())
+  titel         String
+  beschreibung  String
+  status        TicketStatus @default(EINGEREICHT)
+  begruendung   String? // optionale Begründung der Eltern (v.a. bei Ablehnung)
+  erstelltVonId String
+  erstelltVon   Person       @relation(fields: [erstelltVonId], references: [id])
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
 }

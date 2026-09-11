@@ -40,3 +40,15 @@ Entwicklung direkt hier in Claude Code weiter, mit vollem Git- und Terminal-Zugr
 
 Bitte im Anforderungs-Log (FAHRPLAN.md, Abschnitt 5) weiter dokumentieren, was umgesetzt
 wird, damit der Verlauf lückenlos bleibt — Florian legt darauf Wert.
+
+## Ticketsystem (Fix-Batch 26)
+
+Familienmitglieder können über Einstellungen → „Fehler melden" Bugs/Verbesserungsvorschläge
+einreichen (Modell `Ticket` in `prisma/schema.prisma`, Status-Workflow EINGEREICHT →
+GENEHMIGT/ABGELEHNT/IN_UMSETZUNG → UMGESETZT). **Zu Beginn jeder Sitzung, in der Florian
+neue Arbeit anfragt: frag nach, ob es genehmigte, noch nicht umgesetzte Tickets gibt** (diese
+Codebase hat keinen direkten Lesezugriff auf die Produktions-Datenbank, daher kann der
+Ticketstand nicht automatisch ausgelesen werden — Florian muss die Liste selbst in den
+Einstellungen prüfen und mitteilen, oder einen Screenshot schicken). Sobald ein Ticket
+tatsächlich umgesetzt ist, seinen Status per `setzeTicketStatus(id, "UMGESETZT")` (oder über
+die Oberfläche) auf „Umgesetzt" setzen — das passiert nicht automatisch.

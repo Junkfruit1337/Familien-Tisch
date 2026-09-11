@@ -14,8 +14,10 @@ import {
   createSchulEintrag,
   updateSchulEintrag,
   deleteSchulEintrag,
+  erkenneNoteAusText,
 } from "./actions";
 import HistorieVerlauf from "@/components/HistorieVerlauf";
+import Spracheingabe from "@/components/Spracheingabe";
 
 type Note = {
   id: string;
@@ -392,10 +394,30 @@ export default function SchuleClient({
   const [neueinreichungId, setNeueinreichungId] = useState<string | null>(null);
   const [neueinreichungNote, setNeueinreichungNote] = useState(1);
   const [neueinreichungNotiz, setNeueinreichungNotiz] = useState("");
+  const [spracheVerarbeitung, setSpracheVerarbeitung] = useState(false);
 
   if (!kind) return <p>Noch keine Kinder angelegt.</p>;
 
   const offeneNoten = istEltern ? kinder.flatMap((k) => k.noten.filter((n) => n.status === "OFFEN").map((n) => ({ ...n, kindName: k.name }))) : [];
+
+  async function spracheErkannt(text: string) {
+    setSpracheVerarbeitung(true);
+    try {
+      const ergebnis = await erkenneNoteAusText(text, kind.id);
+      if (!ergebnis.ok) {
+        alert(ergebnis.fehler);
+        return;
+      }
+      const n = ergebnis.note;
+      if (n.fachId) setFachId(n.fachId);
+      setArt(n.art);
+      if (n.note) setNoteWert(n.note);
+      setDatum(n.datum ?? new Date().toISOString().slice(0, 10));
+      setNotiz(n.notiz ?? "");
+    } finally {
+      setSpracheVerarbeitung(false);
+    }
+  }
 
   async function jetztEinreichen() {
     if (!fachId) return;
@@ -622,6 +644,8 @@ export default function SchuleClient({
       {(istEltern || kind.id === eigeneId) && (
         <div className="card" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           <strong>Note eintragen</strong>
+          <Spracheingabe onErgebnis={spracheErkannt} disabled={spracheVerarbeitung} />
+          {spracheVerarbeitung && <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>Spracheingabe wird verarbeitet …</p>}
           <div style={{ display: "flex", gap: 8 }}>
             <select value={fachId} onChange={(e) => setFachId(e.target.value)} style={{ flex: 1 }}>
               <option value="">Fach wählen</option>

@@ -1,7 +1,16 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { createPerson, setPin, setFarbe, setAktiv, setPortionsGewicht } from "./actions";
+import {
+  createPerson,
+  setPin,
+  setFarbe,
+  setAktiv,
+  setPortionsGewicht,
+  erstelleTicket,
+  erkenneTicketAusText,
+  setzeTicketStatus,
+} from "./actions";
 import { addKategorie, verschiebeKategorie } from "../einkaufsliste/actions";
 import { addFach, deleteFach } from "../schule/actions";
 import {
@@ -14,6 +23,7 @@ import {
 } from "../dienstplan/actions";
 import NotengewichtungSektion from "@/components/NotengewichtungSektion";
 import PushBenachrichtigungen from "@/components/PushBenachrichtigungen";
+import Spracheingabe from "@/components/Spracheingabe";
 
 type Person = { id: string; name: string; rolle: string; farbe: string; aktiv: boolean; hatPin: boolean; portionsGewicht: number };
 type Kategorie = { id: string; name: string; reihenfolge: number };
@@ -21,12 +31,22 @@ type Gewichtung = { fachId: string; fachName: string; gewichtungen: { art: strin
 type Kind = { id: string; name: string; faecher: { id: string; name: string }[]; gewichtung: Gewichtung[] };
 type Dienst = { id: string; schichtNummer: number; reihenfolge: number; bezeichnung: string; beschreibung: string | null };
 type HistorieEintrag = { id: string; zeitpunkt: string; personName: string; typLabel: string; aktion: string; bezug: string | null };
+type Ticket = { id: string; titel: string; beschreibung: string; status: string; begruendung: string | null; createdAt: string };
+type TicketMitErsteller = Ticket & { erstellerName: string };
 
 const ROLLEN = [
   { value: "ELTERN", label: "Elternteil" },
   { value: "KIND", label: "Kind (mit Login)" },
   { value: "KIND_OHNE_ZUGANG", label: "Kind ohne eigenen Zugang" },
 ];
+
+const TICKET_STATUS_LABEL: Record<string, string> = {
+  EINGEREICHT: "Eingereicht",
+  GENEHMIGT: "Genehmigt",
+  ABGELEHNT: "Abgelehnt",
+  IN_UMSETZUNG: "Genehmigt und in Umsetzung",
+  UMGESETZT: "Umgesetzt",
+};
 
 export default function EinstellungenClient({
   istEltern,
@@ -35,6 +55,8 @@ export default function EinstellungenClient({
   kinder,
   dienstkatalog,
   historie,
+  meineTickets,
+  alleTickets,
 }: {
   istEltern: boolean;
   personen: Person[];
@@ -42,6 +64,8 @@ export default function EinstellungenClient({
   kinder: Kind[];
   dienstkatalog: Dienst[];
   historie: HistorieEintrag[];
+  meineTickets: Ticket[];
+  alleTickets: TicketMitErsteller[];
 }) {
   const [pending, startTransition] = useTransition();
   const [name, setName] = useState("");
@@ -58,11 +82,78 @@ export default function EinstellungenClient({
   const [dienstBeschreibung, setDienstBeschreibung] = useState("");
   const [neuerDienst, setNeuerDienst] = useState<Record<number, string>>({});
 
+  const [ticketTitel, setTicketTitel] = useState("");
+  const [ticketBeschreibung, setTicketBeschreibung] = useState("");
+  const [ticketVerarbeitung, setTicketVerarbeitung] = useState(false);
+  const [ticketBegruendungen, setTicketBegruendungen] = useState<Record<string, string>>({});
+
+  async function ticketSpracheErkannt(text: string) {
+    setTicketVerarbeitung(true);
+    try {
+      const ergebnis = await erkenneTicketAusText(text);
+      if (!ergebnis.ok) {
+        alert(ergebnis.fehler);
+        return;
+      }
+      setTicketTitel(ergebnis.ticket.titel);
+      setTicketBeschreibung(ergebnis.ticket.beschreibung);
+    } finally {
+      setTicketVerarbeitung(false);
+    }
+  }
+
+  const fehlerMeldenSektion = (
+    <details>
+      <summary style={{ cursor: "pointer", fontWeight: 600 }}>🐞 Fehler melden / Verbesserungsvorschlag</summary>
+      <div className="card" style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
+        <Spracheingabe onErgebnis={ticketSpracheErkannt} disabled={ticketVerarbeitung} />
+        {ticketVerarbeitung && <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>Spracheingabe wird verarbeitet …</p>}
+        <input placeholder="Titel" value={ticketTitel} onChange={(e) => setTicketTitel(e.target.value)} />
+        <textarea
+          placeholder="Was ist passiert / was wünschst du dir?"
+          rows={4}
+          value={ticketBeschreibung}
+          onChange={(e) => setTicketBeschreibung(e.target.value)}
+        />
+        <button
+          className="btn"
+          disabled={pending || !ticketTitel.trim() || !ticketBeschreibung.trim()}
+          onClick={() =>
+            startTransition(async () => {
+              await erstelleTicket(ticketTitel, ticketBeschreibung);
+              setTicketTitel("");
+              setTicketBeschreibung("");
+            })
+          }
+        >
+          Einreichen
+        </button>
+        {meineTickets.length > 0 && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, borderTop: "1px solid var(--border)", paddingTop: 8, marginTop: 4 }}>
+            <strong style={{ fontSize: 13 }}>Meine gemeldeten Tickets</strong>
+            {meineTickets.map((t) => (
+              <div key={t.id} style={{ display: "flex", flexDirection: "column", gap: 2, fontSize: 13 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                  <span>{t.titel}</span>
+                  <span className={`pill pill-${t.status === "ABGELEHNT" ? "abgelehnt" : t.status === "EINGEREICHT" ? "offen" : "genehmigt"}`}>
+                    {TICKET_STATUS_LABEL[t.status] ?? t.status}
+                  </span>
+                </div>
+                {t.begruendung && <span style={{ color: "var(--text-muted)", fontSize: 12 }}>„{t.begruendung}"</span>}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </details>
+  );
+
   if (!istEltern) {
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
         <h1 style={{ fontSize: 22, margin: 0 }}>Einstellungen</h1>
         <PushBenachrichtigungen />
+        {fehlerMeldenSektion}
         <p style={{ color: "var(--text-muted)" }}>Der Rest dieses Bereichs ist nur für Eltern.</p>
       </div>
     );
@@ -75,6 +166,54 @@ export default function EinstellungenClient({
       <h1 style={{ fontSize: 22, margin: 0 }}>Einstellungen</h1>
 
       <PushBenachrichtigungen />
+
+      {fehlerMeldenSektion}
+
+      {alleTickets.length > 0 && (
+        <details>
+          <summary style={{ cursor: "pointer", fontWeight: 600 }}>🎫 Tickets verwalten ({alleTickets.filter((t) => t.status === "EINGEREICHT").length} neu)</summary>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
+            {alleTickets.map((t) => (
+              <div key={t.id} className="card" style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                  <strong style={{ fontSize: 14 }}>{t.titel}</strong>
+                  <span className={`pill pill-${t.status === "ABGELEHNT" ? "abgelehnt" : t.status === "EINGEREICHT" ? "offen" : "genehmigt"}`}>
+                    {TICKET_STATUS_LABEL[t.status] ?? t.status}
+                  </span>
+                </div>
+                <p style={{ margin: 0, fontSize: 13 }}>{t.beschreibung}</p>
+                <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>
+                  Von {t.erstellerName} · {new Date(t.createdAt).toLocaleDateString("de-DE")}
+                </p>
+                {t.begruendung && <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>Begründung: „{t.begruendung}"</p>}
+                <input
+                  placeholder="Begründung (optional)"
+                  value={ticketBegruendungen[t.id] ?? ""}
+                  onChange={(e) => setTicketBegruendungen((prev) => ({ ...prev, [t.id]: e.target.value }))}
+                  style={{ fontSize: 13 }}
+                />
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  {["GENEHMIGT", "ABGELEHNT", "IN_UMSETZUNG", "UMGESETZT"].map((s) => (
+                    <button
+                      key={s}
+                      className="btn-secondary"
+                      style={{
+                        fontSize: 12,
+                        padding: "4px 10px",
+                        background: t.status === s ? "var(--accent)" : undefined,
+                        color: t.status === s ? "var(--accent-contrast)" : undefined,
+                      }}
+                      onClick={() => startTransition(() => setzeTicketStatus(t.id, s, ticketBegruendungen[t.id] || undefined))}
+                    >
+                      {TICKET_STATUS_LABEL[s]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </details>
+      )}
 
       <details open>
         <summary style={{ cursor: "pointer", fontWeight: 600 }}>👪 Personen &amp; Zugänge</summary>

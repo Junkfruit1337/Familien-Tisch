@@ -20,6 +20,19 @@ export type ErkannteAufgabe = {
   wiederholungBis: string | null;
 };
 
+export type ErkannteNote = {
+  fachId: string | null;
+  art: "KLASSENARBEIT" | "HAUSAUFGABEN_KONTROLLE" | "EPOCHALNOTE";
+  note: number | null;
+  datum: string | null; // JJJJ-MM-TT, null = heute (Client setzt Default)
+  notiz: string | null;
+};
+
+export type ErkanntesTicket = {
+  titel: string;
+  beschreibung: string;
+};
+
 const WIEDERHOLUNG_WERTE = ["KEINE", "TAEGLICH", "WOECHENTLICH", "ZWEIWOECHENTLICH", "MONATLICH"];
 
 // Aktuelles Datum als Kontext für relative Angaben ("morgen", "nächsten Montag" etc.),
@@ -122,5 +135,49 @@ export async function erkenneAufgabeAusSprache(text: string, personen: PersonFue
     personIds: lesePersonIds(d.personIds, personen),
     wiederholung: leseWiederholung(d),
     wiederholungBis: leseDatumsfeld(d.wiederholungBis),
+  };
+}
+
+const NOTE_ART_WERTE = ["KLASSENARBEIT", "HAUSAUFGABEN_KONTROLLE", "EPOCHALNOTE"];
+
+// Spracheingabe fürs Noten-Formular (Fix-Batch 26 — Florians Wunsch, Spracheingabe auch
+// für weitere Mehrfeld-Formulare anzubieten, nicht nur Termine/Aufgaben).
+export async function erkenneNoteAusSprache(text: string, faecher: { id: string; name: string }[]): Promise<ErkannteNote> {
+  const faecherListe = faecher.length > 0 ? faecher.map((f) => `${f.id} = ${f.name}`).join(", ") : "(keine Fächer bekannt)";
+  const prompt =
+    `${heutigerKontext()}\n` +
+    `Ein Familienmitglied hat per Spracheingabe folgende Schulnote diktiert:\n"${text}"\n\n` +
+    `Bekannte Fächer dieses Kindes (ID = Name): ${faecherListe}\n\n` +
+    "Extrahiere die Noten-Angaben und antworte AUSSCHLIESSLICH mit einem JSON-Objekt, ohne Markdown-Codeblock, ohne weiteren Text, in genau diesem Format:\n" +
+    '{"fachId": "eine ID aus der Liste oder null, falls kein passendes Fach erkennbar ist", ' +
+    '"art": "KLASSENARBEIT oder HAUSAUFGABEN_KONTROLLE oder EPOCHALNOTE (Standard: KLASSENARBEIT, falls nichts erkennbar)", ' +
+    '"note": "Zahl von 1 bis 6, oder null falls nicht erkennbar", ' +
+    '"datum": "JJJJ-MM-TT oder null, falls kein Datum genannt wurde (dann gilt heute)", ' +
+    '"notiz": "kurze zusätzliche Anmerkung oder null, falls keine erkennbar ist"}\n' +
+    "Rechne relative Datumsangaben (\"heute\", \"gestern\", \"letzten Montag\") anhand des heutigen Datums in ein konkretes Datum um.";
+
+  const d = await rufeSpracheNluAuf(prompt);
+  return {
+    fachId: typeof d.fachId === "string" && faecher.some((f) => f.id === d.fachId) ? d.fachId : null,
+    art: typeof d.art === "string" && NOTE_ART_WERTE.includes(d.art) ? (d.art as ErkannteNote["art"]) : "KLASSENARBEIT",
+    note: typeof d.note === "number" && d.note >= 1 && d.note <= 6 ? Math.round(d.note) : null,
+    datum: leseDatumsfeld(d.datum),
+    notiz: typeof d.notiz === "string" && d.notiz.trim() ? d.notiz.trim() : null,
+  };
+}
+
+// Spracheingabe für "Fehler melden"/Verbesserungsvorschläge (Fix-Batch 26) — formt einen
+// frei gesprochenen Bericht in einen kurzen Titel + eine ausformulierte Beschreibung um.
+export async function erkenneTicketAusSprache(text: string): Promise<ErkanntesTicket> {
+  const prompt =
+    `Ein Familienmitglied hat per Spracheingabe folgenden Fehler/Verbesserungsvorschlag zur Familientisch-App diktiert:\n"${text}"\n\n` +
+    "Fasse das in einen kurzen, prägnanten Titel (wenige Worte) und eine vollständige, klare Beschreibung (ganze Sätze, alle genannten Details) um. " +
+    "Antworte AUSSCHLIESSLICH mit einem JSON-Objekt, ohne Markdown-Codeblock, ohne weiteren Text, in genau diesem Format:\n" +
+    '{"titel": "kurzer Titel", "beschreibung": "ausformulierte Beschreibung"}';
+
+  const d = await rufeSpracheNluAuf(prompt);
+  return {
+    titel: typeof d.titel === "string" && d.titel.trim() ? d.titel.trim() : text.trim().slice(0, 60),
+    beschreibung: typeof d.beschreibung === "string" && d.beschreibung.trim() ? d.beschreibung.trim() : text.trim(),
   };
 }
