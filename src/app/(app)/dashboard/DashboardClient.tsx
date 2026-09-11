@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useState, useTransition } from "react";
 import { entscheideNote } from "../schule/actions";
 import { entscheideWunsch } from "../einkaufsliste/actions";
+import SeitenTitel from "@/components/SeitenTitel";
+import { BEREICH_FARBEN } from "@/lib/bereichFarben";
 
 const ART_LABEL: Record<string, string> = {
   KLASSENARBEIT: "Klassenarbeit",
@@ -28,7 +30,7 @@ export default function DashboardClient({ daten, istEltern }: { daten: Daten; is
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <h1 style={{ fontSize: 22, margin: 0 }}>Hallo, {daten.person.name}!</h1>
+      <SeitenTitel icon="🏠" farbe={BEREICH_FARBEN.dashboard}>Hallo, {daten.person.name}!</SeitenTitel>
 
       {grossesBild && (
         <div

@@ -20,6 +20,8 @@ import {
 import HistorieVerlauf from "@/components/HistorieVerlauf";
 import Spracheingabe from "@/components/Spracheingabe";
 import { erkenneSparzielIcon } from "@/lib/sparzielIcon";
+import SeitenTitel from "@/components/SeitenTitel";
+import { BEREICH_FARBEN } from "@/lib/bereichFarben";
 
 type Note = {
   id: string;
@@ -500,7 +502,7 @@ export default function SchuleClient({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <h1 style={{ fontSize: 22, margin: 0 }}>Schule &amp; Taschengeld</h1>
+      <SeitenTitel icon="🎓" farbe={BEREICH_FARBEN.schule}>Schule &amp; Taschengeld</SeitenTitel>
       {(kind.klasse || kind.klassenstufe) && (
         <p style={{ margin: "-8px 0 0", fontSize: 13, color: "var(--text-muted)" }}>
           {kind.klasse ? `Klasse ${kind.klasse}` : `${kind.klassenstufe}. Klasse`}
@@ -624,7 +626,20 @@ export default function SchuleClient({
         <strong>Kontostand: {kind.kontostand.toFixed(2)} €</strong>
         {kind.sparziel && (
           <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 12 }}>
-            <span style={{ fontSize: 32, flexShrink: 0 }}>{erkenneSparzielIcon(kind.sparziel.bezeichnung)}</span>
+            <div
+              style={{
+                width: 64,
+                height: 64,
+                borderRadius: 16,
+                background: BEREICH_FARBEN.schule,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexShrink: 0,
+              }}
+            >
+              <span style={{ fontSize: 34, lineHeight: 1 }}>{erkenneSparzielIcon(kind.sparziel.bezeichnung)}</span>
+            </div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "var(--text-muted)" }}>
                 <span>{kind.sparziel.bezeichnung}</span>
@@ -658,9 +673,22 @@ export default function SchuleClient({
                 <input type="number" placeholder="z. B. 150" value={zielBetrag} onChange={(e) => setZielBetrag(e.target.value)} />
               </label>
               {zielBezeichnung.trim() && (
-                <p style={{ margin: 0, fontSize: 13, color: "var(--text-muted)" }}>
-                  Vorschau-Icon: <span style={{ fontSize: 20, verticalAlign: "middle" }}>{erkenneSparzielIcon(zielBezeichnung)}</span>
-                </p>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--text-muted)" }}>
+                  <span>Vorschau-Icon:</span>
+                  <div
+                    style={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: 10,
+                      background: BEREICH_FARBEN.schule,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <span style={{ fontSize: 22, lineHeight: 1 }}>{erkenneSparzielIcon(zielBezeichnung)}</span>
+                  </div>
+                </div>
               )}
               <button
                 className="btn"

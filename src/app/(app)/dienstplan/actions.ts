@@ -159,32 +159,6 @@ export async function setKoerperpflegetag(wochentag: number, text: string) {
   revalidatePath("/einstellungen");
 }
 
-// ---------- Zusätzliche Aufgaben — freier Bereich für Ad-hoc-Dienste (Fahrplan §3, Batch 4) ----------
-
-export async function listZusatzAufgaben() {
-  return prisma.zusatzAufgabe.findMany({ include: { person: true }, orderBy: [{ erledigt: "asc" }, { createdAt: "desc" }] });
-}
-
-export async function addZusatzAufgabe(titel: string, personId?: string) {
-  const ersteller = await requireParent();
-  await prisma.zusatzAufgabe.create({ data: { titel, personId: personId || null, erstelltVonId: ersteller.id } });
-  revalidatePath("/dienstplan");
-}
-
-export async function toggleZusatzAufgabe(id: string) {
-  await requirePerson();
-  const a = await prisma.zusatzAufgabe.findUnique({ where: { id } });
-  if (!a) return;
-  await prisma.zusatzAufgabe.update({ where: { id }, data: { erledigt: !a.erledigt } });
-  revalidatePath("/dienstplan");
-}
-
-export async function deleteZusatzAufgabe(id: string) {
-  await requireParent();
-  await prisma.zusatzAufgabe.delete({ where: { id } });
-  revalidatePath("/dienstplan");
-}
-
 // ---------- Dienstkatalog dauerhaft verwalten (Florians Wunsch, 11.09.2026) ----------
 // Dienste sind reine Nachschlage-/Anzeigedaten je Schicht (keine Fremdschlüssel von
 // Dienstzuweisung/-Tausch darauf), Ändern/Verschieben/Löschen ist daher jederzeit

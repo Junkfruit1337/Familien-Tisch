@@ -29,6 +29,8 @@ import {
 import NotengewichtungSektion from "@/components/NotengewichtungSektion";
 import PushBenachrichtigungen from "@/components/PushBenachrichtigungen";
 import Spracheingabe from "@/components/Spracheingabe";
+import SeitenTitel from "@/components/SeitenTitel";
+import { BEREICH_FARBEN } from "@/lib/bereichFarben";
 
 type Person = { id: string; name: string; rolle: string; farbe: string; aktiv: boolean; hatPin: boolean; portionsGewicht: number; geburtsdatum: string | null };
 type Tagesroutine = { id: string; kategorie: string; text: string };
@@ -402,7 +404,7 @@ export default function EinstellungenClient({
   if (!istEltern) {
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-        <h1 style={{ fontSize: 22, margin: 0 }}>Einstellungen</h1>
+        <SeitenTitel icon="⚙️" farbe={BEREICH_FARBEN.einstellungen}>Einstellungen</SeitenTitel>
         <PushBenachrichtigungen />
         {fehlerMeldenSektion}
         {geburtstagSektion}
@@ -421,7 +423,7 @@ export default function EinstellungenClient({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <h1 style={{ fontSize: 22, margin: 0 }}>Einstellungen</h1>
+      <SeitenTitel icon="⚙️" farbe={BEREICH_FARBEN.einstellungen}>Einstellungen</SeitenTitel>
 
       <PushBenachrichtigungen />
 

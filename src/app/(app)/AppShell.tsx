@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { logout } from "./actions";
+import { BEREICH_FARBEN } from "@/lib/bereichFarben";
 
 type Person = { id: string; name: string; farbe: string; rolle: string };
 type Theme = "hell" | "dunkel";
@@ -15,14 +16,14 @@ function anwendenTheme(theme: Theme) {
 }
 
 const NAV = [
-  { href: "/dashboard", label: "Heute", icon: "🏠" },
-  { href: "/kalender", label: "Kalender", icon: "📅" },
-  { href: "/aufgaben", label: "Aufgaben", icon: "✅" },
-  { href: "/einkaufsliste", label: "Einkauf", icon: "🛒" },
-  { href: "/schule", label: "Schule", icon: "🎓" },
-  { href: "/dienstplan", label: "Dienste", icon: "🧹" },
-  { href: "/essensplan", label: "Essen", icon: "🍽️" },
-  { href: "/einstellungen", label: "Mehr", icon: "⚙️" },
+  { href: "/dashboard", label: "Heute", icon: "🏠", farbe: BEREICH_FARBEN.dashboard },
+  { href: "/kalender", label: "Kalender", icon: "📅", farbe: BEREICH_FARBEN.kalender },
+  { href: "/aufgaben", label: "Aufgaben", icon: "✅", farbe: BEREICH_FARBEN.aufgaben },
+  { href: "/einkaufsliste", label: "Einkauf", icon: "🛒", farbe: BEREICH_FARBEN.einkaufsliste },
+  { href: "/schule", label: "Schule", icon: "🎓", farbe: BEREICH_FARBEN.schule },
+  { href: "/dienstplan", label: "Dienste", icon: "🧹", farbe: BEREICH_FARBEN.dienstplan },
+  { href: "/essensplan", label: "Essen", icon: "🍽️", farbe: BEREICH_FARBEN.essensplan },
+  { href: "/einstellungen", label: "Mehr", icon: "⚙️", farbe: BEREICH_FARBEN.einstellungen },
 ];
 
 export default function AppShell({ person, children }: { person: Person; children: React.ReactNode }) {
@@ -135,10 +136,11 @@ export default function AppShell({ person, children }: { person: Person; childre
                 alignItems: "center",
                 gap: 2,
                 padding: "8px 4px",
-                color: active ? "var(--accent)" : "var(--text-muted)",
+                color: active ? item.farbe : "var(--text-muted)",
                 fontSize: 11,
                 textDecoration: "none",
                 fontWeight: active ? 700 : 500,
+                borderTop: active ? `2px solid ${item.farbe}` : "2px solid transparent",
               }}
             >
               <span style={{ fontSize: 18 }}>{item.icon}</span>

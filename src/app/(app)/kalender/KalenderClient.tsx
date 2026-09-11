@@ -5,6 +5,8 @@ import { createTermin, updateTermin, deleteTermin, erkenneTerminAusText } from "
 import { erkenneTerminKategorie, TERMIN_KATEGORIE_LABEL } from "@/lib/terminkategorisierung";
 import HistorieVerlauf from "@/components/HistorieVerlauf";
 import Spracheingabe from "@/components/Spracheingabe";
+import SeitenTitel from "@/components/SeitenTitel";
+import { BEREICH_FARBEN } from "@/lib/bereichFarben";
 
 type PersonKurz = { id: string; name: string; farbe: string };
 type Termin = {
@@ -318,7 +320,7 @@ export default function KalenderClient({
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <h1 style={{ fontSize: 22, margin: 0 }}>Kalender</h1>
+        <SeitenTitel icon="📅" farbe={BEREICH_FARBEN.kalender}>Kalender</SeitenTitel>
         <button
           className="btn"
           onClick={() => {

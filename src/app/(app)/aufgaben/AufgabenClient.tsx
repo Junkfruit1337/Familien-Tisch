@@ -4,6 +4,8 @@ import { useState, useTransition } from "react";
 import { createAufgabe, toggleAufgabe, deleteAufgabe, erkenneAufgabeAusText } from "./actions";
 import HistorieVerlauf from "@/components/HistorieVerlauf";
 import Spracheingabe from "@/components/Spracheingabe";
+import SeitenTitel from "@/components/SeitenTitel";
+import { BEREICH_FARBEN } from "@/lib/bereichFarben";
 
 type Aufgabe = {
   id: string;
@@ -106,7 +108,7 @@ export default function AufgabenClient({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <h1 style={{ fontSize: 22, margin: 0 }}>Aufgaben</h1>
+      <SeitenTitel icon="✅" farbe={BEREICH_FARBEN.aufgaben}>Aufgaben</SeitenTitel>
 
       <div className="card" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         <Spracheingabe onErgebnis={spracheErkannt} disabled={spracheVerarbeitung} />

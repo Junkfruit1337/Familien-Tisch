@@ -19,6 +19,8 @@ import {
   erkenneRezeptAusFoto,
   updateRezeptPortionenBasis,
 } from "./actions";
+import SeitenTitel from "@/components/SeitenTitel";
+import { BEREICH_FARBEN } from "@/lib/bereichFarben";
 
 // Für die Foto-Erkennung etwas größer/hochwertiger als bei Notenfotos (Batch 3),
 // damit auch kleinere Kochbuch-/Handschrift-Texte für die Bilderkennung lesbar bleiben.
@@ -143,7 +145,7 @@ export default function EssensplanClient({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <h1 style={{ fontSize: 22, margin: 0 }}>Essensplan</h1>
+      <SeitenTitel icon="🍽️" farbe={BEREICH_FARBEN.essensplan}>Essensplan</SeitenTitel>
 
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <button className="btn-secondary" style={{ padding: "6px 12px" }} disabled={offset === 0} onClick={() => wechsleWoche(offset - 1)}>

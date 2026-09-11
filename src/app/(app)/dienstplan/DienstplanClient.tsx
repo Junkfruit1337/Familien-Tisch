@@ -9,11 +9,10 @@ import {
   listAktiveTausche,
   getBadplan,
   updateDienstBeschreibung,
-  addZusatzAufgabe,
-  toggleZusatzAufgabe,
-  deleteZusatzAufgabe,
 } from "./actions";
 import HistorieVerlauf from "@/components/HistorieVerlauf";
+import SeitenTitel from "@/components/SeitenTitel";
+import { BEREICH_FARBEN } from "@/lib/bereichFarben";
 
 type Dienst = { id: string; bezeichnung: string; beschreibung: string | null };
 type Tag = { datum: string; kindName: string; kindFarbe: string; getauschtHeute: boolean };
@@ -35,7 +34,6 @@ type BadPosition = { position: number; kindName: string; kindFarbe: string };
 type BadPlan = { morgens: BadPosition[]; abends: BadPosition[] };
 type Tagesroutine = { id: string; kategorie: string; reihenfolge: number; text: string };
 type Koerperpflegetag = { id: string; wochentag: number; text: string };
-type ZusatzAufgabe = { id: string; titel: string; personName: string | null; erledigt: boolean };
 
 export default function DienstplanClient({
   istEltern,
@@ -46,7 +44,6 @@ export default function DienstplanClient({
   badplan: initialBadplan,
   tagesroutinen,
   koerperpflegeplan,
-  zusatzAufgaben,
 }: {
   istEltern: boolean;
   wocheStart: string;
@@ -56,7 +53,6 @@ export default function DienstplanClient({
   badplan: BadPlan;
   tagesroutinen: Tagesroutine[];
   koerperpflegeplan: Koerperpflegetag[];
-  zusatzAufgaben: ZusatzAufgabe[];
 }) {
   const [pending, startTransition] = useTransition();
   const [wocheStart, setWocheStart] = useState(initialWocheStart);
@@ -76,8 +72,6 @@ export default function DienstplanClient({
   const [dienstText, setDienstText] = useState("");
   const [zeigeDienstDetails, setZeigeDienstDetails] = useState(false);
 
-  const [neueAufgabeTitel, setNeueAufgabeTitel] = useState("");
-  const [neueAufgabePersonId, setNeueAufgabePersonId] = useState("");
 
   async function ladeWoche(neueWocheStartIso: string) {
     const { wocheStart: neuerStart, woche: neueWoche } = await getWoche(neueWocheStartIso);
@@ -137,7 +131,7 @@ export default function DienstplanClient({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <h1 style={{ fontSize: 22, margin: 0 }}>Dienstplan</h1>
+      <SeitenTitel icon="🧹" farbe={BEREICH_FARBEN.dienstplan}>Dienstplan</SeitenTitel>
 
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <button className="btn-secondary" style={{ padding: "6px 12px" }} onClick={() => wechsleWoche(-1)}>
@@ -407,52 +401,6 @@ export default function DienstplanClient({
         </div>
       </details>
 
-      <details className="card">
-        <summary style={{ cursor: "pointer", fontWeight: 600 }}>🧹 Zusätzliche Aufgaben ({zusatzAufgaben.filter((a) => !a.erledigt).length} offen)</summary>
-        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 10 }}>
-          {zusatzAufgaben.length === 0 && <p style={{ color: "var(--text-muted)", fontSize: 13, margin: 0 }}>Keine Ad-hoc-Aufgaben.</p>}
-          {zusatzAufgaben.map((a) => (
-            <div key={a.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-              <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, textDecoration: a.erledigt ? "line-through" : "none", color: a.erledigt ? "var(--text-muted)" : undefined }}>
-                <input type="checkbox" checked={a.erledigt} onChange={() => startTransition(() => toggleZusatzAufgabe(a.id))} />
-                {a.titel} {a.personName && <span style={{ color: "var(--text-muted)" }}>({a.personName})</span>}
-              </label>
-              {istEltern && (
-                <button className="btn-secondary" style={{ fontSize: 12, padding: "2px 8px" }} onClick={() => startTransition(() => deleteZusatzAufgabe(a.id))}>
-                  🗑
-                </button>
-              )}
-            </div>
-          ))}
-          {istEltern && (
-            <div style={{ borderTop: "1px solid var(--border)", paddingTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
-              <input placeholder="Neue Aufgabe" value={neueAufgabeTitel} onChange={(e) => setNeueAufgabeTitel(e.target.value)} />
-              <select value={neueAufgabePersonId} onChange={(e) => setNeueAufgabePersonId(e.target.value)}>
-                <option value="">Für alle / niemand Bestimmtes</option>
-                {kinder.map((k) => (
-                  <option key={k.id} value={k.id}>
-                    {k.name}
-                  </option>
-                ))}
-              </select>
-              <button
-                className="btn"
-                style={{ alignSelf: "flex-start" }}
-                onClick={() =>
-                  startTransition(async () => {
-                    if (!neueAufgabeTitel) return;
-                    await addZusatzAufgabe(neueAufgabeTitel, neueAufgabePersonId || undefined);
-                    setNeueAufgabeTitel("");
-                    setNeueAufgabePersonId("");
-                  })
-                }
-              >
-                Hinzufügen
-              </button>
-            </div>
-          )}
-        </div>
-      </details>
     </div>
   );
 }

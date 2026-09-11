@@ -21,7 +21,11 @@ self.addEventListener("push", (event) => {
     self.registration.showNotification(daten.title || "Familientisch", {
       body: daten.body || "",
       icon: "/icon-192.png",
-      badge: "/icon-192.png",
+      // Android maskiert das "badge" (Statusleisten-Icon) rein nach Alpha-Kanal und färbt es
+      // weiß — das normale, komplett opake Farb-Icon wurde dadurch zu einem weißen Viereck
+      // (Florians Bugreport). badge-96.png ist eine eigene, monochrome Silhouette auf
+      // transparentem Grund extra für diesen Zweck.
+      badge: "/badge-96.png",
       data: { url: daten.url || "/dashboard" },
     })
   );

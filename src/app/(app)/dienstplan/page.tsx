@@ -1,18 +1,17 @@
 import { getCurrentPerson } from "@/lib/auth";
-import { getWoche, listAktiveTausche, getBadplan, listTagesroutinen, listKoerperpflegeplan, listZusatzAufgaben } from "./actions";
+import { getWoche, listAktiveTausche, getBadplan, listTagesroutinen, listKoerperpflegeplan } from "./actions";
 import { prisma } from "@/lib/prisma";
 import DienstplanClient from "./DienstplanClient";
 
 export default async function DienstplanPage() {
   const person = await getCurrentPerson();
   const { wocheStart, woche } = await getWoche();
-  const [tausche, badplan, kinder, tagesroutinen, koerperpflegeplan, zusatzAufgaben] = await Promise.all([
+  const [tausche, badplan, kinder, tagesroutinen, koerperpflegeplan] = await Promise.all([
     listAktiveTausche(wocheStart),
     getBadplan(wocheStart),
     prisma.person.findMany({ where: { rolle: "KIND" }, orderBy: { reihenfolge: "asc" } }),
     listTagesroutinen(),
     listKoerperpflegeplan(),
-    listZusatzAufgaben(),
   ]);
 
   return (
@@ -47,12 +46,6 @@ export default async function DienstplanPage() {
       }}
       tagesroutinen={tagesroutinen}
       koerperpflegeplan={koerperpflegeplan}
-      zusatzAufgaben={zusatzAufgaben.map((z) => ({
-        id: z.id,
-        titel: z.titel,
-        personName: z.person?.name ?? null,
-        erledigt: z.erledigt,
-      }))}
     />
   );
 }

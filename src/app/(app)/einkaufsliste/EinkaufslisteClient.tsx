@@ -25,6 +25,8 @@ import { erkenneArtikelIcon } from "@/lib/artikelIcon";
 import HistorieVerlauf from "@/components/HistorieVerlauf";
 import FaktorLeiste from "@/components/FaktorLeiste";
 import Spracheingabe from "@/components/Spracheingabe";
+import SeitenTitel from "@/components/SeitenTitel";
+import { BEREICH_FARBEN } from "@/lib/bereichFarben";
 
 type Artikel = { id: string; name: string; menge: string | null; erledigt: boolean; kategorieId: string | null; kategorieName: string };
 type Wunsch = { id: string; artikelName: string; menge: string | null; status: string; kindName: string; entschiedenAm: string | null };
@@ -230,7 +232,7 @@ export default function EinkaufslisteClient({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <h1 style={{ fontSize: 22, margin: 0 }}>Einkaufsliste</h1>
+      <SeitenTitel icon="🛒" farbe={BEREICH_FARBEN.einkaufsliste}>Einkaufsliste</SeitenTitel>
 
       {istEltern ? (
         <div className="card" style={{ display: "flex", flexDirection: "column", gap: 10 }}>

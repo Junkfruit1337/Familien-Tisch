@@ -55,7 +55,6 @@ model Person {
   dienstTauscheVon   DienstTausch[]     @relation("DienstTauschVon")
   dienstTauscheMit   DienstTausch[]     @relation("DienstTauschMit")
   badZuweisungen     BadZuweisung[]
-  zusatzAufgaben     ZusatzAufgabe[]
   pushSubscriptions  PushSubscription[]
   schulEintraege     SchulEintrag[]     @relation("SchulEintragPerson")
   tickets            Ticket[]
@@ -394,16 +393,6 @@ model Koerperpflegetag {
   id        String @id @default(cuid())
   wochentag Int    @unique // 1 = Montag ... 7 = Sonntag
   text      String
-}
-
-model ZusatzAufgabe {
-  id            String   @id @default(cuid())
-  titel         String
-  personId      String?
-  person        Person?  @relation(fields: [personId], references: [id])
-  erledigt      Boolean  @default(false)
-  erstelltVonId String
-  createdAt     DateTime @default(now())
 }
 
 // ---------- Rezepte & Essensplan ----------
