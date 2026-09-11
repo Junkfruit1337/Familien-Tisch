@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition, type ReactNode } from "react";
+import { useEffect, useMemo, useState, useTransition, type ReactNode } from "react";
 import {
   addArtikel,
   toggleArtikel,
@@ -77,6 +77,7 @@ function ArtikelKachel({
   deaktiviert,
   onTap,
   eckeAktion,
+  gross,
 }: {
   name: string;
   menge?: string | null;
@@ -87,6 +88,7 @@ function ArtikelKachel({
   deaktiviert?: boolean;
   onTap?: () => void;
   eckeAktion?: ReactNode;
+  gross?: boolean;
 }) {
   return (
     <div
@@ -112,10 +114,10 @@ function ArtikelKachel({
           {eckeAktion}
         </div>
       )}
-      <span style={{ fontSize: 22, lineHeight: 1 }}>{erkenneArtikelIcon(name)}</span>
-      <span style={{ fontWeight: 600, fontSize: 12, textDecoration: durchgestrichen ? "line-through" : "none" }}>{name}</span>
-      {menge && <span style={{ fontSize: 10, opacity: 0.85 }}>{menge}</span>}
-      {notiz && <span style={{ fontSize: 9, opacity: 0.75, fontStyle: "italic" }}>{notiz}</span>}
+      <span style={{ fontSize: gross ? 30 : 22, lineHeight: 1 }}>{erkenneArtikelIcon(name)}</span>
+      <span style={{ fontWeight: 600, fontSize: gross ? 15 : 12, textDecoration: durchgestrichen ? "line-through" : "none" }}>{name}</span>
+      {menge && <span style={{ fontSize: gross ? 12 : 10, opacity: 0.85 }}>{menge}</span>}
+      {notiz && <span style={{ fontSize: gross ? 11 : 9, opacity: 0.75, fontStyle: "italic" }}>{notiz}</span>}
     </div>
   );
 }
@@ -162,6 +164,32 @@ export default function EinkaufslisteClient({
   const [extraAusgewaehlt, setExtraAusgewaehlt] = useState<boolean[]>([]);
   const [extraGeprueft, setExtraGeprueft] = useState(false);
   const [spracheVerarbeitung, setSpracheVerarbeitung] = useState(false);
+  const [einkaufsmodus, setEinkaufsmodus] = useState(false);
+
+  // Einkaufsmodus (Fix-Batch 35, Florians Wunsch): hält den Bildschirm wach, solange man mit
+  // der Liste im Laden unterwegs ist (Wake Lock API) — verhindert, dass das Display beim
+  // Schieben des Einkaufswagens ständig ausgeht. Kein Fehler, wenn der Browser das nicht
+  // unterstützt (z.B. iOS Safari älter) — dann bleibt es einfach beim Standardverhalten.
+  useEffect(() => {
+    if (!einkaufsmodus || !("wakeLock" in navigator)) return;
+    let sentinel: any = null;
+    let abgebrochen = false;
+    async function anfordern() {
+      try {
+        sentinel = await (navigator as any).wakeLock.request("screen");
+      } catch {}
+    }
+    anfordern();
+    function beiSichtbarkeitswechsel() {
+      if (document.visibilityState === "visible" && !abgebrochen) anfordern();
+    }
+    document.addEventListener("visibilitychange", beiSichtbarkeitswechsel);
+    return () => {
+      abgebrochen = true;
+      document.removeEventListener("visibilitychange", beiSichtbarkeitswechsel);
+      sentinel?.release?.().catch(() => {});
+    };
+  }, [einkaufsmodus]);
 
   async function spracheErkannt(text: string) {
     setSpracheVerarbeitung(true);
@@ -240,9 +268,25 @@ export default function EinkaufslisteClient({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <SeitenTitel icon="🛒" farbe={BEREICH_FARBEN.einkaufsliste}>Einkaufsliste</SeitenTitel>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+        <SeitenTitel icon="🛒" farbe={BEREICH_FARBEN.einkaufsliste}>Einkaufsliste</SeitenTitel>
+        {istEltern && (
+          <button
+            className={einkaufsmodus ? "btn" : "btn-secondary"}
+            style={{ fontSize: 13, padding: "8px 12px", flexShrink: 0 }}
+            onClick={() => setEinkaufsmodus((v) => !v)}
+          >
+            {einkaufsmodus ? "✕ Fertig" : "🛍️ Einkaufsmodus"}
+          </button>
+        )}
+      </div>
+      {einkaufsmodus && (
+        <p style={{ margin: "-8px 0 0", fontSize: 13, color: "var(--text-muted)" }}>
+          {erledigt.length} von {artikel.length} erledigt — Bildschirm bleibt an, solange der Einkaufsmodus läuft.
+        </p>
+      )}
 
-      {istEltern ? (
+      {einkaufsmodus ? null : istEltern ? (
         <div className="card" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           <Spracheingabe onErgebnis={spracheErkannt} disabled={spracheVerarbeitung} />
           {spracheVerarbeitung && <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>Spracheingabe wird verarbeitet …</p>}
@@ -380,7 +424,7 @@ export default function EinkaufslisteClient({
         </div>
       )}
 
-      {istEltern && unbestaetigt.length > 0 && (
+      {!einkaufsmodus && istEltern && unbestaetigt.length > 0 && (
         <details open>
           <summary style={{ cursor: "pointer", color: "var(--text-muted)" }}>🕓 Noch nicht zugesagt ({unbestaetigt.length})</summary>
           <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
@@ -445,7 +489,7 @@ export default function EinkaufslisteClient({
         </details>
       )}
 
-      {istEltern && rezepte.length > 0 && (
+      {!einkaufsmodus && istEltern && rezepte.length > 0 && (
         <details>
           <summary style={{ cursor: "pointer", color: "var(--text-muted)" }}>➕ Extra-Gericht zur Einkaufsliste hinzufügen</summary>
           <div className="card" style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
@@ -515,7 +559,7 @@ export default function EinkaufslisteClient({
         </details>
       )}
 
-      {istEltern && vorschlaege.length > 0 && (
+      {!einkaufsmodus && istEltern && vorschlaege.length > 0 && (
         <details>
           <summary style={{ cursor: "pointer", color: "var(--text-muted)" }}>Vorschläge — zuletzt verwendet ({vorschlaege.length})</summary>
           <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
@@ -550,7 +594,7 @@ export default function EinkaufslisteClient({
         </details>
       )}
 
-      {istEltern && offeneWuensche.length > 0 && (
+      {!einkaufsmodus && istEltern && offeneWuensche.length > 0 && (
         <div className="card" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           <strong>Wünsche der Kinder</strong>
           {offeneWuensche.map((w) => {
@@ -598,7 +642,7 @@ export default function EinkaufslisteClient({
         </div>
       )}
 
-      {entschiedeneWuensche.length > 0 && (
+      {!einkaufsmodus && entschiedeneWuensche.length > 0 && (
         <details>
           <summary style={{ cursor: "pointer", color: "var(--text-muted)" }}>Wunsch-Verlauf ({entschiedeneWuensche.length})</summary>
           <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
@@ -619,7 +663,14 @@ export default function EinkaufslisteClient({
       {Object.entries(nachKategorie).map(([kat, items]) => (
         <div key={kat} className="card">
           <strong>{kat}</strong>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(88px, 1fr))", gap: 10, marginTop: 8 }}>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: `repeat(auto-fill, minmax(${einkaufsmodus ? 110 : 88}px, 1fr))`,
+              gap: einkaufsmodus ? 14 : 10,
+              marginTop: 8,
+            }}
+          >
             {items.map((a) => (
               <ArtikelKachel
                 key={a.id}
@@ -629,9 +680,10 @@ export default function EinkaufslisteClient({
                 hintergrund="var(--accent)"
                 textfarbe="var(--accent-contrast)"
                 deaktiviert={!istEltern}
+                gross={einkaufsmodus}
                 onTap={() => startTransition(() => toggleArtikel(a.id))}
                 eckeAktion={
-                  istEltern ? (
+                  istEltern && !einkaufsmodus ? (
                     <button
                       title="Bearbeiten"
                       onClick={() => beginneBearbeiten(a)}
@@ -716,7 +768,7 @@ export default function EinkaufslisteClient({
           );
         })()}
 
-      {istEltern && (
+      {!einkaufsmodus && istEltern && (
         <p style={{ fontSize: 12, color: "var(--text-muted)", margin: 0 }}>
           Kategorien verwalten (hinzufügen, Reihenfolge ändern) geht jetzt zentral in den Einstellungen.
         </p>
