@@ -103,3 +103,76 @@ export async function hebeTauschAuf(id: string) {
   revalidatePath("/dienstplan");
   revalidatePath("/dashboard");
 }
+
+// ---------- Dienstkatalog: Regeltexte bearbeiten (Fahrplan §3, Batch 4) ----------
+
+export async function updateDienstBeschreibung(id: string, beschreibung: string) {
+  await requireParent();
+  await prisma.dienstDefinition.update({ where: { id }, data: { beschreibung } });
+  revalidatePath("/dienstplan");
+}
+
+// ---------- Tagesroutinen & Körperpflege-Nachschlagewerk (Fahrplan §3, Batch 4) ----------
+
+export async function listTagesroutinen() {
+  return prisma.tagesroutine.findMany({ orderBy: [{ kategorie: "asc" }, { reihenfolge: "asc" }] });
+}
+
+export async function addTagesroutine(kategorie: string, text: string) {
+  await requireParent();
+  const anzahl = await prisma.tagesroutine.count({ where: { kategorie } });
+  await prisma.tagesroutine.create({ data: { kategorie, text, reihenfolge: anzahl } });
+  revalidatePath("/dienstplan");
+}
+
+export async function updateTagesroutine(id: string, text: string) {
+  await requireParent();
+  await prisma.tagesroutine.update({ where: { id }, data: { text } });
+  revalidatePath("/dienstplan");
+}
+
+export async function deleteTagesroutine(id: string) {
+  await requireParent();
+  await prisma.tagesroutine.delete({ where: { id } });
+  revalidatePath("/dienstplan");
+}
+
+export async function listKoerperpflegeplan() {
+  return prisma.koerperpflegetag.findMany({ orderBy: { wochentag: "asc" } });
+}
+
+export async function setKoerperpflegetag(wochentag: number, text: string) {
+  await requireParent();
+  await prisma.koerperpflegetag.upsert({
+    where: { wochentag },
+    update: { text },
+    create: { wochentag, text },
+  });
+  revalidatePath("/dienstplan");
+}
+
+// ---------- Zusätzliche Aufgaben — freier Bereich für Ad-hoc-Dienste (Fahrplan §3, Batch 4) ----------
+
+export async function listZusatzAufgaben() {
+  return prisma.zusatzAufgabe.findMany({ include: { person: true }, orderBy: [{ erledigt: "asc" }, { createdAt: "desc" }] });
+}
+
+export async function addZusatzAufgabe(titel: string, personId?: string) {
+  const ersteller = await requireParent();
+  await prisma.zusatzAufgabe.create({ data: { titel, personId: personId || null, erstelltVonId: ersteller.id } });
+  revalidatePath("/dienstplan");
+}
+
+export async function toggleZusatzAufgabe(id: string) {
+  await requirePerson();
+  const a = await prisma.zusatzAufgabe.findUnique({ where: { id } });
+  if (!a) return;
+  await prisma.zusatzAufgabe.update({ where: { id }, data: { erledigt: !a.erledigt } });
+  revalidatePath("/dienstplan");
+}
+
+export async function deleteZusatzAufgabe(id: string) {
+  await requireParent();
+  await prisma.zusatzAufgabe.delete({ where: { id } });
+  revalidatePath("/dienstplan");
+}

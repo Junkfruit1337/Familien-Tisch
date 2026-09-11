@@ -45,6 +45,7 @@ model Person {
   dienstTauscheVon   DienstTausch[]     @relation("DienstTauschVon")
   dienstTauscheMit   DienstTausch[]     @relation("DienstTauschMit")
   badZuweisungen     BadZuweisung[]
+  zusatzAufgaben     ZusatzAufgabe[]
   schulEintraege     SchulEintrag[]     @relation("SchulEintragPerson")
 }
 
@@ -326,6 +327,33 @@ model BadZuweisung {
   kind       Person   @relation(fields: [kindId], references: [id])
 
   @@unique([wocheStart, zeitpunkt, position])
+}
+
+// ---------- Dienstplan-Nachschlagewerk & Zusatzaufgaben (Fahrplan §3, Batch 4) ----------
+// Bewusst frei durch Eltern editierbar statt mit vorgefertigtem Text — der reale Wortlaut
+// aus Florians Word-Dokument "Schichtsystem" liegt Claude in dieser Sitzung nicht vor.
+
+model Tagesroutine {
+  id          String @id @default(cuid())
+  kategorie   String // z.B. "Morgens", "Vor der Schule", "Nach der Schule", "Lernregel", "Abends"
+  reihenfolge Int    @default(0)
+  text        String
+}
+
+model Koerperpflegetag {
+  id        String @id @default(cuid())
+  wochentag Int    @unique // 1 = Montag ... 7 = Sonntag
+  text      String
+}
+
+model ZusatzAufgabe {
+  id            String   @id @default(cuid())
+  titel         String
+  personId      String?
+  person        Person?  @relation(fields: [personId], references: [id])
+  erledigt      Boolean  @default(false)
+  erstelltVonId String
+  createdAt     DateTime @default(now())
 }
 
 // ---------- Rezepte & Essensplan ----------
