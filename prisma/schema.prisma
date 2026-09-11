@@ -159,6 +159,8 @@ model EinkaufsArtikel {
   vonWunschId  String?
   createdAt    DateTime           @default(now())
   updatedAt    DateTime           @updatedAt
+
+  essensplanHerkuenfte EssensplanHerkunft[]
 }
 
 enum WunschStatus {
@@ -335,7 +337,8 @@ model Rezept {
   zubereitung String?
   createdAt DateTime @default(now())
 
-  planEintraege EssensplanEintrag[]
+  planEintraege  EssensplanEintrag[]
+  ausblendungen  RezeptAusblendung[]
 }
 
 model EssensplanEintrag {
@@ -344,6 +347,39 @@ model EssensplanEintrag {
   tag         DateTime
   rezeptId    String
   rezept      Rezept   @relation(fields: [rezeptId], references: [id])
+  esserIds    String[] @default([])
   esserFaktor Float    @default(1)
   gelockt     Boolean  @default(false)
+
+  herkuenfte  EssensplanHerkunft[]
+}
+
+// Blendet ein Rezept aus den Vorschlägen für eine einzelne Woche aus (Fahrplan §3,
+// Batch 5) — bewusst pro Woche statt global, damit es später wieder vorgeschlagen wird.
+model RezeptAusblendung {
+  id         String   @id @default(cuid())
+  rezeptId   String
+  rezept     Rezept   @relation(fields: [rezeptId], references: [id], onDelete: Cascade)
+  wocheStart DateTime
+
+  @@unique([rezeptId, wocheStart])
+}
+
+// Merkt sich, welcher Essensplan-Tag welche (skalierte) Menge zu welchem
+// Einkaufslisten-Artikel beigetragen hat — Grundlage für den Entfernen/Behalten-Dialog,
+// wenn ein Gericht in einer bereits gelockten Woche geändert wird (Fahrplan §3).
+// Bekannte, bewusst in Kauf genommene Einschränkung: Wird beim "Entfernen" die Menge
+// neu berechnet, fließen nur die noch bekannten Essensplan-Herkünfte ein — ein zufällig
+// in denselben Artikel gemischter manueller Anteil (gleicher Name, andere Quelle) wird
+// dabei nicht separat zurückgerechnet.
+model EssensplanHerkunft {
+  id        String            @id @default(cuid())
+  artikelId String
+  artikel   EinkaufsArtikel   @relation(fields: [artikelId], references: [id], onDelete: Cascade)
+  eintragId String
+  eintrag   EssensplanEintrag @relation(fields: [eintragId], references: [id], onDelete: Cascade)
+  menge     String?
+  createdAt DateTime          @default(now())
+
+  @@unique([artikelId, eintragId])
 }
