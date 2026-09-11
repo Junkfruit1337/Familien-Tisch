@@ -13,6 +13,14 @@ function betragFuerNote(note: number): number {
   return 0;
 }
 
+// Kurzform der Notenart für den Taschengeld-Verlauf (Fix-Batch 35, Florians Wunsch) — die
+// vollen Bezeichnungen bleiben im Rest der App (Formular, Notenliste) unverändert.
+const ART_KURZ: Record<string, string> = {
+  KLASSENARBEIT: "Arbeit",
+  HAUSAUFGABEN_KONTROLLE: "HÜ",
+  EPOCHALNOTE: "EPO",
+};
+
 export async function listKinder() {
   return prisma.person.findMany({ where: { rolle: "KIND" }, orderBy: { reihenfolge: "asc" } });
 }
@@ -211,7 +219,14 @@ export async function einreichenNote(data: {
     const betrag = betragFuerNote(note.note);
     if (betrag > 0) {
       await prisma.taschengeldTransaktion.create({
-        data: { kindId, betrag, typ: "GUTSCHRIFT", grund: `Note ${note.note}`, noteId: note.id, erstelltVonId: person.id },
+        data: {
+          kindId,
+          betrag,
+          typ: "GUTSCHRIFT",
+          grund: `Note ${note.note} · ${fach.name} (${ART_KURZ[data.art] ?? data.art})`,
+          noteId: note.id,
+          erstelltVonId: person.id,
+        },
       });
       await logAenderung({ entityTyp: "TASCHENGELD", entityId: note.id, aktion: "gutschrift", neuerWert: `${betrag} €`, geaendertVonId: person.id });
     }
@@ -305,7 +320,14 @@ export async function entscheideNote(id: string, genehmigt: boolean) {
     const betrag = betragFuerNote(note.note);
     if (betrag > 0) {
       await prisma.taschengeldTransaktion.create({
-        data: { kindId: note.kindId, betrag, typ: "GUTSCHRIFT", grund: `Note ${note.note}`, noteId: note.id, erstelltVonId: person.id },
+        data: {
+          kindId: note.kindId,
+          betrag,
+          typ: "GUTSCHRIFT",
+          grund: `Note ${note.note} · ${note.fach.name} (${ART_KURZ[note.art] ?? note.art})`,
+          noteId: note.id,
+          erstelltVonId: person.id,
+        },
       });
     }
   }

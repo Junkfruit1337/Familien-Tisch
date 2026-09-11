@@ -29,9 +29,17 @@ export default function Spracheingabe({
     erkennung.lang = "de-DE";
     erkennung.interimResults = false;
     erkennung.maxAlternatives = 1;
+    // continuous=true (Fix-Batch 35, Florians Wunsch): ohne das beendet der Browser die
+    // Aufnahme selbständig schon nach der ersten kurzen Sprechpause (z. B. beim Nachdenken),
+    // was zu abgebrochenen/unvollständigen Aufnahmen führte. Jetzt läuft die Aufnahme weiter,
+    // bis der Nutzer selbst auf "Stoppen" tippt (oder das Browser-eigene Zeitlimit greift).
+    erkennung.continuous = true;
     erkennung.onresult = (event: any) => {
-      const text = event.results?.[0]?.[0]?.transcript;
-      if (text) onErgebnis(text);
+      let text = "";
+      for (let i = 0; i < event.results.length; i++) {
+        text += event.results[i][0].transcript;
+      }
+      if (text.trim()) onErgebnis(text.trim());
     };
     erkennung.onerror = () => setLaeuft(false);
     erkennung.onend = () => setLaeuft(false);
