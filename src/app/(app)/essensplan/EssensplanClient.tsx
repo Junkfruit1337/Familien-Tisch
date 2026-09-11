@@ -221,6 +221,7 @@ export default function EssensplanClient({
                   return (
                     <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 4 }}>
                       Wer isst mit? ({gesamtPortionen.toFixed(1)} von {portionenBasis} Portionen · Faktor {t.eintrag!.esserFaktor.toFixed(2)})
+                      {t.eintrag!.gelockt && " · 🔒 gesperrt"}
                     </div>
                   );
                 })()}
@@ -231,6 +232,7 @@ export default function EssensplanClient({
                       <button
                         key={f.id}
                         className="btn-secondary"
+                        disabled={t.eintrag!.gelockt}
                         style={{ fontSize: 12, padding: "4px 10px", background: aktiv ? f.farbe : undefined, color: aktiv ? "#fff" : undefined }}
                         onClick={() => {
                           const aktuelle = t.eintrag!.esserIds.length === 0 ? familie.map((x) => x.id) : t.eintrag!.esserIds;
@@ -249,6 +251,7 @@ export default function EssensplanClient({
                     type="number"
                     min={0}
                     step={0.5}
+                    disabled={t.eintrag.gelockt}
                     style={{ width: 70 }}
                     value={extraEntwuerfe[t.eintrag.id] ?? (t.eintrag.extraPortionen || "")}
                     onChange={(e) => setExtraEntwuerfe((prev) => ({ ...prev, [t.eintrag!.id]: e.target.value }))}
