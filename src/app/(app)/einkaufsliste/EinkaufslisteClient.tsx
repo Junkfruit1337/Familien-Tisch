@@ -28,8 +28,8 @@ import Spracheingabe from "@/components/Spracheingabe";
 import SeitenTitel from "@/components/SeitenTitel";
 import { BEREICH_FARBEN } from "@/lib/bereichFarben";
 
-type Artikel = { id: string; name: string; menge: string | null; erledigt: boolean; kategorieId: string | null; kategorieName: string };
-type Wunsch = { id: string; artikelName: string; menge: string | null; status: string; kindName: string; entschiedenAm: string | null };
+type Artikel = { id: string; name: string; menge: string | null; notiz: string | null; erledigt: boolean; kategorieId: string | null; kategorieName: string };
+type Wunsch = { id: string; artikelName: string; menge: string | null; notiz: string | null; status: string; kindName: string; entschiedenAm: string | null };
 type Kategorie = { id: string; name: string };
 type Quelle = { id: string; beschreibung: string; menge: string | null; zeitpunkt: string };
 type Vorschlag = { name: string; menge: string | null };
@@ -70,6 +70,7 @@ function ArtikelHerkunft({ artikelId }: { artikelId: string }) {
 function ArtikelKachel({
   name,
   menge,
+  notiz,
   hintergrund,
   textfarbe,
   durchgestrichen,
@@ -79,6 +80,7 @@ function ArtikelKachel({
 }: {
   name: string;
   menge?: string | null;
+  notiz?: string | null;
   hintergrund: string;
   textfarbe: string;
   durchgestrichen?: boolean;
@@ -113,6 +115,7 @@ function ArtikelKachel({
       <span style={{ fontSize: 22, lineHeight: 1 }}>{erkenneArtikelIcon(name)}</span>
       <span style={{ fontWeight: 600, fontSize: 12, textDecoration: durchgestrichen ? "line-through" : "none" }}>{name}</span>
       {menge && <span style={{ fontSize: 10, opacity: 0.85 }}>{menge}</span>}
+      {notiz && <span style={{ fontSize: 9, opacity: 0.75, fontStyle: "italic" }}>{notiz}</span>}
     </div>
   );
 }
@@ -137,14 +140,17 @@ export default function EinkaufslisteClient({
   const [pending, startTransition] = useTransition();
   const [name, setName] = useState("");
   const [menge, setMenge] = useState("");
+  const [notiz, setNotiz] = useState("");
   const [kategorieId, setKategorieId] = useState("");
   const [bearbeiteId, setBearbeiteId] = useState<string | null>(null);
   const [bearbeiteName, setBearbeiteName] = useState("");
   const [bearbeiteMenge, setBearbeiteMenge] = useState("");
+  const [bearbeiteNotiz, setBearbeiteNotiz] = useState("");
   const [wunschKategorie, setWunschKategorie] = useState<Record<string, string>>({});
   const [wunschBearbeitenId, setWunschBearbeitenId] = useState<string | null>(null);
   const [wunschBearbeitenName, setWunschBearbeitenName] = useState("");
   const [wunschBearbeitenMenge, setWunschBearbeitenMenge] = useState("");
+  const [wunschBearbeitenNotiz, setWunschBearbeitenNotiz] = useState("");
 
   const [unbestaetigt, setUnbestaetigt] = useState(initialUnbestaetigt);
   const [unbestaetigtMengen, setUnbestaetigtMengen] = useState<Record<string, string>>({});
@@ -220,12 +226,13 @@ export default function EinkaufslisteClient({
     setBearbeiteId(a.id);
     setBearbeiteName(a.name);
     setBearbeiteMenge(a.menge ?? "");
+    setBearbeiteNotiz(a.notiz ?? "");
   }
 
   function speichereBearbeiten() {
     if (!bearbeiteId) return;
     startTransition(async () => {
-      await updateArtikel(bearbeiteId, { name: bearbeiteName, menge: bearbeiteMenge || undefined });
+      await updateArtikel(bearbeiteId, { name: bearbeiteName, menge: bearbeiteMenge || undefined, notiz: bearbeiteNotiz || undefined });
       setBearbeiteId(null);
     });
   }
@@ -240,6 +247,7 @@ export default function EinkaufslisteClient({
           {spracheVerarbeitung && <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>Spracheingabe wird verarbeitet …</p>}
           <input placeholder="Artikel" value={name} onChange={(e) => setName(e.target.value)} />
           <input placeholder="Menge (optional)" value={menge} onChange={(e) => setMenge(e.target.value)} />
+          <input placeholder="Notizen (optional, z. B. Körnerbrot)" value={notiz} onChange={(e) => setNotiz(e.target.value)} />
           <select value={kategorieId} onChange={(e) => setKategorieId(e.target.value)}>
             <option value="">Automatisch{erkannteKategorieName ? ` (erkannt: ${erkannteKategorieName})` : ""}</option>
             {kategorien.map((k) => (
@@ -261,9 +269,10 @@ export default function EinkaufslisteClient({
             onClick={() =>
               startTransition(async () => {
                 if (!name) return;
-                await addArtikel({ name, menge: menge || undefined, kategorieId: kategorieId || undefined });
+                await addArtikel({ name, menge: menge || undefined, notiz: notiz || undefined, kategorieId: kategorieId || undefined });
                 setName("");
                 setMenge("");
+                setNotiz("");
                 setKategorieId("");
               })
             }
@@ -280,15 +289,17 @@ export default function EinkaufslisteClient({
           {spracheVerarbeitung && <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>Spracheingabe wird verarbeitet …</p>}
           <input placeholder="Was wünschst du dir?" value={name} onChange={(e) => setName(e.target.value)} />
           <input placeholder="Menge (optional)" value={menge} onChange={(e) => setMenge(e.target.value)} />
+          <input placeholder="Notizen (optional, z. B. Körnerbrot)" value={notiz} onChange={(e) => setNotiz(e.target.value)} />
           <button
             className="btn"
             disabled={pending}
             onClick={() =>
               startTransition(async () => {
                 if (!name) return;
-                await submitWunsch({ artikelName: name, menge: menge || undefined });
+                await submitWunsch({ artikelName: name, menge: menge || undefined, notiz: notiz || undefined });
                 setName("");
                 setMenge("");
+                setNotiz("");
               })
             }
           >
@@ -302,6 +313,7 @@ export default function EinkaufslisteClient({
                   <div key={w.id} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                     <input value={wunschBearbeitenName} onChange={(e) => setWunschBearbeitenName(e.target.value)} autoFocus />
                     <input placeholder="Menge (optional)" value={wunschBearbeitenMenge} onChange={(e) => setWunschBearbeitenMenge(e.target.value)} />
+                    <input placeholder="Notizen (optional)" value={wunschBearbeitenNotiz} onChange={(e) => setWunschBearbeitenNotiz(e.target.value)} />
                     <div style={{ display: "flex", gap: 6 }}>
                       <button
                         className="btn"
@@ -310,7 +322,11 @@ export default function EinkaufslisteClient({
                           startTransition(async () => {
                             if (!wunschBearbeitenName.trim()) return;
                             try {
-                              await updateWunsch(w.id, { artikelName: wunschBearbeitenName.trim(), menge: wunschBearbeitenMenge || undefined });
+                              await updateWunsch(w.id, {
+                                artikelName: wunschBearbeitenName.trim(),
+                                menge: wunschBearbeitenMenge || undefined,
+                                notiz: wunschBearbeitenNotiz || undefined,
+                              });
                               setWunschBearbeitenId(null);
                             } catch (e: any) {
                               alert(e.message);
@@ -330,6 +346,7 @@ export default function EinkaufslisteClient({
                     <span>
                       {w.artikelName}
                       {w.menge ? ` (${w.menge})` : ""}
+                      {w.notiz ? ` · ${w.notiz}` : ""}
                     </span>
                     <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
                       <button
@@ -339,6 +356,7 @@ export default function EinkaufslisteClient({
                           setWunschBearbeitenId(w.id);
                           setWunschBearbeitenName(w.artikelName);
                           setWunschBearbeitenMenge(w.menge ?? "");
+                          setWunschBearbeitenNotiz(w.notiz ?? "");
                         }}
                       >
                         ✎
@@ -604,6 +622,7 @@ export default function EinkaufslisteClient({
                 key={a.id}
                 name={a.name}
                 menge={a.menge}
+                notiz={a.notiz}
                 hintergrund="var(--accent)"
                 textfarbe="var(--accent-contrast)"
                 deaktiviert={!istEltern}
@@ -633,6 +652,7 @@ export default function EinkaufslisteClient({
               <ArtikelKachel
                 key={a.id}
                 name={a.name}
+                notiz={a.notiz}
                 hintergrund="var(--border)"
                 textfarbe="var(--text-muted)"
                 durchgestrichen
@@ -654,6 +674,7 @@ export default function EinkaufslisteClient({
                 <strong>Artikel bearbeiten</strong>
                 <input value={bearbeiteName} onChange={(e) => setBearbeiteName(e.target.value)} placeholder="Name" />
                 <input value={bearbeiteMenge} onChange={(e) => setBearbeiteMenge(e.target.value)} placeholder="Menge" />
+                <input value={bearbeiteNotiz} onChange={(e) => setBearbeiteNotiz(e.target.value)} placeholder="Notizen (optional)" />
                 <label style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: -6 }}>Kategorie</label>
                 <select
                   value={a.kategorieId ?? ""}

@@ -20,7 +20,7 @@ export default async function EssensplanPage() {
       rezepteAlle={rezepteAlle.map((r) => ({ id: r.id, name: r.name, zutaten: r.zutaten, zubereitung: r.zubereitung, portionenBasis: r.portionenBasis }))}
       rezepteVorschlaege={rezepteVorschlaege}
       ausgeblendete={ausgeblendete}
-      familie={familie.map((f) => ({ id: f.id, name: f.name, farbe: f.farbe }))}
+      familie={familie.map((f) => ({ id: f.id, name: f.name, farbe: f.farbe, portionsGewicht: f.portionsGewicht }))}
     />
   );
 }

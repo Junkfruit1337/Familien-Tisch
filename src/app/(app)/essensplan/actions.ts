@@ -174,6 +174,7 @@ export async function getWochenplan(offsetWochen = 0) {
             gelockt: eintrag.gelockt,
             esserIds: eintrag.esserIds,
             esserFaktor: eintrag.esserFaktor,
+            extraPortionen: eintrag.extraPortionen,
           }
         : null,
     };
@@ -204,17 +205,36 @@ export async function sperren(eintragId: string) {
   revalidatePath("/essensplan");
 }
 
+// Skaliert nicht mehr fest auf 6, sondern auf die Portionsgrundlage des jeweiligen Rezepts
+// (Fix-Batch 22) — ein Rezept "für 1 Portion" ergibt bei allen 6 Essern jetzt Faktor 6, statt
+// fälschlich Faktor 1 wie zuvor. Personen-Gewichtung kommt aus der Datenbank (Fix-Batch 23,
+// in den Einstellungen editierbar). extraPortionen (Fix-Batch 33 Nachtrag) zählt zusätzlich
+// dazu, für spontane Gäste an dem Tag, ohne dass man dafür extra Personen anlegen müsste.
+async function berechneFaktor(personIds: string[], extraPortionen: number, portionenBasis: number): Promise<number> {
+  if (personIds.length === 0 && extraPortionen === 0) return 1;
+  const alle = await prisma.person.findMany({ where: { id: { in: personIds } } });
+  const gewichtSumme = alle.reduce((s, p) => s + p.portionsGewicht, 0) + extraPortionen;
+  return gewichtSumme / portionenBasis;
+}
+
 export async function setEsser(eintragId: string, personIds: string[]) {
   await requireParent();
   const eintrag = await prisma.essensplanEintrag.findUnique({ where: { id: eintragId }, include: { rezept: true } });
   if (!eintrag) return;
-  const alle = await prisma.person.findMany({ where: { id: { in: personIds } } });
-  // Skaliert nicht mehr fest auf 6, sondern auf die Portionsgrundlage des jeweiligen Rezepts
-  // (Fix-Batch 22) — ein Rezept "für 1 Portion" ergibt bei allen 6 Essern jetzt Faktor 6, statt
-  // fälschlich Faktor 1 wie zuvor. Personen-Gewichtung kommt jetzt aus der Datenbank
-  // (Fix-Batch 23, in den Einstellungen editierbar) statt aus einer festen Code-Tabelle.
-  const faktor = personIds.length === 0 ? 1 : alle.reduce((s, p) => s + p.portionsGewicht, 0) / eintrag.rezept.portionenBasis;
+  const faktor = await berechneFaktor(personIds, eintrag.extraPortionen, eintrag.rezept.portionenBasis);
   await prisma.essensplanEintrag.update({ where: { id: eintragId }, data: { esserIds: personIds, esserFaktor: faktor } });
+  revalidatePath("/essensplan");
+}
+
+// Extra-Portionen für spontane Gäste an einem Tag (Fix-Batch 33 Nachtrag, Florians Wunsch)
+// — addiert sich zum gewichteten Esser-Total, bevor durch die Rezept-Portionsbasis geteilt wird.
+export async function setExtraPortionen(eintragId: string, extraPortionen: number) {
+  await requireParent();
+  const eintrag = await prisma.essensplanEintrag.findUnique({ where: { id: eintragId }, include: { rezept: true } });
+  if (!eintrag) return;
+  const wert = Number.isFinite(extraPortionen) && extraPortionen >= 0 ? extraPortionen : 0;
+  const faktor = await berechneFaktor(eintrag.esserIds, wert, eintrag.rezept.portionenBasis);
+  await prisma.essensplanEintrag.update({ where: { id: eintragId }, data: { extraPortionen: wert, esserFaktor: faktor } });
   revalidatePath("/essensplan");
 }
 

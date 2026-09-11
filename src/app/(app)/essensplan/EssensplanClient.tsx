@@ -13,6 +13,7 @@ import {
   sperren,
   entsperren,
   setEsser,
+  setExtraPortionen,
   fuegeZutatenDesTagsHinzu,
   fuegeZutatenDerWocheHinzu,
   pruefeGelocktenTagWechsel,
@@ -55,12 +56,13 @@ type TagEintrag = {
   gelockt: boolean;
   esserIds: string[];
   esserFaktor: number;
+  extraPortionen: number;
 };
 type Tag = { tag: string; vergangen: boolean; eintrag: TagEintrag | null };
 type Plan = { wocheStart: string; wocheEnde: string; tage: Tag[] };
 type RezeptDetail = { id: string; name: string; zutaten: string; zubereitung: string | null; portionenBasis: number };
 type RezeptKurz = { id: string; name: string };
-type Familienmitglied = { id: string; name: string; farbe: string };
+type Familienmitglied = { id: string; name: string; farbe: string; portionsGewicht: number };
 type Herkunft = { artikelId: string; artikelName: string; menge: string | null };
 
 const WOCHEN_LABEL = ["Diese Woche", "Nächste Woche", "Übernächste Woche"];
@@ -87,6 +89,7 @@ export default function EssensplanClient({
   const [ausgeblendete, setAusgeblendete] = useState(initialAusgeblendete);
 
   const [portionenEntwuerfe, setPortionenEntwuerfe] = useState<Record<string, string>>({});
+  const [extraEntwuerfe, setExtraEntwuerfe] = useState<Record<string, string>>({});
 
   const [sperrDialog, setSperrDialog] = useState<{ eintragId: string; herkuenfte: Herkunft[] } | null>(null);
   const [sperrEntscheidungen, setSperrEntscheidungen] = useState<Record<string, "entfernen" | "behalten">>({});
@@ -210,9 +213,17 @@ export default function EssensplanClient({
 
             {istEltern && t.eintrag && (
               <div>
-                <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 4 }}>
-                  Wer isst mit? (Faktor {t.eintrag.esserFaktor.toFixed(2)})
-                </div>
+                {(() => {
+                  const aktiveIds = t.eintrag!.esserIds.length === 0 ? familie.map((f) => f.id) : t.eintrag!.esserIds;
+                  const esserSumme = familie.filter((f) => aktiveIds.includes(f.id)).reduce((s, f) => s + f.portionsGewicht, 0);
+                  const gesamtPortionen = esserSumme + t.eintrag!.extraPortionen;
+                  const portionenBasis = rezepteAlle.find((r) => r.id === t.eintrag!.rezeptId)?.portionenBasis ?? 6;
+                  return (
+                    <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 4 }}>
+                      Wer isst mit? ({gesamtPortionen.toFixed(1)} von {portionenBasis} Portionen · Faktor {t.eintrag!.esserFaktor.toFixed(2)})
+                    </div>
+                  );
+                })()}
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                   {familie.map((f) => {
                     const aktiv = t.eintrag!.esserIds.length === 0 || t.eintrag!.esserIds.includes(f.id);
@@ -231,6 +242,21 @@ export default function EssensplanClient({
                       </button>
                     );
                   })}
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 6 }}>
+                  <span style={{ fontSize: 12, color: "var(--text-muted)" }}>+ Gäste-Portionen (z. B. Besuch):</span>
+                  <input
+                    type="number"
+                    min={0}
+                    step={0.5}
+                    style={{ width: 70 }}
+                    value={extraEntwuerfe[t.eintrag.id] ?? (t.eintrag.extraPortionen || "")}
+                    onChange={(e) => setExtraEntwuerfe((prev) => ({ ...prev, [t.eintrag!.id]: e.target.value }))}
+                    onBlur={(e) => {
+                      const wert = parseFloat(e.target.value) || 0;
+                      startTransition(() => setExtraPortionen(t.eintrag!.id, wert).then(() => ladeWoche(offset)));
+                    }}
+                  />
                 </div>
               </div>
             )}

@@ -174,7 +174,7 @@ export async function listKategorien() {
 }
 
 // Eltern: Artikel direkt hinzufügen
-export async function addArtikel(data: { name: string; menge?: string; kategorieId?: string }) {
+export async function addArtikel(data: { name: string; menge?: string; notiz?: string; kategorieId?: string }) {
   await requireParent();
 
   const bestehender = await findeOffenenArtikel(data.name);
@@ -183,13 +183,13 @@ export async function addArtikel(data: { name: string; menge?: string; kategorie
   if (bestehender) {
     artikel = await prisma.einkaufsArtikel.update({
       where: { id: bestehender.id },
-      data: { menge: await mergeMenge(bestehender.menge, data.menge) },
+      data: { menge: await mergeMenge(bestehender.menge, data.menge), notiz: data.notiz || bestehender.notiz },
     });
     artikelId = artikel.id;
   } else {
     const kategorieId = data.kategorieId || (await autoKategorieId(data.name));
     artikel = await prisma.einkaufsArtikel.create({
-      data: { name: data.name, menge: data.menge, kategorieId: kategorieId || null },
+      data: { name: data.name, menge: data.menge, notiz: data.notiz || null, kategorieId: kategorieId || null },
     });
     artikelId = artikel.id;
   }
@@ -198,12 +198,12 @@ export async function addArtikel(data: { name: string; menge?: string; kategorie
   return artikel;
 }
 
-// Eltern: Namen/Menge eines bestehenden Artikels nachträglich korrigieren.
-export async function updateArtikel(id: string, data: { name?: string; menge?: string }) {
+// Eltern: Namen/Menge/Notiz eines bestehenden Artikels nachträglich korrigieren.
+export async function updateArtikel(id: string, data: { name?: string; menge?: string; notiz?: string }) {
   await requireParent();
   await prisma.einkaufsArtikel.update({
     where: { id },
-    data: { name: data.name, menge: data.menge },
+    data: { name: data.name, menge: data.menge, notiz: data.notiz !== undefined ? data.notiz || null : undefined },
   });
   revalidatePath("/einkaufsliste");
 }
@@ -233,10 +233,10 @@ export async function deleteArtikel(id: string) {
 }
 
 // Kind: Wunsch einreichen
-export async function submitWunsch(data: { artikelName: string; menge?: string }) {
+export async function submitWunsch(data: { artikelName: string; menge?: string; notiz?: string }) {
   const person = await requirePerson();
   const wunsch = await prisma.einkaufsWunsch.create({
-    data: { artikelName: data.artikelName, menge: data.menge, kindId: person.id },
+    data: { artikelName: data.artikelName, menge: data.menge, notiz: data.notiz || null, kindId: person.id },
   });
   await logAenderung({ entityTyp: "EINKAUFS_WUNSCH", entityId: wunsch.id, aktion: "eingereicht", neuerWert: wunsch.artikelName, geaendertVonId: person.id });
   revalidatePath("/einkaufsliste");
@@ -245,7 +245,7 @@ export async function submitWunsch(data: { artikelName: string; menge?: string }
 // Fix-Batch 30: ein Kind darf seinen eigenen Wunsch bearbeiten/zurückziehen, solange er noch
 // OFFEN ist (noch nicht genehmigt/abgelehnt) — danach nicht mehr, da schon in die Liste
 // übernommen bzw. entschieden.
-export async function updateWunsch(id: string, data: { artikelName?: string; menge?: string }) {
+export async function updateWunsch(id: string, data: { artikelName?: string; menge?: string; notiz?: string }) {
   const person = await requirePerson();
   const bestehend = await prisma.einkaufsWunsch.findUnique({ where: { id } });
   if (!bestehend) throw new Error("Wunsch nicht gefunden.");
@@ -280,6 +280,7 @@ export async function entscheideWunsch(id: string, genehmigt: boolean, kategorie
         where: { id: bestehender.id },
         data: {
           menge: await mergeMenge(bestehender.menge, wunsch.menge),
+          notiz: wunsch.notiz || bestehender.notiz,
           vonWunschId: wunsch.id,
           kategorieId: bestehender.kategorieId || kategorieId || (await autoKategorieId(wunsch.artikelName)),
         },
@@ -291,6 +292,7 @@ export async function entscheideWunsch(id: string, genehmigt: boolean, kategorie
         data: {
           name: wunsch.artikelName,
           menge: wunsch.menge,
+          notiz: wunsch.notiz,
           kategorieId: finalKategorieId || null,
           quelle: "wunsch",
           vonWunschId: wunsch.id,

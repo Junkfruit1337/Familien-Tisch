@@ -172,6 +172,7 @@ model EinkaufsArtikel {
   id           String             @id @default(cuid())
   name         String
   menge        String?
+  notiz        String? // z.B. "Körnerbrot" bei Artikel "Brot" (Fix-Batch 33 Nachtrag)
   kategorieId  String?
   kategorie    EinkaufsKategorie? @relation(fields: [kategorieId], references: [id])
   erledigt     Boolean            @default(false)
@@ -422,6 +423,7 @@ model EssensplanEintrag {
   rezept      Rezept   @relation(fields: [rezeptId], references: [id])
   esserIds    String[] @default([])
   esserFaktor Float    @default(1)
+  extraPortionen Float @default(0) // z.B. Gäste an dem Tag, zusätzlich zu den ausgewählten Essern
   gelockt     Boolean  @default(false)
 
   herkuenfte  EssensplanHerkunft[]
