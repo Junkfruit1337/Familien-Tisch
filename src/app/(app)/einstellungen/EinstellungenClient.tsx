@@ -32,6 +32,32 @@ import Spracheingabe from "@/components/Spracheingabe";
 import SeitenTitel from "@/components/SeitenTitel";
 import { BEREICH_FARBEN } from "@/lib/bereichFarben";
 
+// Für Ticket-Fotos (z.B. Screenshot eines Fehlers) — analog dem Notenfoto-Resize in
+// SchuleClient.tsx.
+function ticketFotoAufBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const bild = new Image();
+    const reader = new FileReader();
+    reader.onerror = reject;
+    reader.onload = () => {
+      bild.onerror = reject;
+      bild.onload = () => {
+        const maxBreite = 1000;
+        const skalierung = Math.min(1, maxBreite / bild.width);
+        const canvas = document.createElement("canvas");
+        canvas.width = bild.width * skalierung;
+        canvas.height = bild.height * skalierung;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return reject(new Error("Canvas nicht verfügbar"));
+        ctx.drawImage(bild, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL("image/jpeg", 0.72));
+      };
+      bild.src = reader.result as string;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 type Person = { id: string; name: string; rolle: string; farbe: string; aktiv: boolean; hatPin: boolean; portionsGewicht: number; geburtsdatum: string | null };
 type Tagesroutine = { id: string; kategorie: string; text: string };
 type Koerperpflegetag = { wochentag: number; text: string };
@@ -67,7 +93,16 @@ const BUNDESLAENDER = [
 ];
 type Dienst = { id: string; schichtNummer: number; reihenfolge: number; bezeichnung: string; beschreibung: string | null };
 type HistorieEintrag = { id: string; zeitpunkt: string; personName: string; typLabel: string; aktion: string; bezug: string | null };
-type Ticket = { id: string; titel: string; beschreibung: string; status: string; begruendung: string | null; createdAt: string };
+type Ticket = {
+  id: string;
+  titel: string;
+  beschreibung: string;
+  status: string;
+  begruendung: string | null;
+  fotoBase64: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
 type TicketMitErsteller = Ticket & { erstellerName: string };
 
 const ROLLEN = [
@@ -138,8 +173,10 @@ export default function EinstellungenClient({
 
   const [ticketTitel, setTicketTitel] = useState("");
   const [ticketBeschreibung, setTicketBeschreibung] = useState("");
+  const [ticketFoto, setTicketFoto] = useState<string | null>(null);
   const [ticketVerarbeitung, setTicketVerarbeitung] = useState(false);
   const [ticketBegruendungen, setTicketBegruendungen] = useState<Record<string, string>>({});
+  const [grossesTicketBild, setGrossesTicketBild] = useState<string | null>(null);
 
   async function ticketSpracheErkannt(text: string) {
     setTicketVerarbeitung(true);
@@ -344,14 +381,36 @@ export default function EinstellungenClient({
           value={ticketBeschreibung}
           onChange={(e) => setTicketBeschreibung(e.target.value)}
         />
+        <label style={{ fontSize: 13, display: "flex", flexDirection: "column", gap: 4 }}>
+          Bild dazufügen (optional, z. B. Screenshot)
+          <input
+            type="file"
+            accept="image/*"
+            onChange={async (e) => {
+              const file = e.target.files?.[0];
+              if (!file) return;
+              setTicketFoto(await ticketFotoAufBase64(file));
+            }}
+          />
+        </label>
+        {ticketFoto && (
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={ticketFoto} alt="Vorschau" style={{ width: 60, height: 60, objectFit: "cover", borderRadius: 8 }} />
+            <button className="btn-secondary" style={{ fontSize: 12, padding: "4px 8px" }} onClick={() => setTicketFoto(null)}>
+              Entfernen
+            </button>
+          </div>
+        )}
         <button
           className="btn"
           disabled={pending || !ticketTitel.trim() || !ticketBeschreibung.trim()}
           onClick={() =>
             startTransition(async () => {
-              await erstelleTicket(ticketTitel, ticketBeschreibung);
+              await erstelleTicket(ticketTitel, ticketBeschreibung, ticketFoto || undefined);
               setTicketTitel("");
               setTicketBeschreibung("");
+              setTicketFoto(null);
             })
           }
         >
@@ -361,15 +420,30 @@ export default function EinstellungenClient({
           <div style={{ display: "flex", flexDirection: "column", gap: 6, borderTop: "1px solid var(--border)", paddingTop: 8, marginTop: 4 }}>
             <strong style={{ fontSize: 13 }}>Meine gemeldeten Tickets</strong>
             {meineTickets.map((t) => (
-              <div key={t.id} style={{ display: "flex", flexDirection: "column", gap: 2, fontSize: 13 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+              <details key={t.id} style={{ fontSize: 13 }}>
+                <summary style={{ cursor: "pointer", display: "flex", justifyContent: "space-between", gap: 8, listStyle: "none" }}>
                   <span>{t.titel}</span>
                   <span className={`pill pill-${t.status === "ABGELEHNT" ? "abgelehnt" : t.status === "EINGEREICHT" ? "offen" : "genehmigt"}`}>
                     {TICKET_STATUS_LABEL[t.status] ?? t.status}
                   </span>
+                </summary>
+                <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 6, paddingLeft: 4 }}>
+                  <span>{t.beschreibung}</span>
+                  {t.fotoBase64 && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={t.fotoBase64}
+                      alt="Ticket-Foto"
+                      style={{ width: 60, height: 60, objectFit: "cover", borderRadius: 8, cursor: "pointer" }}
+                      onClick={() => setGrossesTicketBild(t.fotoBase64)}
+                    />
+                  )}
+                  <span style={{ color: "var(--text-muted)", fontSize: 12 }}>
+                    Eingereicht am {new Date(t.createdAt).toLocaleDateString("de-DE")}
+                  </span>
+                  {t.begruendung && <span style={{ color: "var(--text-muted)", fontSize: 12 }}>Begründung: „{t.begruendung}"</span>}
                 </div>
-                {t.begruendung && <span style={{ color: "var(--text-muted)", fontSize: 12 }}>„{t.begruendung}"</span>}
-              </div>
+              </details>
             ))}
           </div>
         )}
@@ -401,15 +475,25 @@ export default function EinstellungenClient({
     </details>
   );
 
+  const grossesTicketBildModal = grossesTicketBild && (
+    <div
+      onClick={() => setGrossesTicketBild(null)}
+      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.8)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={grossesTicketBild} alt="Ticket-Foto groß" style={{ maxWidth: "100%", maxHeight: "100%", borderRadius: 8 }} />
+    </div>
+  );
+
   if (!istEltern) {
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        {grossesTicketBildModal}
         <SeitenTitel icon="⚙️" farbe={BEREICH_FARBEN.einstellungen}>Einstellungen</SeitenTitel>
-        <PushBenachrichtigungen />
         {fehlerMeldenSektion}
         {geburtstagSektion}
         {kinder.length > 0 && (
-          <details open>
+          <details>
             <summary style={{ cursor: "pointer", fontWeight: 600 }}>🎓 Meine Schule</summary>
             <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 8 }}>
               {schulprofilUndFaecherKarten(kind)}
@@ -417,15 +501,15 @@ export default function EinstellungenClient({
           </details>
         )}
         <p style={{ color: "var(--text-muted)" }}>Der Rest dieses Bereichs ist nur für Eltern.</p>
+        <PushBenachrichtigungen />
       </div>
     );
   }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      {grossesTicketBildModal}
       <SeitenTitel icon="⚙️" farbe={BEREICH_FARBEN.einstellungen}>Einstellungen</SeitenTitel>
-
-      <PushBenachrichtigungen />
 
       {fehlerMeldenSektion}
 
@@ -444,8 +528,18 @@ export default function EinstellungenClient({
                   </span>
                 </div>
                 <p style={{ margin: 0, fontSize: 13 }}>{t.beschreibung}</p>
+                {t.fotoBase64 && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={t.fotoBase64}
+                    alt="Ticket-Foto"
+                    style={{ width: 80, height: 80, objectFit: "cover", borderRadius: 8, cursor: "pointer" }}
+                    onClick={() => setGrossesTicketBild(t.fotoBase64)}
+                  />
+                )}
                 <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>
-                  Von {t.erstellerName} · {new Date(t.createdAt).toLocaleDateString("de-DE")}
+                  Von {t.erstellerName} · Eingereicht am {new Date(t.createdAt).toLocaleDateString("de-DE")}
+                  {t.status !== "EINGEREICHT" && <> · Entschieden am {new Date(t.updatedAt).toLocaleDateString("de-DE")}</>}
                 </p>
                 {t.begruendung && <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>Begründung: „{t.begruendung}"</p>}
                 <input
@@ -455,7 +549,7 @@ export default function EinstellungenClient({
                   style={{ fontSize: 13 }}
                 />
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                  {["GENEHMIGT", "ABGELEHNT", "IN_UMSETZUNG", "UMGESETZT"].map((s) => (
+                  {["GENEHMIGT", "ABGELEHNT", "UMGESETZT"].map((s) => (
                     <button
                       key={s}
                       className="btn-secondary"
@@ -477,7 +571,7 @@ export default function EinstellungenClient({
         </details>
       )}
 
-      <details open>
+      <details>
         <summary style={{ cursor: "pointer", fontWeight: 600 }}>👪 Personen &amp; Zugänge</summary>
         <div className="card" style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
           {personen.map((p) => (
@@ -654,7 +748,7 @@ export default function EinstellungenClient({
         </details>
       )}
 
-      <details open>
+      <details>
         <summary style={{ cursor: "pointer", fontWeight: 600 }}>🧹 Dienstplan: Dienstkatalog</summary>
         <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 8 }}>
           <p style={{ fontSize: 12, color: "var(--text-muted)", margin: 0 }}>
@@ -956,6 +1050,8 @@ export default function EinstellungenClient({
           ))}
         </div>
       </details>
+
+      <PushBenachrichtigungen />
     </div>
   );
 }

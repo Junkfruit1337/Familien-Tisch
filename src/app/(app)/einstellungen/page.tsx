@@ -66,7 +66,9 @@ export default async function EinstellungenPage() {
         beschreibung: t.beschreibung,
         status: t.status,
         begruendung: t.begruendung,
+        fotoBase64: t.fotoBase64,
         createdAt: t.createdAt.toISOString(),
+        updatedAt: t.updatedAt.toISOString(),
       }))}
       alleTickets={alleTickets.map((t) => ({
         id: t.id,
@@ -74,8 +76,10 @@ export default async function EinstellungenPage() {
         beschreibung: t.beschreibung,
         status: t.status,
         begruendung: t.begruendung,
+        fotoBase64: t.fotoBase64,
         erstellerName: t.erstelltVon.name,
         createdAt: t.createdAt.toISOString(),
+        updatedAt: t.updatedAt.toISOString(),
       }))}
     />
   );

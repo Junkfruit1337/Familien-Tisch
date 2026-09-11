@@ -80,10 +80,12 @@ export async function erkenneTicketAusText(text: string): Promise<{ ok: true; ti
   }
 }
 
-export async function erstelleTicket(titel: string, beschreibung: string) {
+export async function erstelleTicket(titel: string, beschreibung: string, fotoBase64?: string) {
   const person = await requirePerson();
   if (!titel.trim() || !beschreibung.trim()) throw new Error("Titel und Beschreibung dürfen nicht leer sein.");
-  await prisma.ticket.create({ data: { titel: titel.trim(), beschreibung: beschreibung.trim(), erstelltVonId: person.id } });
+  await prisma.ticket.create({
+    data: { titel: titel.trim(), beschreibung: beschreibung.trim(), fotoBase64: fotoBase64 || undefined, erstelltVonId: person.id },
+  });
   revalidatePath("/einstellungen");
 }
 

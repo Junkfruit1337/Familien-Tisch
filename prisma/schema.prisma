@@ -494,6 +494,7 @@ model Ticket {
   beschreibung  String
   status        TicketStatus @default(EINGEREICHT)
   begruendung   String? // optionale Begründung der Eltern (v.a. bei Ablehnung)
+  fotoBase64    String? // optionales Foto zum Ticket (Fix-Batch 35, z.B. Screenshot des Fehlers)
   erstelltVonId String
   erstelltVon   Person       @relation(fields: [erstelltVonId], references: [id])
   createdAt     DateTime     @default(now())
