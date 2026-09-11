@@ -17,9 +17,16 @@ const UNBEGRENZT_HORIZONT_TAGE = 365 * 2;
 function naechsteAufgabe(datum: Date, wiederholung: string): Date {
   const d = new Date(datum);
   if (wiederholung === "TAEGLICH") d.setDate(d.getDate() + 1);
-  else if (wiederholung === "WOECHENTLICH") d.setDate(d.getDate() + 7);
+  else if (wiederholung === "WERKTAEGLICH") {
+    // Fix-Batch 30: Mo–Fr — Samstag/Sonntag überspringen.
+    do {
+      d.setDate(d.getDate() + 1);
+    } while (d.getDay() === 0 || d.getDay() === 6);
+  } else if (wiederholung === "WOECHENTLICH") d.setDate(d.getDate() + 7);
   else if (wiederholung === "ZWEIWOECHENTLICH") d.setDate(d.getDate() + 14);
   else if (wiederholung === "MONATLICH") d.setMonth(d.getMonth() + 1);
+  else if (wiederholung === "ALLE_3_MONATE") d.setMonth(d.getMonth() + 3);
+  else if (wiederholung === "JAEHRLICH") d.setFullYear(d.getFullYear() + 1);
   return d;
 }
 
@@ -134,12 +141,15 @@ export async function toggleAufgabe(id: string) {
 }
 
 // scope "serie" löscht alle Aufgaben derselben Serie (Outlook-Stil-Rückfrage wie beim Kalender).
+// Fix-Batch 30: Kinder dürfen nur noch selbst angelegte Aufgaben löschen (vorher reichte es,
+// dass die Aufgabe ihnen zugewiesen war — auch von Eltern gesetzte Aufgaben ließen sich so
+// löschen), analog derselben Korrektur bei Terminen.
 export async function deleteAufgabe(id: string, scope: "eins" | "serie" = "eins") {
   const person = await requirePerson();
   const aufgabe = await prisma.aufgabe.findUnique({ where: { id } });
   if (!aufgabe) return;
-  if (person.rolle !== "ELTERN" && aufgabe.personId !== person.id) {
-    throw new Error("Das darfst du nicht löschen.");
+  if (person.rolle !== "ELTERN" && aufgabe.erstelltVonId !== person.id) {
+    throw new Error("Das darfst du nicht löschen — nur selbst angelegte Aufgaben.");
   }
   if (scope === "serie" && aufgabe.seriesId) {
     await prisma.aufgabe.deleteMany({ where: { seriesId: aufgabe.seriesId } });

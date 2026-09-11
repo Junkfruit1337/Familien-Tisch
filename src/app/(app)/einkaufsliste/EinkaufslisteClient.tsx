@@ -87,14 +87,15 @@ function ArtikelKachel({
         position: "relative",
         background: hintergrund,
         color: textfarbe,
-        borderRadius: 16,
-        padding: "18px 10px 12px",
+        borderRadius: 12,
+        padding: "10px 6px",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
-        gap: 4,
+        justifyContent: "center",
+        gap: 2,
         textAlign: "center",
-        minHeight: 96,
+        aspectRatio: "1",
         cursor: deaktiviert || !onTap ? "default" : "pointer",
       }}
     >
@@ -103,9 +104,9 @@ function ArtikelKachel({
           {eckeAktion}
         </div>
       )}
-      <span style={{ fontSize: 30, lineHeight: 1 }}>{erkenneArtikelIcon(name)}</span>
-      <span style={{ fontWeight: 600, fontSize: 13, textDecoration: durchgestrichen ? "line-through" : "none" }}>{name}</span>
-      {menge && <span style={{ fontSize: 11, opacity: 0.85 }}>{menge}</span>}
+      <span style={{ fontSize: 22, lineHeight: 1 }}>{erkenneArtikelIcon(name)}</span>
+      <span style={{ fontWeight: 600, fontSize: 12, textDecoration: durchgestrichen ? "line-through" : "none" }}>{name}</span>
+      {menge && <span style={{ fontSize: 10, opacity: 0.85 }}>{menge}</span>}
     </div>
   );
 }
@@ -407,7 +408,7 @@ export default function EinkaufslisteClient({
             <p style={{ fontSize: 12, color: "var(--text-muted)", margin: 0 }}>
               Häufig gekaufte Artikel, die gerade nicht auf der Liste stehen — antippen zum Hinzufügen.
             </p>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))", gap: 10 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(88px, 1fr))", gap: 10 }}>
               {vorschlaege.map((v) => (
                 <ArtikelKachel
                   key={v.name}
@@ -504,7 +505,7 @@ export default function EinkaufslisteClient({
       {Object.entries(nachKategorie).map(([kat, items]) => (
         <div key={kat} className="card">
           <strong>{kat}</strong>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))", gap: 10, marginTop: 8 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(88px, 1fr))", gap: 10, marginTop: 8 }}>
             {items.map((a) => (
               <ArtikelKachel
                 key={a.id}
@@ -534,7 +535,7 @@ export default function EinkaufslisteClient({
       {erledigt.length > 0 && (
         <details>
           <summary style={{ cursor: "pointer", color: "var(--text-muted)" }}>Bereits eingekauft ({erledigt.length})</summary>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))", gap: 10, marginTop: 8 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(88px, 1fr))", gap: 10, marginTop: 8 }}>
             {erledigt.map((a) => (
               <ArtikelKachel
                 key={a.id}

@@ -19,9 +19,12 @@ type Person = { id: string; name: string };
 const WIEDERHOLUNGEN = [
   { value: "KEINE", label: "Keine Wiederholung" },
   { value: "TAEGLICH", label: "Täglich" },
+  { value: "WERKTAEGLICH", label: "Jeden Werktag (Mo–Fr)" },
   { value: "WOECHENTLICH", label: "Wöchentlich" },
   { value: "ZWEIWOECHENTLICH", label: "Alle 2 Wochen" },
   { value: "MONATLICH", label: "Monatlich" },
+  { value: "ALLE_3_MONATE", label: "Alle 3 Monate" },
+  { value: "JAEHRLICH", label: "Jährlich" },
 ];
 
 export default function AufgabenClient({

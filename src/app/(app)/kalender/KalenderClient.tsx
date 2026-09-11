@@ -6,19 +6,21 @@ import { erkenneTerminKategorie, TERMIN_KATEGORIE_LABEL } from "@/lib/terminkate
 import HistorieVerlauf from "@/components/HistorieVerlauf";
 import Spracheingabe from "@/components/Spracheingabe";
 
+type PersonKurz = { id: string; name: string; farbe: string };
 type Termin = {
   id: string;
-  typ: "termin" | "aufgabe" | "schule";
+  ids: string[];
+  typ: "termin" | "aufgabe" | "schule" | "geburtstag";
   titel: string;
   start: string;
   ende: string | null;
   ganztaegig: boolean;
   kategorie: string;
-  personId: string | null;
-  personName: string;
-  personFarbe: string;
+  personen: PersonKurz[];
   erledigt: boolean;
   seriesId: string | null;
+  gruppeId: string | null;
+  erstelltVonId: string | null;
 };
 type Person = { id: string; name: string; farbe: string };
 
@@ -27,9 +29,12 @@ const WOCHENTAGE = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
 const WIEDERHOLUNGEN = [
   { value: "KEINE", label: "Keine Wiederholung" },
   { value: "TAEGLICH", label: "Täglich" },
+  { value: "WERKTAEGLICH", label: "Jeden Werktag (Mo–Fr)" },
   { value: "WOECHENTLICH", label: "Wöchentlich" },
   { value: "ZWEIWOECHENTLICH", label: "Alle 2 Wochen" },
   { value: "MONATLICH", label: "Monatlich" },
+  { value: "ALLE_3_MONATE", label: "Alle 3 Monate" },
+  { value: "JAEHRLICH", label: "Jährlich" },
 ];
 
 function isoDatum(iso: string): string {
@@ -54,6 +59,10 @@ function wochenStart(d: Date): Date {
   return addTage(d, -montagOffset);
 }
 
+function personenLabel(personen: PersonKurz[]): string {
+  return personen.length > 0 ? personen.map((p) => p.name).join(", ") : "Familie";
+}
+
 export default function KalenderClient({
   istEltern,
   eigeneId,
@@ -70,7 +79,9 @@ export default function KalenderClient({
   const [wochenDatum, setWochenDatum] = useState(() => wochenStart(new Date()));
   const [tagesDatum, setTagesDatum] = useState(() => new Date());
   const [ausgewaehlterTag, setAusgewaehlterTag] = useState<string | null>(null);
-  const [filter, setFilter] = useState<string | null>(null);
+  // Nur für Eltern relevant — Kinder sehen ohnehin nur ihre eigenen + familienweite
+  // Einträge, ein Personen-Filter ergäbe für sie keinen Sinn (Fix-Batch 30).
+  const [filter, setFilter] = useState<string[]>([]);
   const [nurZukunft, setNurZukunft] = useState(true);
   const [zeigeFormular, setZeigeFormular] = useState(false);
   const [bearbeitenId, setBearbeitenId] = useState<string | null>(null);
@@ -79,18 +90,25 @@ export default function KalenderClient({
 
   const [titel, setTitel] = useState("");
   const [start, setStart] = useState("");
+  const [ganztaegig, setGanztaegig] = useState(false);
   const [personIds, setPersonIds] = useState<string[]>(istEltern ? [] : [eigeneId]);
   const [wiederholung, setWiederholung] = useState("KEINE");
   const [wiederholungBis, setWiederholungBis] = useState("");
   const [spracheVerarbeitung, setSpracheVerarbeitung] = useState(false);
   const erkannteKategorie = useMemo(() => erkenneTerminKategorie(titel), [titel]);
 
+  function passtFilter(t: Termin): boolean {
+    if (filter.length === 0) return true;
+    return t.personen.some((p) => filter.includes(p.id));
+  }
+
   const gefiltert = useMemo(() => {
     const jetzt = new Date();
     return termine
-      .filter((t) => !filter || t.personId === filter)
+      .filter(passtFilter)
       .filter((t) => !nurZukunft || ausgewaehlterTag || new Date(t.start) >= new Date(jetzt.toDateString()))
       .filter((t) => !ausgewaehlterTag || isoDatum(t.start) === ausgewaehlterTag);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [termine, filter, nurZukunft, ausgewaehlterTag]);
 
   const monatsZellen = useMemo(() => {
@@ -105,10 +123,11 @@ export default function KalenderClient({
     for (let i = 0; i < 42; i++) {
       const datum = new Date(start0.getFullYear(), start0.getMonth(), start0.getDate() + i);
       const iso = isoVonDate(datum);
-      const eintraege = termine.filter((t) => (!filter || t.personId === filter) && isoDatum(t.start) === iso);
+      const eintraege = termine.filter((t) => passtFilter(t) && isoDatum(t.start) === iso);
       zellen.push({ iso, tag: datum.getDate(), imMonat: datum.getMonth() === monat, heute: iso === heuteIso, eintraege });
     }
     return zellen;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [monatsDatum, termine, filter]);
 
   const wochenTage = useMemo(() => {
@@ -117,22 +136,25 @@ export default function KalenderClient({
       const datum = addTage(wochenDatum, i);
       const iso = isoVonDate(datum);
       const eintraege = termine
-        .filter((t) => (!filter || t.personId === filter) && isoDatum(t.start) === iso)
+        .filter((t) => passtFilter(t) && isoDatum(t.start) === iso)
         .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
       return { iso, datum, heute: iso === heuteIso, eintraege };
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wochenDatum, termine, filter]);
 
   const tagesEintraege = useMemo(() => {
     const iso = isoVonDate(tagesDatum);
     return termine
-      .filter((t) => (!filter || t.personId === filter) && isoDatum(t.start) === iso)
+      .filter((t) => passtFilter(t) && isoDatum(t.start) === iso)
       .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tagesDatum, termine, filter]);
 
   function formularZuruecksetzen() {
     setTitel("");
     setStart("");
+    setGanztaegig(false);
     setWiederholung("KEINE");
     setWiederholungBis("");
     setZeigeFormular(false);
@@ -142,8 +164,8 @@ export default function KalenderClient({
   function bearbeitenStarten(t: Termin) {
     setBearbeitenId(t.id);
     setTitel(t.titel);
-    setStart(t.start.slice(0, 16));
-    setPersonIds(t.personId ? [t.personId] : []);
+    setGanztaegig(t.ganztaegig);
+    setStart(t.ganztaegig ? isoDatum(t.start) : t.start.slice(0, 16));
     setWiederholung("KEINE");
     setWiederholungBis("");
     setZeigeFormular(true);
@@ -161,7 +183,10 @@ export default function KalenderClient({
       setZeigeFormular(true);
       setBearbeitenId(null);
       setTitel(t.titel);
-      setStart(`${t.datum ?? isoVonDate(new Date())}T${t.uhrzeit ?? "09:00"}`);
+      const datum = t.datum ?? isoVonDate(new Date());
+      // Keine Uhrzeit erkannt → als ganztägig übernehmen statt eine Uhrzeit zu erfinden.
+      setGanztaegig(!t.uhrzeit);
+      setStart(t.uhrzeit ? `${datum}T${t.uhrzeit}` : datum);
       if (istEltern && t.personIds.length > 0) setPersonIds(t.personIds);
       setWiederholung(t.wiederholung);
       setWiederholungBis(t.wiederholungBis ?? "");
@@ -173,13 +198,14 @@ export default function KalenderClient({
   function submit() {
     if (!titel || !start) return;
     startTransition(async () => {
+      const startWert = ganztaegig ? `${start}T00:00` : start;
       if (bearbeitenId) {
-        await updateTermin(bearbeitenId, { titel, start, personId: personIds[0] ?? null });
+        await updateTermin(bearbeitenId, { titel, start: startWert });
       } else {
         await createTermin({
           titel,
-          start,
-          ganztaegig: false,
+          start: startWert,
+          ganztaegig,
           personIds,
           wiederholung,
           wiederholungBis: wiederholungBis || undefined,
@@ -190,7 +216,7 @@ export default function KalenderClient({
   }
 
   function loeschKlick(t: Termin) {
-    if (t.seriesId) {
+    if (t.seriesId || t.gruppeId) {
       setLoeschAuswahl({ id: t.id, titel: t.titel });
     } else {
       startTransition(() => deleteTermin(t.id, "eins"));
@@ -198,7 +224,10 @@ export default function KalenderClient({
   }
 
   function renderEintrag(t: Termin) {
-    const bearbeitbar = t.typ === "termin" && (istEltern || t.personId === eigeneId);
+    const istEigenerTermin = t.personen.some((p) => p.id === eigeneId);
+    const bearbeitbar = t.typ === "termin" && (istEltern || istEigenerTermin);
+    const loeschbar = t.typ === "termin" && (istEltern || t.erstelltVonId === eigeneId);
+    const icon = t.typ === "aufgabe" ? "📌 " : t.typ === "schule" ? "🎓 " : t.typ === "geburtstag" ? "" : "";
     return (
       <div
         key={t.id}
@@ -212,7 +241,7 @@ export default function KalenderClient({
       >
         <div>
           <div style={{ fontWeight: 600, textDecoration: t.typ === "aufgabe" && t.erledigt ? "line-through" : undefined }}>
-            {t.typ === "aufgabe" ? "📌 " : t.typ === "schule" ? "🎓 " : ""}
+            {icon}
             {t.titel}
             {t.seriesId ? " 🔁" : ""}
           </div>
@@ -220,14 +249,27 @@ export default function KalenderClient({
             {t.ganztaegig
               ? new Date(t.start).toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit" })
               : new Date(t.start).toLocaleString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
-            {" · "}
-            <span style={{ color: t.personFarbe, fontWeight: 600 }}>{t.personName}</span>
+            {t.typ !== "geburtstag" && (
+              <>
+                {" · "}
+                {t.personen.length > 0 ? (
+                  t.personen.map((p, i) => (
+                    <span key={p.id}>
+                      {i > 0 && ", "}
+                      <span style={{ color: p.farbe, fontWeight: 600 }}>{p.name}</span>
+                    </span>
+                  ))
+                ) : (
+                  <span style={{ fontWeight: 600 }}>Familie</span>
+                )}
+              </>
+            )}
             {t.typ === "aufgabe" && <span> · Aufgabe</span>}
             {t.typ === "schule" && <span> · Schule</span>}
           </div>
           {loeschAuswahl?.id === t.id && (
-            <div style={{ display: "flex", gap: 6, marginTop: 8, alignItems: "center", fontSize: 12 }}>
-              <span>Nur diesen Termin oder die ganze Serie löschen?</span>
+            <div style={{ display: "flex", gap: 6, marginTop: 8, alignItems: "center", fontSize: 12, flexWrap: "wrap" }}>
+              <span>Nur diesen Termin oder {t.gruppeId && !t.seriesId ? "alle Personen" : "die ganze Serie"} löschen?</span>
               <button
                 className="btn-secondary"
                 style={{ fontSize: 12, padding: "2px 8px" }}
@@ -246,7 +288,7 @@ export default function KalenderClient({
                   setLoeschAuswahl(null);
                 }}
               >
-                Ganze Serie
+                {t.gruppeId && !t.seriesId ? "Alle Personen" : "Ganze Serie"}
               </button>
               <button className="btn-secondary" style={{ fontSize: 12, padding: "2px 8px" }} onClick={() => setLoeschAuswahl(null)}>
                 Abbrechen
@@ -255,14 +297,18 @@ export default function KalenderClient({
           )}
           {istEltern && t.typ === "termin" && !loeschAuswahl && <HistorieVerlauf entityTyp="TERMIN" entityId={t.id} />}
         </div>
-        {bearbeitbar && !loeschAuswahl && (
+        {!loeschAuswahl && (bearbeitbar || loeschbar) && (
           <div style={{ display: "flex", gap: 6 }}>
-            <button className="btn-secondary" style={{ fontSize: 13 }} onClick={() => bearbeitenStarten(t)}>
-              Bearbeiten
-            </button>
-            <button className="btn-secondary" style={{ fontSize: 13 }} onClick={() => loeschKlick(t)}>
-              Löschen
-            </button>
+            {bearbeitbar && (
+              <button className="btn-secondary" style={{ fontSize: 13 }} onClick={() => bearbeitenStarten(t)}>
+                Bearbeiten
+              </button>
+            )}
+            {loeschbar && (
+              <button className="btn-secondary" style={{ fontSize: 13 }} onClick={() => loeschKlick(t)}>
+                Löschen
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -290,14 +336,27 @@ export default function KalenderClient({
           {!bearbeitenId && <Spracheingabe onErgebnis={spracheErkannt} disabled={spracheVerarbeitung} />}
           {spracheVerarbeitung && <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>Spracheingabe wird verarbeitet …</p>}
           <input placeholder="Titel" value={titel} onChange={(e) => setTitel(e.target.value)} />
-          <label style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: -6 }}>Datum &amp; Uhrzeit</label>
-          <input type="datetime-local" value={start} onChange={(e) => setStart(e.target.value)} />
+          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 14 }}>
+            <input
+              type="checkbox"
+              checked={ganztaegig}
+              onChange={(e) => {
+                const neu = e.target.checked;
+                setGanztaegig(neu);
+                // Beim Umschalten den bisherigen Wert sinnvoll umformatieren, statt ihn zu verwerfen.
+                setStart((prev) => (neu ? prev.slice(0, 10) : prev ? `${prev}T09:00` : prev));
+              }}
+            />
+            Ganztägig (keine Uhrzeit)
+          </label>
+          <label style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: -6 }}>{ganztaegig ? "Datum" : "Datum & Uhrzeit"}</label>
+          <input type={ganztaegig ? "date" : "datetime-local"} value={start} onChange={(e) => setStart(e.target.value)} />
           {titel.trim() && (
             <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>
               Erkannt als: <strong>{TERMIN_KATEGORIE_LABEL[erkannteKategorie]}</strong>
             </p>
           )}
-          {istEltern && (
+          {istEltern && !bearbeitenId && (
             <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
               <label style={{ fontSize: 12, color: "var(--text-muted)" }}>Für wen?</label>
               <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 14 }}>
@@ -361,31 +420,39 @@ export default function KalenderClient({
         ))}
       </div>
 
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-        <button
-          className="btn-secondary"
-          style={{ background: !filter ? "var(--accent)" : undefined, color: !filter ? "var(--accent-contrast)" : undefined }}
-          onClick={() => setFilter(null)}
-        >
-          Alle
-        </button>
-        {personen.map((p) => (
+      {istEltern && (
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
           <button
-            key={p.id}
             className="btn-secondary"
-            style={{ background: filter === p.id ? p.farbe : undefined, color: filter === p.id ? "#fff" : undefined }}
-            onClick={() => setFilter(p.id)}
+            style={{ background: filter.length === 0 ? "var(--accent)" : undefined, color: filter.length === 0 ? "var(--accent-contrast)" : undefined }}
+            onClick={() => setFilter([])}
           >
-            {p.name}
+            Alle
           </button>
-        ))}
-        {ansicht === "liste" && (
-          <label style={{ marginLeft: "auto", display: "flex", gap: 6, alignItems: "center", fontSize: 13, color: "var(--text-muted)" }}>
-            <input type="checkbox" checked={nurZukunft} onChange={(e) => setNurZukunft(e.target.checked)} style={{ width: "auto" }} />
-            Vergangene ausblenden
-          </label>
-        )}
-      </div>
+          {personen.map((p) => (
+            <button
+              key={p.id}
+              className="btn-secondary"
+              style={{ background: filter.includes(p.id) ? p.farbe : undefined, color: filter.includes(p.id) ? "#fff" : undefined }}
+              onClick={() => setFilter((prev) => (prev.includes(p.id) ? prev.filter((id) => id !== p.id) : [...prev, p.id]))}
+            >
+              {p.name}
+            </button>
+          ))}
+          {ansicht === "liste" && (
+            <label style={{ marginLeft: "auto", display: "flex", gap: 6, alignItems: "center", fontSize: 13, color: "var(--text-muted)" }}>
+              <input type="checkbox" checked={nurZukunft} onChange={(e) => setNurZukunft(e.target.checked)} style={{ width: "auto" }} />
+              Vergangene ausblenden
+            </label>
+          )}
+        </div>
+      )}
+      {!istEltern && ansicht === "liste" && (
+        <label style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 13, color: "var(--text-muted)" }}>
+          <input type="checkbox" checked={nurZukunft} onChange={(e) => setNurZukunft(e.target.checked)} style={{ width: "auto" }} />
+          Vergangene ausblenden
+        </label>
+      )}
 
       {ansicht === "monat" && (
         <div className="card">
@@ -432,12 +499,12 @@ export default function KalenderClient({
               >
                 <span>{zelle.tag}</span>
                 <div style={{ display: "flex", gap: 2, flexWrap: "wrap", justifyContent: "center", marginTop: 2 }}>
-                  {zelle.eintraege.slice(0, 4).map((e) => (
-                    <span
-                      key={e.id}
-                      style={{ width: 6, height: 6, borderRadius: "50%", background: e.personFarbe, display: "inline-block" }}
-                    />
-                  ))}
+                  {zelle.eintraege
+                    .flatMap((e) => (e.personen.length > 0 ? e.personen.map((p) => ({ key: `${e.id}-${p.id}`, farbe: p.farbe })) : [{ key: e.id, farbe: "var(--accent)" }]))
+                    .slice(0, 4)
+                    .map((d) => (
+                      <span key={d.key} style={{ width: 6, height: 6, borderRadius: "50%", background: d.farbe, display: "inline-block" }} />
+                    ))}
                   {zelle.eintraege.length > 4 && <span style={{ fontSize: 9 }}>+{zelle.eintraege.length - 4}</span>}
                 </div>
               </button>
@@ -472,7 +539,10 @@ export default function KalenderClient({
                   {tag.eintraege.length === 0 && <span style={{ fontSize: 12, color: "var(--text-muted)" }}>—</span>}
                   {tag.eintraege.map((e) => (
                     <div key={e.id} style={{ fontSize: 13 }}>
-                      <span style={{ color: e.personFarbe, fontWeight: 600 }}>{e.personName}</span> · {e.titel}
+                      {e.typ !== "geburtstag" && (
+                        <span style={{ color: e.personen[0]?.farbe ?? "var(--text)", fontWeight: 600 }}>{personenLabel(e.personen)} · </span>
+                      )}
+                      {e.titel}
                     </div>
                   ))}
                 </div>

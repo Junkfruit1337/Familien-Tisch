@@ -9,10 +9,6 @@ import {
   listAktiveTausche,
   getBadplan,
   updateDienstBeschreibung,
-  addTagesroutine,
-  updateTagesroutine,
-  deleteTagesroutine,
-  setKoerperpflegetag,
   addZusatzAufgabe,
   toggleZusatzAufgabe,
   deleteZusatzAufgabe,
@@ -79,13 +75,6 @@ export default function DienstplanClient({
   const [bearbeiteDienstId, setBearbeiteDienstId] = useState<string | null>(null);
   const [dienstText, setDienstText] = useState("");
   const [zeigeDienstDetails, setZeigeDienstDetails] = useState(false);
-
-  const [neueRoutineKategorie, setNeueRoutineKategorie] = useState("");
-  const [neueRoutineText, setNeueRoutineText] = useState("");
-  const [bearbeiteRoutineId, setBearbeiteRoutineId] = useState<string | null>(null);
-  const [routineText, setRoutineText] = useState("");
-  const [bearbeiteWochentag, setBearbeiteWochentag] = useState<number | null>(null);
-  const [wochentagText, setWochentagText] = useState("");
 
   const [neueAufgabeTitel, setNeueAufgabeTitel] = useState("");
   const [neueAufgabePersonId, setNeueAufgabePersonId] = useState("");
@@ -387,56 +376,9 @@ export default function DienstplanClient({
             <div key={kategorie}>
               <strong style={{ fontSize: 14 }}>{kategorie}</strong>
               <ul style={{ margin: "4px 0 0", paddingLeft: 18, fontSize: 14 }}>
-                {eintraege.map((r) =>
-                  bearbeiteRoutineId === r.id ? (
-                    <li key={r.id} style={{ listStyle: "none", marginLeft: -18, marginBottom: 4 }}>
-                      <div style={{ display: "flex", gap: 6 }}>
-                        <input value={routineText} onChange={(e) => setRoutineText(e.target.value)} style={{ flex: 1 }} />
-                        <button
-                          className="btn"
-                          style={{ fontSize: 12, padding: "3px 8px" }}
-                          onClick={() =>
-                            startTransition(async () => {
-                              await updateTagesroutine(r.id, routineText);
-                              setBearbeiteRoutineId(null);
-                            })
-                          }
-                        >
-                          ✓
-                        </button>
-                        <button className="btn-secondary" style={{ fontSize: 12, padding: "3px 8px" }} onClick={() => setBearbeiteRoutineId(null)}>
-                          ✕
-                        </button>
-                      </div>
-                    </li>
-                  ) : (
-                    <li key={r.id}>
-                      {r.text}
-                      {istEltern && (
-                        <>
-                          {" "}
-                          <button
-                            className="btn-secondary"
-                            style={{ fontSize: 11, padding: "1px 6px" }}
-                            onClick={() => {
-                              setBearbeiteRoutineId(r.id);
-                              setRoutineText(r.text);
-                            }}
-                          >
-                            ✎
-                          </button>
-                          <button
-                            className="btn-secondary"
-                            style={{ fontSize: 11, padding: "1px 6px" }}
-                            onClick={() => startTransition(() => deleteTagesroutine(r.id))}
-                          >
-                            🗑
-                          </button>
-                        </>
-                      )}
-                    </li>
-                  )
-                )}
+                {eintraege.map((r) => (
+                  <li key={r.id}>{r.text}</li>
+                ))}
               </ul>
             </div>
           ))}
@@ -450,39 +392,7 @@ export default function DienstplanClient({
                 return (
                   <div key={wt} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14 }}>
                     <span style={{ width: 90, color: "var(--text-muted)", fontSize: 13 }}>{name}</span>
-                    {bearbeiteWochentag === wt ? (
-                      <>
-                        <input value={wochentagText} onChange={(e) => setWochentagText(e.target.value)} style={{ flex: 1 }} />
-                        <button
-                          className="btn"
-                          style={{ fontSize: 12, padding: "3px 8px" }}
-                          onClick={() =>
-                            startTransition(async () => {
-                              await setKoerperpflegetag(wt, wochentagText);
-                              setBearbeiteWochentag(null);
-                            })
-                          }
-                        >
-                          ✓
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <span style={{ flex: 1 }}>{eintrag?.text ?? "—"}</span>
-                        {istEltern && (
-                          <button
-                            className="btn-secondary"
-                            style={{ fontSize: 11, padding: "1px 6px" }}
-                            onClick={() => {
-                              setBearbeiteWochentag(wt);
-                              setWochentagText(eintrag?.text ?? "");
-                            }}
-                          >
-                            ✎
-                          </button>
-                        )}
-                      </>
-                    )}
+                    <span style={{ flex: 1 }}>{eintrag?.text ?? "—"}</span>
                   </div>
                 );
               })}
@@ -490,25 +400,9 @@ export default function DienstplanClient({
           </div>
 
           {istEltern && (
-            <div style={{ borderTop: "1px solid var(--border)", paddingTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
-              <strong style={{ fontSize: 13 }}>Neue Routine hinzufügen</strong>
-              <input placeholder="Kategorie, z.B. Morgens" value={neueRoutineKategorie} onChange={(e) => setNeueRoutineKategorie(e.target.value)} />
-              <input placeholder="Text" value={neueRoutineText} onChange={(e) => setNeueRoutineText(e.target.value)} />
-              <button
-                className="btn"
-                style={{ alignSelf: "flex-start" }}
-                onClick={() =>
-                  startTransition(async () => {
-                    if (!neueRoutineKategorie || !neueRoutineText) return;
-                    await addTagesroutine(neueRoutineKategorie, neueRoutineText);
-                    setNeueRoutineKategorie("");
-                    setNeueRoutineText("");
-                  })
-                }
-              >
-                Hinzufügen
-              </button>
-            </div>
+            <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>
+              Texte bearbeiten geht jetzt zentral in den Einstellungen.
+            </p>
           )}
         </div>
       </details>

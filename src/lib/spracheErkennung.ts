@@ -33,6 +33,24 @@ export type ErkanntesTicket = {
   beschreibung: string;
 };
 
+export type ErkannterArtikel = {
+  name: string;
+  menge: string | null;
+};
+
+export type ErkannterSchulEintrag = {
+  fachId: string | null;
+  thema: string;
+  art: "KLASSENARBEIT" | "HAUSAUFGABEN_KONTROLLE" | "EPOCHALNOTE";
+  datum: string | null; // JJJJ-MM-TT, null = heute
+  personIds: string[]; // leer = konnte kein Kind erkannt werden (Client fällt auf aktuell gewähltes Kind zurück)
+};
+
+export type FachDuplikatPruefung = {
+  istVermutlichDuplikat: boolean;
+  aehnlichesFach: string | null;
+};
+
 const WIEDERHOLUNG_WERTE = ["KEINE", "TAEGLICH", "WOECHENTLICH", "ZWEIWOECHENTLICH", "MONATLICH"];
 
 // Aktuelles Datum als Kontext für relative Angaben ("morgen", "nächsten Montag" etc.),
@@ -179,5 +197,79 @@ export async function erkenneTicketAusSprache(text: string): Promise<ErkanntesTi
   return {
     titel: typeof d.titel === "string" && d.titel.trim() ? d.titel.trim() : text.trim().slice(0, 60),
     beschreibung: typeof d.beschreibung === "string" && d.beschreibung.trim() ? d.beschreibung.trim() : text.trim(),
+  };
+}
+
+// Spracheingabe für "Artikel hinzufügen" / Einkaufs-Wunsch (Fix-Batch 30) — trennt
+// Artikelname und Menge aus einem frei gesprochenen Satz wie "wir brauchen noch 2 Kilo Mehl".
+export async function erkenneArtikelAusSprache(text: string): Promise<ErkannterArtikel> {
+  const prompt =
+    `Ein Familienmitglied hat per Spracheingabe folgenden Einkaufsliste-Artikel diktiert:\n"${text}"\n\n` +
+    "Extrahiere den Artikelnamen und, falls genannt, die Menge. Antworte AUSSCHLIESSLICH mit einem JSON-Objekt, " +
+    "ohne Markdown-Codeblock, ohne weiteren Text, in genau diesem Format:\n" +
+    '{"name": "Artikelname", "menge": "Menge inkl. Einheit, z.B. \'2 kg\' oder null, falls keine Menge genannt wurde"}';
+
+  const d = await rufeSpracheNluAuf(prompt);
+  return {
+    name: typeof d.name === "string" && d.name.trim() ? d.name.trim() : text.trim(),
+    menge: typeof d.menge === "string" && d.menge.trim() ? d.menge.trim() : null,
+  };
+}
+
+const SCHUL_ART_WERTE = ["KLASSENARBEIT", "HAUSAUFGABEN_KONTROLLE", "EPOCHALNOTE"];
+
+// Spracheingabe für Klassenarbeiten/HÜ-Kontrollen (Fix-Batch 30) — erkennt Fach (gegen die
+// Fächerliste des jeweiligen Kindes), Thema, Art und Datum aus dem gesprochenen Text.
+export async function erkenneSchulEintragAusSprache(
+  text: string,
+  faecher: { id: string; name: string }[],
+  personen: PersonFuerSprache[]
+): Promise<ErkannterSchulEintrag> {
+  const faecherListe = faecher.length > 0 ? faecher.map((f) => `${f.id} = ${f.name}`).join(", ") : "(keine Fächer bekannt)";
+  const personenListe = personen.length > 0 ? personen.map((p) => `${p.id} = ${p.name}`).join(", ") : "(keine Personen bekannt)";
+  const prompt =
+    `${heutigerKontext()}\n` +
+    `Ein Familienmitglied hat per Spracheingabe folgende Klassenarbeit/HÜ-Kontrolle diktiert:\n"${text}"\n\n` +
+    `Bekannte Fächer (ID = Name): ${faecherListe}\n` +
+    `Bekannte Kinder (ID = Name): ${personenListe}\n\n` +
+    "Extrahiere die Angaben und antworte AUSSCHLIESSLICH mit einem JSON-Objekt, ohne Markdown-Codeblock, ohne weiteren Text, in genau diesem Format:\n" +
+    '{"fachId": "eine ID aus der Fächerliste oder null", ' +
+    '"thema": "worum es geht, kurz und prägnant", ' +
+    '"art": "KLASSENARBEIT oder HAUSAUFGABEN_KONTROLLE oder EPOCHALNOTE (Standard: KLASSENARBEIT)", ' +
+    '"datum": "JJJJ-MM-TT oder null, falls kein Datum genannt wurde", ' +
+    '"personIds": ["IDs aus der Kinderliste, falls ein oder mehrere Kinder namentlich genannt wurden — sonst leeres Array"]}\n' +
+    "Rechne relative Datumsangaben (\"nächsten Montag\", \"in zwei Wochen\") anhand des heutigen Datums in ein konkretes Datum um.";
+
+  const d = await rufeSpracheNluAuf(prompt);
+  return {
+    fachId: typeof d.fachId === "string" && faecher.some((f) => f.id === d.fachId) ? d.fachId : null,
+    thema: typeof d.thema === "string" && d.thema.trim() ? d.thema.trim() : text.trim(),
+    art: typeof d.art === "string" && SCHUL_ART_WERTE.includes(d.art) ? (d.art as ErkannterSchulEintrag["art"]) : "KLASSENARBEIT",
+    datum: leseDatumsfeld(d.datum),
+    personIds: lesePersonIds(d.personIds, personen),
+  };
+}
+
+// KI-gestützter Duplikat-Check beim Anlegen eines neuen Fachs (Fix-Batch 30, Florians
+// Wunsch: "mit der KI automatisch überprüft werden ob ein Fach eventuell schon angelegt
+// ist") — erkennt auch Schreibvarianten/Abkürzungen/Synonyme ("Bio" vs. "Biologie"), die
+// der bisherige reine Textvergleich (exakte Übereinstimmung ignoriert Groß-/Kleinschreibung)
+// nicht abdeckt.
+export async function pruefeFachDuplikatKI(neuerName: string, bestehende: string[]): Promise<FachDuplikatPruefung> {
+  if (bestehende.length === 0) return { istVermutlichDuplikat: false, aehnlichesFach: null };
+  const prompt =
+    `Ein Familienmitglied möchte für ein Schulkind das neue Schulfach "${neuerName}" anlegen.\n` +
+    `Bereits vorhandene Fächer dieses Kindes: ${bestehende.join(", ")}\n\n` +
+    "Ist \"" +
+    neuerName +
+    "\" wahrscheinlich dasselbe Fach wie eines der vorhandenen (z. B. Abkürzung, andere Schreibweise, Synonym — " +
+    "z. B. \"Bio\"/\"Biologie\", \"Deutsch\"/\"DE\", \"Erdkunde\"/\"Geographie\")? " +
+    "Antworte AUSSCHLIESSLICH mit einem JSON-Objekt, ohne Markdown-Codeblock, ohne weiteren Text, in genau diesem Format:\n" +
+    '{"istVermutlichDuplikat": true oder false, "aehnlichesFach": "Name des vermutlich gleichen bestehenden Fachs, oder null"}';
+
+  const d = await rufeSpracheNluAuf(prompt);
+  return {
+    istVermutlichDuplikat: d.istVermutlichDuplikat === true,
+    aehnlichesFach: typeof d.aehnlichesFach === "string" && d.aehnlichesFach.trim() ? d.aehnlichesFach.trim() : null,
   };
 }

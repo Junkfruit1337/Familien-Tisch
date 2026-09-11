@@ -119,23 +119,29 @@ export async function listTagesroutinen() {
   return prisma.tagesroutine.findMany({ orderBy: [{ kategorie: "asc" }, { reihenfolge: "asc" }] });
 }
 
+// Fix-Batch 30: Bearbeiten/Löschen ist jetzt nur noch über die Einstellungen möglich
+// (vorher zusätzlich direkt im Dienstplan-Tab, was dort laut Florian nicht hingehört) —
+// revalidiert deshalb auch /einstellungen.
 export async function addTagesroutine(kategorie: string, text: string) {
   await requireParent();
   const anzahl = await prisma.tagesroutine.count({ where: { kategorie } });
   await prisma.tagesroutine.create({ data: { kategorie, text, reihenfolge: anzahl } });
   revalidatePath("/dienstplan");
+  revalidatePath("/einstellungen");
 }
 
 export async function updateTagesroutine(id: string, text: string) {
   await requireParent();
   await prisma.tagesroutine.update({ where: { id }, data: { text } });
   revalidatePath("/dienstplan");
+  revalidatePath("/einstellungen");
 }
 
 export async function deleteTagesroutine(id: string) {
   await requireParent();
   await prisma.tagesroutine.delete({ where: { id } });
   revalidatePath("/dienstplan");
+  revalidatePath("/einstellungen");
 }
 
 export async function listKoerperpflegeplan() {
@@ -150,6 +156,7 @@ export async function setKoerperpflegetag(wochentag: number, text: string) {
     create: { wochentag, text },
   });
   revalidatePath("/dienstplan");
+  revalidatePath("/einstellungen");
 }
 
 // ---------- Zusätzliche Aufgaben — freier Bereich für Ad-hoc-Dienste (Fahrplan §3, Batch 4) ----------

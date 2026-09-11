@@ -34,6 +34,8 @@ model Person {
   bundesland    String?
   klassenstufe  Int?
   klasse        String? // z.B. "5a"
+  // Geburtstag (Fix-Batch 30) — erscheint dann automatisch im Kalender ALLER Familienmitglieder.
+  geburtsdatum  DateTime?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -108,9 +110,12 @@ enum TerminKategorie {
 enum Wiederholung {
   KEINE
   TAEGLICH
+  WERKTAEGLICH // Mo-Fr (Fix-Batch 30)
   WOECHENTLICH
   ZWEIWOECHENTLICH
   MONATLICH
+  ALLE_3_MONATE // Fix-Batch 30
+  JAEHRLICH // Fix-Batch 30
 }
 
 model Termin {
@@ -124,6 +129,10 @@ model Termin {
   personId            String? // null = familienweit
   person              Person?         @relation("TerminPerson", fields: [personId], references: [id])
   seriesId            String?
+  // Gemeinsame ID über alle Personen-Zeilen EINES Anlege-Vorgangs (Fix-Batch 30) — damit
+  // ein Termin für mehrere Personen im Eltern-Kalender als EIN Eintrag mit allen Personen
+  // angezeigt werden kann statt einmal pro Person dupliziert.
+  gruppeId            String?
   wiederholung        Wiederholung    @default(KEINE)
   wiederholungBis     DateTime?
   erinnerungGesendet  Boolean         @default(false)
@@ -229,6 +238,7 @@ model Fach {
   kind         Person            @relation(fields: [kindId], references: [id])
   noten        Note[]
   gewichtungen NotenGewichtung[]
+  schulEintraege SchulEintrag[]
 
   @@unique([kindId, name])
 }
@@ -308,8 +318,10 @@ model Sparziel {
 
 model SchulEintrag {
   id           String   @id @default(cuid())
-  titel        String
-  fachName     String?
+  titel        String // Fix-Batch 30: enthält jetzt das "Thema" (was früher fälschlich als Titel bezeichnet wurde)
+  fachName     String? // veraltet seit Fix-Batch 30 (nur noch für alte Einträge ohne fachId) — neue Einträge nutzen fachId
+  fachId       String?
+  fach         Fach?    @relation(fields: [fachId], references: [id])
   art          NoteArt
   datum        DateTime
   personId     String
