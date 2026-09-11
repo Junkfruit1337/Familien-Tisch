@@ -354,23 +354,12 @@ async function wendeEntscheidungenAn(eintragId: string, entscheidungen: { artike
   }
 }
 
-// Ändert das Gericht eines gesperrten Tages trotzdem — bleibt danach weiterhin gesperrt,
-// da für das neue Gericht wieder "Zutaten hinzufügen" gebraucht wird.
-export async function setTagTrotzSperre(
-  eintragId: string,
-  neuesRezeptId: string,
-  entscheidungen: { artikelId: string; aktion: "entfernen" | "behalten" }[]
-) {
-  await requireParent();
-  await wendeEntscheidungenAn(eintragId, entscheidungen);
-  await prisma.essensplanEintrag.update({ where: { id: eintragId }, data: { rezeptId: neuesRezeptId } });
-  revalidatePath("/essensplan");
-  revalidatePath("/einkaufsliste");
-}
-
-// Entsperrt einen Tag — wie beim Gericht-Ändern muss erst geklärt werden, was mit den
-// schon übernommenen Zutaten passiert (Fix-Batch 24, Florians Wunsch: Warnung mit
-// Entfernen/Behalten-Auswahl statt stillschweigendem Entsperren).
+// Entsperrt einen Tag — erst danach lässt sich das Gericht wieder ändern (Fix-Batch 29:
+// vorher gab es zusätzlich einen zweiten, verwirrenden Weg, das Gericht direkt aus dem
+// gesperrten Dropdown heraus zu ändern — der stand im Weg und führte dazu, dass die
+// Zutaten zwar korrekt entfernt wurden, das eigentliche Gericht aber nicht wechselte.
+// Jetzt: Dropdown ist gesperrt, solange der Tag gesperrt ist — erst entsperren (mit
+// derselben Entfernen/Behalten-Abfrage wie zuvor), dann normal per Dropdown ändern).
 export async function entsperren(eintragId: string, entscheidungen: { artikelId: string; aktion: "entfernen" | "behalten" }[]) {
   await requireParent();
   await wendeEntscheidungenAn(eintragId, entscheidungen);

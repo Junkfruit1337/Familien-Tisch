@@ -16,7 +16,6 @@ import {
   fuegeZutatenDesTagsHinzu,
   fuegeZutatenDerWocheHinzu,
   pruefeGelocktenTagWechsel,
-  setTagTrotzSperre,
   erkenneRezeptAusFoto,
   updateRezeptPortionenBasis,
 } from "./actions";
@@ -87,10 +86,7 @@ export default function EssensplanClient({
 
   const [portionenEntwuerfe, setPortionenEntwuerfe] = useState<Record<string, string>>({});
 
-  // neuesRezeptId === null bedeutet "nur entsperren" statt "Gericht ändern trotz Sperre"
-  // (Fix-Batch 24) — beide Fälle stellen dieselbe Frage: was passiert mit den schon
-  // übernommenen Zutaten dieses Tages?
-  const [sperrDialog, setSperrDialog] = useState<{ eintragId: string; neuesRezeptId: string | null; herkuenfte: Herkunft[] } | null>(null);
+  const [sperrDialog, setSperrDialog] = useState<{ eintragId: string; herkuenfte: Herkunft[] } | null>(null);
   const [sperrEntscheidungen, setSperrEntscheidungen] = useState<Record<string, "entfernen" | "behalten">>({});
 
   const [neuName, setNeuName] = useState("");
@@ -124,21 +120,10 @@ export default function EssensplanClient({
     startTransition(() => fuegeZutatenDerWocheHinzu(plan.wocheStart).then(() => ladeWoche(offset)));
   }
 
-  async function versucheTagAendern(t: Tag, neuesRezeptId: string) {
-    if (!t.eintrag) return;
-    if (!t.eintrag.gelockt) {
-      startTransition(() => setTag(plan.wocheStart, t.tag, neuesRezeptId).then(() => ladeWoche(offset)));
-      return;
-    }
-    const herkuenfte = await pruefeGelocktenTagWechsel(t.eintrag.id);
-    if (herkuenfte.length === 0) {
-      startTransition(() => setTagTrotzSperre(t.eintrag!.id, neuesRezeptId, []).then(() => ladeWoche(offset)));
-      return;
-    }
-    setSperrDialog({ eintragId: t.eintrag.id, neuesRezeptId, herkuenfte });
-    // Default "entfernen" (Florians Wunsch): wer die Zutaten für dieses Gericht behalten
-    // will, muss es aktiv antippen — nicht umgekehrt.
-    setSperrEntscheidungen(Object.fromEntries(herkuenfte.map((h) => [h.artikelId, "entfernen" as const])));
+  // Gericht ändern geht nur bei entsperrtem Tag (Dropdown ist sonst deaktiviert, siehe unten) —
+  // kein Lock-Check hier mehr nötig, das vereinfacht den vorherigen Doppelweg (Fix-Batch 29).
+  function tagAendern(t: Tag, neuesRezeptId: string) {
+    startTransition(() => setTag(plan.wocheStart, t.tag, neuesRezeptId).then(() => ladeWoche(offset)));
   }
 
   async function klickSchloss(t: Tag) {
@@ -152,7 +137,7 @@ export default function EssensplanClient({
       startTransition(() => entsperren(t.eintrag!.id, []).then(() => ladeWoche(offset)));
       return;
     }
-    setSperrDialog({ eintragId: t.eintrag.id, neuesRezeptId: null, herkuenfte });
+    setSperrDialog({ eintragId: t.eintrag.id, herkuenfte });
     setSperrEntscheidungen(Object.fromEntries(herkuenfte.map((h) => [h.artikelId, "entfernen" as const])));
   }
 
@@ -183,17 +168,28 @@ export default function EssensplanClient({
               {t.vergangen && " · ✓ erledigt"}
             </div>
             {istEltern ? (
-              <select value={t.eintrag?.rezeptId ?? ""} onChange={(e) => e.target.value && versucheTagAendern(t, e.target.value)}>
-                <option value="">– kein Gericht –</option>
-                {vorschlaege.map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {r.name}
-                  </option>
-                ))}
-                {t.eintrag && !vorschlaege.some((r) => r.id === t.eintrag!.rezeptId) && (
-                  <option value={t.eintrag.rezeptId}>{t.eintrag.rezeptName}</option>
+              <>
+                <select
+                  value={t.eintrag?.rezeptId ?? ""}
+                  disabled={!!t.eintrag?.gelockt}
+                  onChange={(e) => e.target.value && tagAendern(t, e.target.value)}
+                >
+                  <option value="">– kein Gericht –</option>
+                  {vorschlaege.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.name}
+                    </option>
+                  ))}
+                  {t.eintrag && !vorschlaege.some((r) => r.id === t.eintrag!.rezeptId) && (
+                    <option value={t.eintrag.rezeptId}>{t.eintrag.rezeptName}</option>
+                  )}
+                </select>
+                {t.eintrag?.gelockt && (
+                  <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>
+                    🔒 Erst entsperren, um das Gericht zu ändern.
+                  </p>
                 )}
-              </select>
+              </>
             ) : (
               <div>{t.eintrag?.rezeptName ?? "– kein Gericht –"}</div>
             )}
@@ -250,7 +246,7 @@ export default function EssensplanClient({
       {sperrDialog && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 500, padding: 16 }}>
           <div className="card" style={{ maxWidth: 420, width: "100%", display: "flex", flexDirection: "column", gap: 10 }}>
-            <strong>{sperrDialog.neuesRezeptId ? "Gericht ändern trotz Sperre" : "Tag entsperren"}</strong>
+            <strong>Tag entsperren</strong>
             <p style={{ fontSize: 13, color: "var(--text-muted)", margin: 0 }}>
               Für dieses Gericht wurden schon Zutaten auf die Einkaufsliste übernommen. Die folgenden Artikel werden entfernt
               (bzw. um ihren Anteil verringert) — antippen, um einen Artikel stattdessen zu behalten.
@@ -293,11 +289,7 @@ export default function EssensplanClient({
                 onClick={() =>
                   startTransition(async () => {
                     const entscheidungen = Object.entries(sperrEntscheidungen).map(([artikelId, aktion]) => ({ artikelId, aktion }));
-                    if (sperrDialog.neuesRezeptId) {
-                      await setTagTrotzSperre(sperrDialog.eintragId, sperrDialog.neuesRezeptId, entscheidungen);
-                    } else {
-                      await entsperren(sperrDialog.eintragId, entscheidungen);
-                    }
+                    await entsperren(sperrDialog.eintragId, entscheidungen);
                     setSperrDialog(null);
                     await ladeWoche(offset);
                   })
