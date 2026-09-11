@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useState, useTransition, type ReactNode } from "react";
 import {
   addArtikel,
   toggleArtikel,
@@ -18,6 +18,7 @@ import {
 } from "./actions";
 import { pruefeZutatenFuerRezept, uebernehmeZusaetzlicheZutaten } from "../essensplan/actions";
 import { erkenneKategorie } from "@/lib/kategorisierung";
+import { erkenneArtikelIcon } from "@/lib/artikelIcon";
 import HistorieVerlauf from "@/components/HistorieVerlauf";
 import FaktorLeiste from "@/components/FaktorLeiste";
 
@@ -54,6 +55,58 @@ function ArtikelHerkunft({ artikelId }: { artikelId: string }) {
         ))}
       </div>
     </details>
+  );
+}
+
+// Kachel-Ansicht statt Checkbox-Zeilen (Fix-Batch 25, Florians Referenz-Screenshot) —
+// Antippen der Kachel selbst löst die Hauptaktion aus (abhaken bzw. hinzufügen), eine
+// kleine Ecken-Schaltfläche (nur Eltern) öffnet bei Bedarf die Detail-/Bearbeiten-Ansicht.
+function ArtikelKachel({
+  name,
+  menge,
+  hintergrund,
+  textfarbe,
+  durchgestrichen,
+  deaktiviert,
+  onTap,
+  eckeAktion,
+}: {
+  name: string;
+  menge?: string | null;
+  hintergrund: string;
+  textfarbe: string;
+  durchgestrichen?: boolean;
+  deaktiviert?: boolean;
+  onTap?: () => void;
+  eckeAktion?: ReactNode;
+}) {
+  return (
+    <div
+      onClick={deaktiviert ? undefined : onTap}
+      style={{
+        position: "relative",
+        background: hintergrund,
+        color: textfarbe,
+        borderRadius: 16,
+        padding: "18px 10px 12px",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        gap: 4,
+        textAlign: "center",
+        minHeight: 96,
+        cursor: deaktiviert || !onTap ? "default" : "pointer",
+      }}
+    >
+      {eckeAktion && (
+        <div style={{ position: "absolute", top: 2, right: 2 }} onClick={(e) => e.stopPropagation()}>
+          {eckeAktion}
+        </div>
+      )}
+      <span style={{ fontSize: 30, lineHeight: 1 }}>{erkenneArtikelIcon(name)}</span>
+      <span style={{ fontWeight: 600, fontSize: 13, textDecoration: durchgestrichen ? "line-through" : "none" }}>{name}</span>
+      {menge && <span style={{ fontSize: 11, opacity: 0.85 }}>{menge}</span>}
+    </div>
   );
 }
 
@@ -349,37 +402,32 @@ export default function EinkaufslisteClient({
 
       {istEltern && vorschlaege.length > 0 && (
         <details>
-          <summary style={{ cursor: "pointer", color: "var(--text-muted)" }}>Vorschläge ({vorschlaege.length})</summary>
-          <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 8 }}>
-            <p style={{ fontSize: 12, color: "var(--text-muted)", margin: 0 }}>Häufig gekaufte Artikel, die gerade nicht auf der Liste stehen.</p>
-            {vorschlaege.map((v) => (
-              <div key={v.name} className="card" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span style={{ fontSize: 14 }}>
-                  {v.name} {v.menge ? <span style={{ color: "var(--text-muted)" }}>· {v.menge}</span> : null}
-                </span>
-                <div style={{ display: "flex", gap: 6 }}>
-                  <button
-                    className="btn-secondary"
-                    style={{ fontSize: 12, padding: "3px 8px" }}
-                    onClick={() =>
-                      startTransition(async () => {
-                        await addArtikel({ name: v.name, menge: v.menge || undefined });
-                      })
-                    }
-                  >
-                    + Hinzufügen
-                  </button>
-                  <button
-                    className="btn-secondary"
-                    style={{ fontSize: 12, padding: "3px 8px" }}
-                    title="Seltener vorschlagen"
-                    onClick={() => startTransition(() => verwirfVorschlag(v.name))}
-                  >
-                    ✕
-                  </button>
-                </div>
-              </div>
-            ))}
+          <summary style={{ cursor: "pointer", color: "var(--text-muted)" }}>Vorschläge — zuletzt verwendet ({vorschlaege.length})</summary>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
+            <p style={{ fontSize: 12, color: "var(--text-muted)", margin: 0 }}>
+              Häufig gekaufte Artikel, die gerade nicht auf der Liste stehen — antippen zum Hinzufügen.
+            </p>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))", gap: 10 }}>
+              {vorschlaege.map((v) => (
+                <ArtikelKachel
+                  key={v.name}
+                  name={v.name}
+                  menge={v.menge}
+                  hintergrund="var(--success)"
+                  textfarbe="#fff"
+                  onTap={() => startTransition(async () => { await addArtikel({ name: v.name, menge: v.menge || undefined }); })}
+                  eckeAktion={
+                    <button
+                      title="Seltener vorschlagen"
+                      onClick={() => startTransition(() => verwirfVorschlag(v.name))}
+                      style={{ background: "rgba(0,0,0,0.25)", color: "#fff", border: "none", borderRadius: 999, width: 22, height: 22, fontSize: 12, cursor: "pointer" }}
+                    >
+                      ✕
+                    </button>
+                  }
+                />
+              ))}
+            </div>
             <button className="btn-secondary" style={{ fontSize: 12, alignSelf: "flex-start" }} onClick={() => startTransition(() => setzeVorschlaegeZurueck())}>
               Zurücksetzen
             </button>
@@ -456,59 +504,28 @@ export default function EinkaufslisteClient({
       {Object.entries(nachKategorie).map(([kat, items]) => (
         <div key={kat} className="card">
           <strong>{kat}</strong>
-          <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 8 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))", gap: 10, marginTop: 8 }}>
             {items.map((a) => (
-              <div key={a.id} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                {bearbeiteId === a.id ? (
-                  <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
-                    <input value={bearbeiteName} onChange={(e) => setBearbeiteName(e.target.value)} style={{ flex: "1 1 120px" }} />
-                    <input value={bearbeiteMenge} onChange={(e) => setBearbeiteMenge(e.target.value)} placeholder="Menge" style={{ flex: "0 1 100px" }} />
-                    <button className="btn" style={{ padding: "4px 10px", fontSize: 13 }} onClick={speichereBearbeiten} disabled={pending}>
-                      Speichern
+              <ArtikelKachel
+                key={a.id}
+                name={a.name}
+                menge={a.menge}
+                hintergrund="var(--accent)"
+                textfarbe="var(--accent-contrast)"
+                deaktiviert={!istEltern}
+                onTap={() => startTransition(() => toggleArtikel(a.id))}
+                eckeAktion={
+                  istEltern ? (
+                    <button
+                      title="Bearbeiten"
+                      onClick={() => beginneBearbeiten(a)}
+                      style={{ background: "rgba(0,0,0,0.25)", color: "#fff", border: "none", borderRadius: 999, width: 22, height: 22, fontSize: 12, cursor: "pointer" }}
+                    >
+                      ⋯
                     </button>
-                    <button className="btn-secondary" style={{ padding: "4px 10px", fontSize: 13 }} onClick={() => setBearbeiteId(null)}>
-                      Abbrechen
-                    </button>
-                  </div>
-                ) : (
-                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <input
-                      type="checkbox"
-                      checked={false}
-                      disabled={!istEltern}
-                      onChange={() => istEltern && startTransition(() => toggleArtikel(a.id))}
-                      style={{ width: 18, height: 18 }}
-                    />
-                    <span style={{ flex: 1 }}>
-                      {a.name} {a.menge ? <span style={{ color: "var(--text-muted)" }}>· {a.menge}</span> : null}
-                    </span>
-                    {istEltern && (
-                      <>
-                        <select
-                          value={a.kategorieId ?? ""}
-                          onChange={(e) => startTransition(() => verschiebeArtikelKategorie(a.id, e.target.value))}
-                          style={{ fontSize: 12, padding: "2px 4px" }}
-                          title="In andere Kategorie verschieben"
-                        >
-                          <option value="">Sonstiges</option>
-                          {kategorien.map((k) => (
-                            <option key={k.id} value={k.id}>
-                              {k.name}
-                            </option>
-                          ))}
-                        </select>
-                        <button className="btn-secondary" style={{ fontSize: 12, padding: "4px 8px" }} onClick={() => beginneBearbeiten(a)}>
-                          ✎
-                        </button>
-                        <button className="btn-secondary" style={{ fontSize: 12, padding: "4px 8px" }} onClick={() => startTransition(() => deleteArtikel(a.id))}>
-                          ✕
-                        </button>
-                      </>
-                    )}
-                  </div>
-                )}
-                {istEltern && bearbeiteId !== a.id && <ArtikelHerkunft artikelId={a.id} />}
-              </div>
+                  ) : undefined
+                }
+              />
             ))}
           </div>
         </div>
@@ -517,22 +534,69 @@ export default function EinkaufslisteClient({
       {erledigt.length > 0 && (
         <details>
           <summary style={{ cursor: "pointer", color: "var(--text-muted)" }}>Bereits eingekauft ({erledigt.length})</summary>
-          <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 8 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))", gap: 10, marginTop: 8 }}>
             {erledigt.map((a) => (
-              <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 10, opacity: 0.6 }}>
-                <input
-                  type="checkbox"
-                  checked
-                  disabled={!istEltern}
-                  onChange={() => istEltern && startTransition(() => toggleArtikel(a.id))}
-                  style={{ width: 18, height: 18 }}
-                />
-                <span style={{ textDecoration: "line-through" }}>{a.name}</span>
-              </div>
+              <ArtikelKachel
+                key={a.id}
+                name={a.name}
+                hintergrund="var(--border)"
+                textfarbe="var(--text-muted)"
+                durchgestrichen
+                deaktiviert={!istEltern}
+                onTap={() => startTransition(() => toggleArtikel(a.id))}
+              />
             ))}
           </div>
         </details>
       )}
+
+      {bearbeiteId &&
+        (() => {
+          const a = artikel.find((x) => x.id === bearbeiteId);
+          if (!a) return null;
+          return (
+            <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 500, padding: 16 }}>
+              <div className="card" style={{ maxWidth: 380, width: "100%", display: "flex", flexDirection: "column", gap: 10 }}>
+                <strong>Artikel bearbeiten</strong>
+                <input value={bearbeiteName} onChange={(e) => setBearbeiteName(e.target.value)} placeholder="Name" />
+                <input value={bearbeiteMenge} onChange={(e) => setBearbeiteMenge(e.target.value)} placeholder="Menge" />
+                <label style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: -6 }}>Kategorie</label>
+                <select
+                  value={a.kategorieId ?? ""}
+                  onChange={(e) => startTransition(() => verschiebeArtikelKategorie(a.id, e.target.value))}
+                >
+                  <option value="">Sonstiges</option>
+                  {kategorien.map((k) => (
+                    <option key={k.id} value={k.id}>
+                      {k.name}
+                    </option>
+                  ))}
+                </select>
+                <ArtikelHerkunft artikelId={a.id} />
+                <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                  <button className="btn" disabled={pending} onClick={speichereBearbeiten}>
+                    Speichern
+                  </button>
+                  <button className="btn-secondary" onClick={() => setBearbeiteId(null)}>
+                    Abbrechen
+                  </button>
+                  <button
+                    className="btn-danger"
+                    style={{ marginLeft: "auto", borderRadius: 10, border: "none", padding: "10px 16px" }}
+                    onClick={() =>
+                      startTransition(async () => {
+                        await deleteArtikel(a.id);
+                        setBearbeiteId(null);
+                      })
+                    }
+                  >
+                    Löschen
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
 
       {istEltern && (
         <p style={{ fontSize: 12, color: "var(--text-muted)", margin: 0 }}>
