@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import PushBenachrichtigungen from "@/components/PushBenachrichtigungen";
 
 type Daten = {
   person: { name: string; rolle: string };
@@ -80,6 +81,8 @@ export default function DashboardClient({
           </div>
         </details>
       )}
+
+      <PushBenachrichtigungen />
     </div>
   );
 }

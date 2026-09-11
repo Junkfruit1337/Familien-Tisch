@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { requirePerson, requireParent } from "@/lib/auth";
 import { logAenderung } from "@/lib/history";
 import { revalidatePath } from "next/cache";
+import { sendePushAnEltern, sendePushAnPerson } from "@/lib/push";
 
 function betragFuerNote(note: number): number {
   if (note === 1) return 10;
@@ -108,6 +109,15 @@ export async function einreichenNote(data: {
     }
   }
 
+  if (!istEltern) {
+    const kind = await prisma.person.findUnique({ where: { id: kindId } });
+    await sendePushAnEltern({
+      title: "Neue Note wartet auf Freigabe",
+      body: `${kind?.name ?? "Ein Kind"} — ${fach.name}: Note ${note.note}`,
+      url: "/schule",
+    });
+  }
+
   revalidatePath("/schule");
   return { istKindEinreichung: !istEltern, note: note.note };
 }
@@ -170,6 +180,7 @@ export async function entscheideNote(id: string, genehmigt: boolean) {
   const note = await prisma.note.update({
     where: { id },
     data: { status: genehmigt ? "GENEHMIGT" : "ABGELEHNT" },
+    include: { fach: true },
   });
 
   await logAenderung({
@@ -187,6 +198,13 @@ export async function entscheideNote(id: string, genehmigt: boolean) {
       });
     }
   }
+
+  await sendePushAnPerson(note.kindId, {
+    title: genehmigt ? "Note genehmigt 🎉" : "Note abgelehnt",
+    body: `${note.fach.name}: Note ${note.note}`,
+    url: "/schule",
+  });
+
   revalidatePath("/schule");
 }
 

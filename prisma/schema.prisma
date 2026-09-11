@@ -46,6 +46,7 @@ model Person {
   dienstTauscheMit   DienstTausch[]     @relation("DienstTauschMit")
   badZuweisungen     BadZuweisung[]
   zusatzAufgaben     ZusatzAufgabe[]
+  pushSubscriptions  PushSubscription[]
   schulEintraege     SchulEintrag[]     @relation("SchulEintragPerson")
 }
 
@@ -104,22 +105,23 @@ enum Wiederholung {
 }
 
 model Termin {
-  id               String          @id @default(cuid())
-  titel            String
-  beschreibung     String?
-  start            DateTime
-  ende             DateTime?
-  ganztaegig       Boolean         @default(false)
-  kategorie        TerminKategorie @default(TERMIN)
-  personId         String? // null = familienweit
-  person           Person?         @relation("TerminPerson", fields: [personId], references: [id])
-  seriesId         String?
-  wiederholung     Wiederholung    @default(KEINE)
-  wiederholungBis  DateTime?
-  erstelltVonId    String
-  erstelltVon      Person          @relation("TerminErsteller", fields: [erstelltVonId], references: [id])
-  createdAt        DateTime        @default(now())
-  updatedAt        DateTime        @updatedAt
+  id                  String          @id @default(cuid())
+  titel               String
+  beschreibung        String?
+  start               DateTime
+  ende                DateTime?
+  ganztaegig          Boolean         @default(false)
+  kategorie           TerminKategorie @default(TERMIN)
+  personId            String? // null = familienweit
+  person              Person?         @relation("TerminPerson", fields: [personId], references: [id])
+  seriesId            String?
+  wiederholung        Wiederholung    @default(KEINE)
+  wiederholungBis     DateTime?
+  erinnerungGesendet  Boolean         @default(false)
+  erstelltVonId       String
+  erstelltVon         Person          @relation("TerminErsteller", fields: [erstelltVonId], references: [id])
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
 }
 
 // ---------- Aufgaben ----------
@@ -432,4 +434,18 @@ model EssensplanHerkunft {
   createdAt DateTime          @default(now())
 
   @@unique([artikelId, eintragId])
+}
+
+// ---------- Push-Benachrichtigungen (Fragenkatalog Frage 33, Batch 8) ----------
+// Pro Gerät/Browser eine eigene Subscription (nicht pro Person insgesamt) — eine Person
+// kann mehrere Geräte aktiviert haben, alle bekommen dieselbe Benachrichtigung.
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  personId  String
+  person    Person   @relation(fields: [personId], references: [id], onDelete: Cascade)
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
 }
