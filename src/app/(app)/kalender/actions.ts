@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { requirePerson } from "@/lib/auth";
 import { logAenderung } from "@/lib/history";
 import { erkenneTerminKategorie } from "@/lib/terminkategorisierung";
+import { erkenneTerminAusSprache, type ErkannterTermin } from "@/lib/spracheErkennung";
 import { revalidatePath } from "next/cache";
 import { randomUUID } from "crypto";
 
@@ -51,6 +52,25 @@ export async function listAufgabenMitFaelligkeit() {
     include: { person: true },
     orderBy: { faelligkeit: "asc" },
   });
+}
+
+// Spracheingabe (Fragenkatalog Frage 25/51, Fix-Batch 19) — wandelt einen diktierten Text in
+// Termin-Formularfelder um, die im Client noch geprüft/korrigiert werden müssen; es wird hier
+// nichts gespeichert. Fehler werden abgefangen und als Ergebnis-Objekt zurückgegeben statt
+// geworfen, damit die echte Meldung den Nutzer erreicht (siehe Fix-Batch 19, Rezept-Foto-Fehler).
+export async function erkenneTerminAusText(
+  text: string
+): Promise<{ ok: true; termin: ErkannterTermin } | { ok: false; fehler: string }> {
+  await requirePerson();
+  try {
+    const personen = await prisma.person.findMany({ where: { aktiv: true }, select: { id: true, name: true } });
+    const termin = await erkenneTerminAusSprache(text, personen);
+    return { ok: true, termin };
+  } catch (err) {
+    console.error("Spracheingabe (Termin) fehlgeschlagen:", err);
+    const fehler = err instanceof Error ? err.message : "Unbekannter Fehler bei der Spracherkennung.";
+    return { ok: false, fehler };
+  }
 }
 
 export async function createTermin(data: {

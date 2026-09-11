@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { createAufgabe, toggleAufgabe, deleteAufgabe } from "./actions";
+import { createAufgabe, toggleAufgabe, deleteAufgabe, erkenneAufgabeAusText } from "./actions";
 import HistorieVerlauf from "@/components/HistorieVerlauf";
+import Spracheingabe from "@/components/Spracheingabe";
 
 type Aufgabe = {
   id: string;
@@ -43,6 +44,32 @@ export default function AufgabenClient({
   const [filter, setFilter] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const [loeschAuswahl, setLoeschAuswahl] = useState<string | null>(null);
+  const [spracheVerarbeitung, setSpracheVerarbeitung] = useState(false);
+
+  async function spracheErkannt(text: string) {
+    setSpracheVerarbeitung(true);
+    try {
+      const ergebnis = await erkenneAufgabeAusText(text);
+      if (!ergebnis.ok) {
+        alert(ergebnis.fehler);
+        return;
+      }
+      const a = ergebnis.aufgabe;
+      setTitel(a.titel);
+      setFaelligkeit(a.datum ?? "");
+      if (istEltern && a.personId) setPersonId(a.personId);
+      setWiederholung(a.datum ? a.wiederholung : "KEINE");
+      if (a.wiederholung !== "KEINE" && a.datum) {
+        setWiederholungUnbegrenzt(!a.wiederholungBis);
+        setWiederholungBis(a.wiederholungBis ?? "");
+      } else {
+        setWiederholungUnbegrenzt(true);
+        setWiederholungBis("");
+      }
+    } finally {
+      setSpracheVerarbeitung(false);
+    }
+  }
 
   function submit() {
     if (!titel) return;
@@ -79,6 +106,8 @@ export default function AufgabenClient({
       <h1 style={{ fontSize: 22, margin: 0 }}>Aufgaben</h1>
 
       <div className="card" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        <Spracheingabe onErgebnis={spracheErkannt} disabled={spracheVerarbeitung} />
+        {spracheVerarbeitung && <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>Spracheingabe wird verarbeitet …</p>}
         <input placeholder="Neue Aufgabe" value={titel} onChange={(e) => setTitel(e.target.value)} />
         <input type="date" value={faelligkeit} onChange={(e) => setFaelligkeit(e.target.value)} />
         {!faelligkeit && (

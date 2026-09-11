@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { requirePerson } from "@/lib/auth";
 import { logAenderung } from "@/lib/history";
+import { erkenneAufgabeAusSprache, type ErkannteAufgabe } from "@/lib/spracheErkennung";
 import { revalidatePath } from "next/cache";
 import { randomUUID } from "crypto";
 
@@ -33,6 +34,25 @@ export async function listAufgaben() {
     include: { person: true },
     orderBy: [{ erledigt: "asc" }, { faelligkeit: "asc" }],
   });
+}
+
+// Spracheingabe (Fragenkatalog Frage 25/51, Fix-Batch 19) — wandelt einen diktierten Text in
+// Aufgaben-Formularfelder um, die im Client noch geprüft/korrigiert werden müssen; es wird hier
+// nichts gespeichert. Fehler werden abgefangen und als Ergebnis-Objekt zurückgegeben statt
+// geworfen, damit die echte Meldung den Nutzer erreicht (siehe Fix-Batch 19, Rezept-Foto-Fehler).
+export async function erkenneAufgabeAusText(
+  text: string
+): Promise<{ ok: true; aufgabe: ErkannteAufgabe } | { ok: false; fehler: string }> {
+  await requirePerson();
+  try {
+    const personen = await prisma.person.findMany({ where: { aktiv: true }, select: { id: true, name: true } });
+    const aufgabe = await erkenneAufgabeAusSprache(text, personen);
+    return { ok: true, aufgabe };
+  } catch (err) {
+    console.error("Spracheingabe (Aufgabe) fehlgeschlagen:", err);
+    const fehler = err instanceof Error ? err.message : "Unbekannter Fehler bei der Spracherkennung.";
+    return { ok: false, fehler };
+  }
 }
 
 export async function createAufgabe(data: {

@@ -1,9 +1,10 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { createTermin, updateTermin, deleteTermin } from "./actions";
+import { createTermin, updateTermin, deleteTermin, erkenneTerminAusText } from "./actions";
 import { erkenneTerminKategorie, TERMIN_KATEGORIE_LABEL } from "@/lib/terminkategorisierung";
 import HistorieVerlauf from "@/components/HistorieVerlauf";
+import Spracheingabe from "@/components/Spracheingabe";
 
 type Termin = {
   id: string;
@@ -81,6 +82,7 @@ export default function KalenderClient({
   const [personId, setPersonId] = useState<string>(istEltern ? "" : eigeneId);
   const [wiederholung, setWiederholung] = useState("KEINE");
   const [wiederholungBis, setWiederholungBis] = useState("");
+  const [spracheVerarbeitung, setSpracheVerarbeitung] = useState(false);
   const erkannteKategorie = useMemo(() => erkenneTerminKategorie(titel), [titel]);
 
   const gefiltert = useMemo(() => {
@@ -145,6 +147,27 @@ export default function KalenderClient({
     setWiederholung("KEINE");
     setWiederholungBis("");
     setZeigeFormular(true);
+  }
+
+  async function spracheErkannt(text: string) {
+    setSpracheVerarbeitung(true);
+    try {
+      const ergebnis = await erkenneTerminAusText(text);
+      if (!ergebnis.ok) {
+        alert(ergebnis.fehler);
+        return;
+      }
+      const t = ergebnis.termin;
+      setZeigeFormular(true);
+      setBearbeitenId(null);
+      setTitel(t.titel);
+      setStart(`${t.datum ?? isoVonDate(new Date())}T${t.uhrzeit ?? "09:00"}`);
+      if (istEltern && t.personId) setPersonId(t.personId);
+      setWiederholung(t.wiederholung);
+      setWiederholungBis(t.wiederholungBis ?? "");
+    } finally {
+      setSpracheVerarbeitung(false);
+    }
   }
 
   function submit() {
@@ -264,6 +287,8 @@ export default function KalenderClient({
       {zeigeFormular && (
         <div className="card" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           <strong style={{ fontSize: 14 }}>{bearbeitenId ? "Termin bearbeiten" : "Neuer Termin"}</strong>
+          {!bearbeitenId && <Spracheingabe onErgebnis={spracheErkannt} disabled={spracheVerarbeitung} />}
+          {spracheVerarbeitung && <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>Spracheingabe wird verarbeitet …</p>}
           <input placeholder="Titel" value={titel} onChange={(e) => setTitel(e.target.value)} />
           <label style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: -6 }}>Datum &amp; Uhrzeit</label>
           <input type="datetime-local" value={start} onChange={(e) => setStart(e.target.value)} />
