@@ -3,6 +3,7 @@ import { listPersonen } from "./actions";
 import { listKategorien } from "../einkaufsliste/actions";
 import { listKinder, listFaecher, listNotenGewichtung } from "../schule/actions";
 import { listDienstkatalog } from "../dienstplan/actions";
+import { getAenderungshistorie } from "../dashboard/actions";
 import EinstellungenClient from "./EinstellungenClient";
 
 export default async function EinstellungenPage() {
@@ -12,6 +13,7 @@ export default async function EinstellungenPage() {
 
   const kategorien = istEltern ? await listKategorien() : [];
   const dienstkatalog = istEltern ? await listDienstkatalog() : [];
+  const historie = istEltern ? await getAenderungshistorie() : [];
   const kinder = istEltern ? await listKinder() : [];
   const kinderDaten = istEltern
     ? await Promise.all(
@@ -40,6 +42,7 @@ export default async function EinstellungenPage() {
         bezeichnung: d.bezeichnung,
         beschreibung: d.beschreibung,
       }))}
+      historie={historie}
     />
   );
 }

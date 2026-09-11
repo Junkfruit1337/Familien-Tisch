@@ -20,6 +20,7 @@ type Kategorie = { id: string; name: string; reihenfolge: number };
 type Gewichtung = { fachId: string; fachName: string; gewichtungen: { art: string; gewichtung: number }[] };
 type Kind = { id: string; name: string; faecher: { id: string; name: string }[]; gewichtung: Gewichtung[] };
 type Dienst = { id: string; schichtNummer: number; reihenfolge: number; bezeichnung: string; beschreibung: string | null };
+type HistorieEintrag = { id: string; zeitpunkt: string; personName: string; typLabel: string; aktion: string; bezug: string | null };
 
 const ROLLEN = [
   { value: "ELTERN", label: "Elternteil" },
@@ -33,12 +34,14 @@ export default function EinstellungenClient({
   kategorien,
   kinder,
   dienstkatalog,
+  historie,
 }: {
   istEltern: boolean;
   personen: Person[];
   kategorien: Kategorie[];
   kinder: Kind[];
   dienstkatalog: Dienst[];
+  historie: HistorieEintrag[];
 }) {
   const [pending, startTransition] = useTransition();
   const [name, setName] = useState("");
@@ -390,6 +393,22 @@ export default function EinstellungenClient({
               </div>
             );
           })}
+        </div>
+      </details>
+
+      <details className="card">
+        <summary style={{ cursor: "pointer", fontWeight: 600 }}>🕘 Änderungshistorie ({historie.length})</summary>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 10 }}>
+          {historie.length === 0 && <p style={{ margin: 0, color: "var(--text-muted)" }}>Noch keine Änderungen erfasst.</p>}
+          {historie.map((h) => (
+            <div key={h.id} style={{ fontSize: 13, borderBottom: "1px solid rgba(128,128,128,0.15)", paddingBottom: 4 }}>
+              <span style={{ color: "var(--text-muted)" }}>
+                {new Date(h.zeitpunkt).toLocaleString("de-DE", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+              </span>{" "}
+              — <strong>{h.personName}</strong>: {h.typLabel} {h.aktion}
+              {h.bezug ? ` „${h.bezug}"` : ""}
+            </div>
+          ))}
         </div>
       </details>
     </div>

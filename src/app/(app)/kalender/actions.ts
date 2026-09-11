@@ -8,7 +8,10 @@ import { revalidatePath } from "next/cache";
 import { randomUUID } from "crypto";
 
 // Sicherheitsgrenze gegen versehentliche Endlos-Serien (z. B. "täglich, bis 2099").
+// Bei "Unbegrenzt" (kein Enddatum) wird pragmatisch bis zu diesem Horizont im Voraus
+// angelegt statt echter unbegrenzter Wiederholung (analog Aufgaben, Fix-Batch 12).
 const MAX_SERIEN_TERMINE = 200;
+const UNBEGRENZT_HORIZONT_TAGE = 365 * 2;
 
 function naechsterTermin(datum: Date, wiederholung: string): Date {
   const d = new Date(datum);
@@ -65,14 +68,18 @@ export async function createTermin(data: {
   // (Fragenkatalog Frage 3: "die App soll das selbst erkennen/zuordnen").
   const kategorie = erkenneTerminKategorie(data.titel);
 
-  const wiederholung = data.wiederholung && data.wiederholung !== "KEINE" && data.wiederholungBis ? data.wiederholung : "KEINE";
+  const wiederholung = data.wiederholung && data.wiederholung !== "KEINE" ? data.wiederholung : "KEINE";
   const seriesId = wiederholung !== "KEINE" ? randomUUID() : null;
-  const wiederholungBis = wiederholung !== "KEINE" && data.wiederholungBis ? new Date(data.wiederholungBis) : null;
+  const unbegrenzt = wiederholung !== "KEINE" && !data.wiederholungBis;
+  const horizont = new Date();
+  horizont.setDate(horizont.getDate() + UNBEGRENZT_HORIZONT_TAGE);
+  const wiederholungBis = wiederholung !== "KEINE" ? (data.wiederholungBis ? new Date(data.wiederholungBis) : null) : null;
+  const grenze = wiederholung !== "KEINE" ? (data.wiederholungBis ? new Date(data.wiederholungBis) : horizont) : null;
 
   const startDaten: Date[] = [new Date(data.start)];
-  if (wiederholung !== "KEINE" && wiederholungBis) {
+  if (wiederholung !== "KEINE" && grenze) {
     let naechster = naechsterTermin(startDaten[0], wiederholung);
-    while (naechster <= wiederholungBis && startDaten.length < MAX_SERIEN_TERMINE) {
+    while (naechster <= grenze && startDaten.length < MAX_SERIEN_TERMINE) {
       startDaten.push(naechster);
       naechster = naechsterTermin(naechster, wiederholung);
     }
@@ -92,7 +99,7 @@ export async function createTermin(data: {
         personId,
         seriesId,
         wiederholung: wiederholung as any,
-        wiederholungBis,
+        wiederholungBis: unbegrenzt ? null : wiederholungBis,
         erstelltVonId: person.id,
       },
     });

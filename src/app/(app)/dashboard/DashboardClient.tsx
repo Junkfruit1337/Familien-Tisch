@@ -9,17 +9,8 @@ type Daten = {
   termineHeute: { id: string; titel: string; start: string; personName: string }[];
   offeneAufgaben: number;
 };
-type HistorieEintrag = { id: string; zeitpunkt: string; personName: string; typLabel: string; aktion: string; bezug: string | null };
 
-export default function DashboardClient({
-  daten,
-  istEltern,
-  historie,
-}: {
-  daten: Daten;
-  istEltern: boolean;
-  historie: HistorieEintrag[];
-}) {
+export default function DashboardClient({ daten, istEltern }: { daten: Daten; istEltern: boolean }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <h1 style={{ fontSize: 22, margin: 0 }}>Hallo, {daten.person.name}!</h1>
@@ -62,24 +53,6 @@ export default function DashboardClient({
           </div>
         ))}
       </div>
-
-      {istEltern && (
-        <details className="card">
-          <summary style={{ cursor: "pointer", fontWeight: 600 }}>🕘 Änderungshistorie ({historie.length})</summary>
-          <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 10 }}>
-            {historie.length === 0 && <p style={{ margin: 0, color: "var(--text-muted)" }}>Noch keine Änderungen erfasst.</p>}
-            {historie.map((h) => (
-              <div key={h.id} style={{ fontSize: 13, borderBottom: "1px solid rgba(128,128,128,0.15)", paddingBottom: 4 }}>
-                <span style={{ color: "var(--text-muted)" }}>
-                  {new Date(h.zeitpunkt).toLocaleString("de-DE", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
-                </span>{" "}
-                — <strong>{h.personName}</strong>: {h.typLabel} {h.aktion}
-                {h.bezug ? ` „${h.bezug}"` : ""}
-              </div>
-            ))}
-          </div>
-        </details>
-      )}
     </div>
   );
 }

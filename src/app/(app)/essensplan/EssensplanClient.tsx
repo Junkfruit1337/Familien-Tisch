@@ -403,10 +403,14 @@ export default function EssensplanClient({
                   setErkennungLaeuft(true);
                   try {
                     const base64 = await rezeptfotoAufBase64(file);
-                    const erkannt = await erkenneRezeptAusFoto(base64);
-                    setNeuName(erkannt.name);
-                    setNeuZutaten(erkannt.zutaten);
-                    setNeuZubereitung(erkannt.zubereitung);
+                    const ergebnis = await erkenneRezeptAusFoto(base64);
+                    if (!ergebnis.ok) {
+                      alert(ergebnis.fehler);
+                      return;
+                    }
+                    setNeuName(ergebnis.rezept.name);
+                    setNeuZutaten(ergebnis.rezept.zutaten);
+                    setNeuZubereitung(ergebnis.rezept.zubereitung);
                   } catch (err: any) {
                     alert(err.message ?? "Foto konnte nicht erkannt werden.");
                   } finally {

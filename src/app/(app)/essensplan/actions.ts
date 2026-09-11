@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { requireParent } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import { autoKategorieId, findeOffenenArtikel, mergeMenge } from "../einkaufsliste/actions";
-import { erkenneRezeptAusBild } from "@/lib/rezeptErkennung";
+import { erkenneRezeptAusBild, type ErkanntesRezept } from "@/lib/rezeptErkennung";
 
 function getSamstagWocheStart(date: Date): Date {
   // Essensplan-Woche läuft Samstag–Samstag.
@@ -57,9 +57,21 @@ export async function addRezept(name: string, zutaten: string, zubereitung?: str
 
 // Rezept-Erfassung per Foto (Fragenkatalog Frage 25, Batch 8) — füllt nur das
 // "Neues Rezept"-Formular vor, gespeichert wird erst nach Prüfung/Korrektur durch die Eltern.
-export async function erkenneRezeptAusFoto(fotoDataUrl: string) {
+// Fehler werden hier abgefangen und als Ergebnis-Objekt zurückgegeben statt geworfen,
+// weil Next.js Fehlermeldungen aus Server Actions im Produktions-Build sonst durch eine
+// generische Meldung ersetzt ("...error occurred in the Server Components render...").
+export async function erkenneRezeptAusFoto(
+  fotoDataUrl: string
+): Promise<{ ok: true; rezept: ErkanntesRezept } | { ok: false; fehler: string }> {
   await requireParent();
-  return erkenneRezeptAusBild(fotoDataUrl);
+  try {
+    const rezept = await erkenneRezeptAusBild(fotoDataUrl);
+    return { ok: true, rezept };
+  } catch (err) {
+    console.error("Rezept-Foto-Erkennung fehlgeschlagen:", err);
+    const fehler = err instanceof Error ? err.message : "Unbekannter Fehler bei der Bilderkennung.";
+    return { ok: false, fehler };
+  }
 }
 
 export async function deleteRezept(id: string) {
