@@ -13,8 +13,10 @@ import {
   listVorschlaege,
   verwirfVorschlag,
   setzeVorschlaegeZurueck,
+  bestaetigeArtikel,
+  lehneArtikelAb,
 } from "./actions";
-import { pruefeZutaten, uebernehmeAusgewaehlteZutaten, pruefeZutatenFuerRezept, uebernehmeZusaetzlicheZutaten } from "../essensplan/actions";
+import { pruefeZutatenFuerRezept, uebernehmeZusaetzlicheZutaten } from "../essensplan/actions";
 import { erkenneKategorie } from "@/lib/kategorisierung";
 import HistorieVerlauf from "@/components/HistorieVerlauf";
 import FaktorLeiste from "@/components/FaktorLeiste";
@@ -24,7 +26,7 @@ type Wunsch = { id: string; artikelName: string; menge: string | null; status: s
 type Kategorie = { id: string; name: string };
 type Quelle = { id: string; beschreibung: string; menge: string | null; zeitpunkt: string };
 type Vorschlag = { name: string; menge: string | null };
-type WochenTag = { eintragId: string; tag: string; rezeptName: string };
+type Unbestaetigt = { id: string; name: string; menge: string | null; herkunft: { rezeptName: string; tag: string }[] };
 type RezeptKurz = { id: string; name: string };
 type Zutat = { name: string; menge?: string };
 
@@ -61,7 +63,7 @@ export default function EinkaufslisteClient({
   wuensche,
   kategorien,
   vorschlaege,
-  wochenTage,
+  unbestaetigt: initialUnbestaetigt,
   rezepte,
 }: {
   istEltern: boolean;
@@ -69,7 +71,7 @@ export default function EinkaufslisteClient({
   wuensche: Wunsch[];
   kategorien: Kategorie[];
   vorschlaege: Vorschlag[];
-  wochenTage: WochenTag[];
+  unbestaetigt: Unbestaetigt[];
   rezepte: RezeptKurz[];
 }) {
   const [pending, startTransition] = useTransition();
@@ -81,23 +83,14 @@ export default function EinkaufslisteClient({
   const [bearbeiteMenge, setBearbeiteMenge] = useState("");
   const [wunschKategorie, setWunschKategorie] = useState<Record<string, string>>({});
 
-  const [pruefTagId, setPruefTagId] = useState<string | null>(null);
-  const [pruefZeilen, setPruefZeilen] = useState<Zutat[]>([]);
-  const [pruefAusgewaehlt, setPruefAusgewaehlt] = useState<boolean[]>([]);
-  const [erledigteTage, setErledigteTage] = useState<string[]>([]);
+  const [unbestaetigt, setUnbestaetigt] = useState(initialUnbestaetigt);
+  const [unbestaetigtMengen, setUnbestaetigtMengen] = useState<Record<string, string>>({});
 
   const [extraRezeptId, setExtraRezeptId] = useState("");
   const [extraFaktor, setExtraFaktor] = useState(1);
   const [extraZeilen, setExtraZeilen] = useState<Zutat[]>([]);
   const [extraAusgewaehlt, setExtraAusgewaehlt] = useState<boolean[]>([]);
   const [extraGeprueft, setExtraGeprueft] = useState(false);
-
-  async function starteWochenPruefung(eintragId: string) {
-    const zeilen = await pruefeZutaten(eintragId);
-    setPruefTagId(eintragId);
-    setPruefZeilen(zeilen);
-    setPruefAusgewaehlt(zeilen.map(() => true));
-  }
 
   async function aendereExtraFaktor(faktor: number) {
     setExtraFaktor(faktor);
@@ -221,66 +214,65 @@ export default function EinkaufslisteClient({
         </div>
       )}
 
-      {istEltern && wochenTage.filter((t) => !erledigteTage.includes(t.eintragId)).length > 0 && (
+      {istEltern && unbestaetigt.length > 0 && (
         <details open>
-          <summary style={{ cursor: "pointer", color: "var(--text-muted)" }}>🍽️ Zutaten aus dem Essensplan (diese Woche)</summary>
+          <summary style={{ cursor: "pointer", color: "var(--text-muted)" }}>🕓 Noch nicht zugesagt ({unbestaetigt.length})</summary>
           <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
             <p style={{ fontSize: 12, color: "var(--text-muted)", margin: 0 }}>
-              Geplante Gerichte dieser Woche einzeln prüfen und auswählen, was wirklich noch eingekauft werden muss.
+              Aus dem Essensplan übertragen — bitte prüfen, ob wirklich noch eingekauft werden muss (oder schon (teilweise) zu Hause vorrätig ist).
             </p>
-            {wochenTage
-              .filter((t) => !erledigteTage.includes(t.eintragId))
-              .map((t) => (
-                <div key={t.eintragId} className="card" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-                    <span style={{ fontSize: 14 }}>
-                      <strong>{new Date(t.tag).toLocaleDateString("de-DE", { weekday: "long", day: "2-digit", month: "2-digit" })}</strong>
-                      {" · "}
-                      {t.rezeptName}
-                    </span>
-                    {pruefTagId !== t.eintragId && (
-                      <button className="btn-secondary" style={{ fontSize: 12 }} onClick={() => starteWochenPruefung(t.eintragId)}>
-                        Zutaten prüfen
-                      </button>
-                    )}
-                  </div>
-                  {pruefTagId === t.eintragId && (
-                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                      {pruefZeilen.map((z, i) => (
-                        <label key={i} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14 }}>
-                          <input
-                            type="checkbox"
-                            checked={pruefAusgewaehlt[i]}
-                            onChange={() => setPruefAusgewaehlt((prev) => prev.map((v, idx) => (idx === i ? !v : v)))}
-                          />
-                          <span style={{ textDecoration: pruefAusgewaehlt[i] ? "none" : "line-through", color: pruefAusgewaehlt[i] ? undefined : "var(--text-muted)" }}>
-                            {z.menge ? `${z.menge} ${z.name}` : z.name}
-                          </span>
-                        </label>
-                      ))}
-                      <div style={{ display: "flex", gap: 8 }}>
-                        <button
-                          className="btn"
-                          disabled={pending}
-                          onClick={() =>
-                            startTransition(async () => {
-                              const ausgewaehlt = pruefZeilen.filter((_, i) => pruefAusgewaehlt[i]);
-                              await uebernehmeAusgewaehlteZutaten(t.eintragId, ausgewaehlt);
-                              setErledigteTage((prev) => [...prev, t.eintragId]);
-                              setPruefTagId(null);
-                            })
-                          }
-                        >
-                          Übernehmen ({pruefAusgewaehlt.filter(Boolean).length})
-                        </button>
-                        <button className="btn-secondary" onClick={() => setPruefTagId(null)}>
-                          Abbrechen
-                        </button>
-                      </div>
-                    </div>
-                  )}
+            {unbestaetigt.map((a) => (
+              <div key={a.id} className="card" style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: 14 }}>
+                    {a.menge ? `${a.menge} ` : ""}
+                    {a.name}
+                  </span>
                 </div>
-              ))}
+                {a.herkunft.length > 0 && (
+                  <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>
+                    Für:{" "}
+                    {a.herkunft
+                      .map((h) => `${h.rezeptName} (${new Date(h.tag).toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit" })})`)
+                      .join(", ")}
+                  </p>
+                )}
+                <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+                  <input
+                    placeholder="Menge anpassen"
+                    value={unbestaetigtMengen[a.id] ?? a.menge ?? ""}
+                    onChange={(e) => setUnbestaetigtMengen((prev) => ({ ...prev, [a.id]: e.target.value }))}
+                    style={{ flex: "1 1 120px" }}
+                  />
+                  <button
+                    className="btn"
+                    style={{ fontSize: 13, padding: "6px 10px" }}
+                    disabled={pending}
+                    onClick={() =>
+                      startTransition(async () => {
+                        await bestaetigeArtikel(a.id, unbestaetigtMengen[a.id] ?? a.menge ?? undefined);
+                        setUnbestaetigt((prev) => prev.filter((x) => x.id !== a.id));
+                      })
+                    }
+                  >
+                    ✓ Übernehmen
+                  </button>
+                  <button
+                    className="btn-secondary"
+                    style={{ fontSize: 13, padding: "6px 10px" }}
+                    disabled={pending}
+                    onClick={() =>
+                      startTransition(async () => {
+                        await lehneArtikelAb(a.id);
+                        setUnbestaetigt((prev) => prev.filter((x) => x.id !== a.id));
+                      })
+                    }
+                  >
+                    ✕ Ablehnen
+                  </button>
+                </div>
+              </div>
+            ))}
           </div>
         </details>
       )}

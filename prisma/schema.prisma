@@ -163,6 +163,11 @@ model EinkaufsArtikel {
   erledigt     Boolean            @default(false)
   quelle       String             @default("manuell") // "manuell" | "essensplan" | "wunsch"
   vonWunschId  String?
+  // "noch nicht zugesagt" (Fix-Batch 24): Zutaten aus dem Essensplan landen zunächst hier
+  // mit bestaetigt=false und müssen auf der Einkaufsliste erst geprüft/angepasst/bestätigt
+  // werden, bevor sie als normaler Artikel zählen. Alle anderen Wege (manuell, Wunsch,
+  // Extra-Rezept) legen weiterhin direkt bestätigte Artikel an (Default true).
+  bestaetigt   Boolean            @default(true)
   createdAt    DateTime           @default(now())
   updatedAt    DateTime           @updatedAt
 

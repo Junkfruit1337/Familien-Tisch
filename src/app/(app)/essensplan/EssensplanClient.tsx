@@ -10,10 +10,11 @@ import {
   blendeRezeptAus,
   zeigeRezeptWiederAn,
   setTag,
-  toggleLock,
+  sperren,
+  entsperren,
   setEsser,
-  pruefeZutaten,
-  uebernehmeAusgewaehlteZutaten,
+  fuegeZutatenDesTagsHinzu,
+  fuegeZutatenDerWocheHinzu,
   pruefeGelocktenTagWechsel,
   setTagTrotzSperre,
   erkenneRezeptAusFoto,
@@ -59,7 +60,6 @@ type Plan = { wocheStart: string; wocheEnde: string; tage: Tag[] };
 type RezeptDetail = { id: string; name: string; zutaten: string; zubereitung: string | null; portionenBasis: number };
 type RezeptKurz = { id: string; name: string };
 type Familienmitglied = { id: string; name: string; farbe: string };
-type Zutat = { name: string; menge?: string };
 type Herkunft = { artikelId: string; artikelName: string; menge: string | null };
 
 const WOCHEN_LABEL = ["Diese Woche", "Nächste Woche", "Übernächste Woche"];
@@ -85,12 +85,12 @@ export default function EssensplanClient({
   const [vorschlaege, setVorschlaege] = useState(initialVorschlaege);
   const [ausgeblendete, setAusgeblendete] = useState(initialAusgeblendete);
 
-  const [pruefTagId, setPruefTagId] = useState<string | null>(null);
-  const [pruefZeilen, setPruefZeilen] = useState<Zutat[]>([]);
-  const [pruefAusgewaehlt, setPruefAusgewaehlt] = useState<boolean[]>([]);
   const [portionenEntwuerfe, setPortionenEntwuerfe] = useState<Record<string, string>>({});
 
-  const [sperrDialog, setSperrDialog] = useState<{ eintragId: string; neuesRezeptId: string; herkuenfte: Herkunft[] } | null>(null);
+  // neuesRezeptId === null bedeutet "nur entsperren" statt "Gericht ändern trotz Sperre"
+  // (Fix-Batch 24) — beide Fälle stellen dieselbe Frage: was passiert mit den schon
+  // übernommenen Zutaten dieses Tages?
+  const [sperrDialog, setSperrDialog] = useState<{ eintragId: string; neuesRezeptId: string | null; herkuenfte: Herkunft[] } | null>(null);
   const [sperrEntscheidungen, setSperrEntscheidungen] = useState<Record<string, "entfernen" | "behalten">>({});
 
   const [neuName, setNeuName] = useState("");
@@ -116,11 +116,12 @@ export default function EssensplanClient({
     startTransition(() => ladeWoche(neuerOffset));
   }
 
-  async function starteZutatenPruefung(eintragId: string) {
-    const zeilen = await pruefeZutaten(eintragId);
-    setPruefTagId(eintragId);
-    setPruefZeilen(zeilen);
-    setPruefAusgewaehlt(zeilen.map(() => true));
+  function zutatenHinzufuegen(eintragId: string) {
+    startTransition(() => fuegeZutatenDesTagsHinzu(eintragId).then(() => ladeWoche(offset)));
+  }
+
+  function zutatenDerWocheHinzufuegen() {
+    startTransition(() => fuegeZutatenDerWocheHinzu(plan.wocheStart).then(() => ladeWoche(offset)));
   }
 
   async function versucheTagAendern(t: Tag, neuesRezeptId: string) {
@@ -135,7 +136,24 @@ export default function EssensplanClient({
       return;
     }
     setSperrDialog({ eintragId: t.eintrag.id, neuesRezeptId, herkuenfte });
-    setSperrEntscheidungen(Object.fromEntries(herkuenfte.map((h) => [h.artikelId, "behalten" as const])));
+    // Default "entfernen" (Florians Wunsch): wer die Zutaten für dieses Gericht behalten
+    // will, muss es aktiv antippen — nicht umgekehrt.
+    setSperrEntscheidungen(Object.fromEntries(herkuenfte.map((h) => [h.artikelId, "entfernen" as const])));
+  }
+
+  async function klickSchloss(t: Tag) {
+    if (!t.eintrag) return;
+    if (!t.eintrag.gelockt) {
+      startTransition(() => sperren(t.eintrag!.id).then(() => ladeWoche(offset)));
+      return;
+    }
+    const herkuenfte = await pruefeGelocktenTagWechsel(t.eintrag.id);
+    if (herkuenfte.length === 0) {
+      startTransition(() => entsperren(t.eintrag!.id, []).then(() => ladeWoche(offset)));
+      return;
+    }
+    setSperrDialog({ eintragId: t.eintrag.id, neuesRezeptId: null, herkuenfte });
+    setSperrEntscheidungen(Object.fromEntries(herkuenfte.map((h) => [h.artikelId, "entfernen" as const])));
   }
 
   return (
@@ -181,12 +199,14 @@ export default function EssensplanClient({
             )}
             {istEltern && t.eintrag && (
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                <button className="btn-secondary" style={{ fontSize: 12 }} onClick={() => startTransition(() => toggleLock(t.eintrag!.id).then(() => ladeWoche(offset)))}>
+                <button className="btn-secondary" style={{ fontSize: 12 }} onClick={() => klickSchloss(t)}>
                   {t.eintrag.gelockt ? "🔒 Gesperrt" : "🔓 Entsperrt"}
                 </button>
-                <button className="btn-secondary" style={{ fontSize: 12 }} onClick={() => starteZutatenPruefung(t.eintrag!.id)}>
-                  Zutaten prüfen
-                </button>
+                {!t.eintrag.gelockt && (
+                  <button className="btn-secondary" style={{ fontSize: 12 }} onClick={() => zutatenHinzufuegen(t.eintrag!.id)} disabled={pending}>
+                    Zutaten zur Einkaufsliste hinzufügen
+                  </button>
+                )}
               </div>
             )}
 
@@ -217,76 +237,55 @@ export default function EssensplanClient({
               </div>
             )}
 
-            {pruefTagId === t.eintrag?.id && (
-              <div style={{ borderTop: "1px solid var(--border)", paddingTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
-                <strong style={{ fontSize: 13 }}>Zutaten prüfen — schon zu Hause?</strong>
-                {pruefZeilen.map((z, i) => (
-                  <label key={i} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14 }}>
-                    <input
-                      type="checkbox"
-                      checked={pruefAusgewaehlt[i]}
-                      onChange={() => setPruefAusgewaehlt((prev) => prev.map((v, idx) => (idx === i ? !v : v)))}
-                    />
-                    <span style={{ textDecoration: pruefAusgewaehlt[i] ? "none" : "line-through", color: pruefAusgewaehlt[i] ? undefined : "var(--text-muted)" }}>
-                      {z.menge ? `${z.menge} ${z.name}` : z.name}
-                    </span>
-                  </label>
-                ))}
-                <div style={{ display: "flex", gap: 8 }}>
-                  <button
-                    className="btn"
-                    disabled={pending}
-                    onClick={() =>
-                      startTransition(async () => {
-                        const ausgewaehlt = pruefZeilen.filter((_, i) => pruefAusgewaehlt[i]);
-                        await uebernehmeAusgewaehlteZutaten(pruefTagId!, ausgewaehlt);
-                        setPruefTagId(null);
-                      })
-                    }
-                  >
-                    Übernehmen ({pruefAusgewaehlt.filter(Boolean).length})
-                  </button>
-                  <button className="btn-secondary" onClick={() => setPruefTagId(null)}>
-                    Abbrechen
-                  </button>
-                </div>
-              </div>
-            )}
           </div>
         ))}
       </div>
 
+      {istEltern && plan.tage.some((t) => t.eintrag && !t.eintrag.gelockt) && (
+        <button className="btn-secondary" disabled={pending} onClick={zutatenDerWocheHinzufuegen}>
+          Ganze Woche: Zutaten zur Einkaufsliste hinzufügen
+        </button>
+      )}
+
       {sperrDialog && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 500, padding: 16 }}>
           <div className="card" style={{ maxWidth: 420, width: "100%", display: "flex", flexDirection: "column", gap: 10 }}>
-            <strong>Gericht ändern trotz Sperre</strong>
+            <strong>{sperrDialog.neuesRezeptId ? "Gericht ändern trotz Sperre" : "Tag entsperren"}</strong>
             <p style={{ fontSize: 13, color: "var(--text-muted)", margin: 0 }}>
-              Für das bisherige Gericht wurden schon Zutaten auf die Einkaufsliste übernommen. Was soll mit den einzelnen Mengen-Anteilen passieren?
+              Für dieses Gericht wurden schon Zutaten auf die Einkaufsliste übernommen. Die folgenden Artikel werden entfernt
+              (bzw. um ihren Anteil verringert) — antippen, um einen Artikel stattdessen zu behalten.
             </p>
-            {sperrDialog.herkuenfte.map((h) => (
-              <div key={h.artikelId} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-                <span style={{ fontSize: 14 }}>
-                  {h.menge ? `${h.menge} ` : ""}
-                  {h.artikelName}
-                </span>
-                <div style={{ display: "flex", gap: 4 }}>
-                  <button
-                    className="btn-secondary"
-                    style={{ fontSize: 12, padding: "4px 8px", background: sperrEntscheidungen[h.artikelId] === "behalten" ? "var(--accent)" : undefined, color: sperrEntscheidungen[h.artikelId] === "behalten" ? "var(--accent-contrast)" : undefined }}
-                    onClick={() => setSperrEntscheidungen((prev) => ({ ...prev, [h.artikelId]: "behalten" }))}
-                  >
-                    Behalten
-                  </button>
-                  <button
-                    className="btn-secondary"
-                    style={{ fontSize: 12, padding: "4px 8px", background: sperrEntscheidungen[h.artikelId] === "entfernen" ? "var(--danger)" : undefined, color: sperrEntscheidungen[h.artikelId] === "entfernen" ? "#fff" : undefined }}
-                    onClick={() => setSperrEntscheidungen((prev) => ({ ...prev, [h.artikelId]: "entfernen" }))}
-                  >
-                    Entfernen
-                  </button>
-                </div>
-              </div>
-            ))}
+            {sperrDialog.herkuenfte.map((h) => {
+              const behalten = sperrEntscheidungen[h.artikelId] === "behalten";
+              return (
+                <button
+                  key={h.artikelId}
+                  type="button"
+                  onClick={() =>
+                    setSperrEntscheidungen((prev) => ({ ...prev, [h.artikelId]: behalten ? "entfernen" : "behalten" }))
+                  }
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    gap: 8,
+                    background: "none",
+                    border: "1px solid var(--border)",
+                    borderRadius: 8,
+                    padding: "6px 10px",
+                    cursor: "pointer",
+                    fontFamily: "inherit",
+                    color: "inherit",
+                  }}
+                >
+                  <span style={{ fontSize: 14, textDecoration: behalten ? "none" : "line-through", color: behalten ? undefined : "var(--text-muted)" }}>
+                    {h.menge ? `${h.menge} ` : ""}
+                    {h.artikelName}
+                  </span>
+                  <span style={{ fontSize: 16 }}>{behalten ? "✅" : "❌"}</span>
+                </button>
+              );
+            })}
             <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
               <button
                 className="btn"
@@ -294,7 +293,11 @@ export default function EssensplanClient({
                 onClick={() =>
                   startTransition(async () => {
                     const entscheidungen = Object.entries(sperrEntscheidungen).map(([artikelId, aktion]) => ({ artikelId, aktion }));
-                    await setTagTrotzSperre(sperrDialog.eintragId, sperrDialog.neuesRezeptId, entscheidungen);
+                    if (sperrDialog.neuesRezeptId) {
+                      await setTagTrotzSperre(sperrDialog.eintragId, sperrDialog.neuesRezeptId, entscheidungen);
+                    } else {
+                      await entsperren(sperrDialog.eintragId, entscheidungen);
+                    }
                     setSperrDialog(null);
                     await ladeWoche(offset);
                   })

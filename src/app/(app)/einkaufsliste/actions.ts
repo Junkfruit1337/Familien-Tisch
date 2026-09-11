@@ -15,11 +15,23 @@ export async function autoKategorieId(name: string): Promise<string | null> {
   return kategorie?.id ?? null;
 }
 
-// Findet einen bereits offenen (nicht erledigten) Artikel mit gleichem Namen,
-// damit gleiche Artikel nicht als doppelte Zeilen auf der Liste landen.
+// Findet einen bereits offenen (nicht erledigten), BESTÄTIGTEN Artikel mit gleichem Namen,
+// damit gleiche Artikel nicht als doppelte Zeilen auf der Liste landen. Bewusst nur unter
+// bereits bestätigten Artikeln gesucht (Fix-Batch 24) — ein manuell hinzugefügter Artikel
+// darf nicht versehentlich in einen noch unbestätigten Essensplan-Posten hineingemischt
+// werden und dadurch selbst als "noch nicht zugesagt" erscheinen.
 export async function findeOffenenArtikel(name: string) {
   return prisma.einkaufsArtikel.findFirst({
-    where: { erledigt: false, name: { equals: name.trim(), mode: "insensitive" } },
+    where: { erledigt: false, bestaetigt: true, name: { equals: name.trim(), mode: "insensitive" } },
+  });
+}
+
+// Gegenstück für den "noch nicht zugesagt"-Pool aus dem Essensplan (Fix-Batch 24) — mehrere
+// Tage, die dieselbe Zutat brauchen, sollen sich in EINEM unbestätigten Posten summieren,
+// statt für jeden Tag eine eigene Zeile zu erzeugen.
+export async function findeOffenenUnbestaetigtenArtikel(name: string) {
+  return prisma.einkaufsArtikel.findFirst({
+    where: { erledigt: false, bestaetigt: false, name: { equals: name.trim(), mode: "insensitive" } },
   });
 }
 
@@ -71,11 +83,66 @@ export async function mergeMenge(bestehend: string | null, neu?: string | null):
   return `${bestehend} + ${neu}`;
 }
 
+// Nur bestätigte Artikel — "noch nicht zugesagte" Essensplan-Posten laufen über den
+// eigenen Bereich (listUnbestaetigteArtikel), bis sie geprüft/bestätigt wurden (Fix-Batch 24).
 export async function listArtikel() {
   return prisma.einkaufsArtikel.findMany({
+    where: { bestaetigt: true },
     include: { kategorie: true },
     orderBy: [{ erledigt: "asc" }, { kategorie: { reihenfolge: "asc" } }],
   });
+}
+
+// "Noch nicht zugesagt" (Fix-Batch 24): Zutaten, die aus dem Essensplan auf die Einkaufsliste
+// übertragen wurden, aber noch geprüft/angepasst/bestätigt werden müssen. Zeigt zur
+// Einordnung, aus welchem(n) Tag(en)/Gericht(en) die Menge stammt.
+export async function listUnbestaetigteArtikel() {
+  await requireParent();
+  const artikel = await prisma.einkaufsArtikel.findMany({
+    where: { bestaetigt: false, erledigt: false },
+    include: {
+      essensplanHerkuenfte: { include: { eintrag: { include: { rezept: true } } } },
+    },
+    orderBy: { createdAt: "asc" },
+  });
+  return artikel.map((a) => ({
+    id: a.id,
+    name: a.name,
+    menge: a.menge,
+    herkunft: a.essensplanHerkuenfte.map((h) => ({
+      rezeptName: h.eintrag.rezept.name,
+      tag: h.eintrag.tag.toISOString(),
+    })),
+  }));
+}
+
+// Übernimmt einen "noch nicht zugesagten" Artikel — mergt in einen ggf. schon bestätigt
+// offenen Artikel gleichen Namens, statt zwei Zeilen nebeneinander stehen zu lassen.
+export async function bestaetigeArtikel(id: string, neueMenge?: string) {
+  await requireParent();
+  const artikel = await prisma.einkaufsArtikel.findUnique({ where: { id } });
+  if (!artikel) return;
+  const menge = neueMenge !== undefined ? neueMenge || null : artikel.menge;
+  const bestehender = await findeOffenenArtikel(artikel.name);
+  if (bestehender) {
+    await prisma.einkaufsArtikel.update({
+      where: { id: bestehender.id },
+      data: { menge: await mergeMenge(bestehender.menge, menge) },
+    });
+    await prisma.essensplanHerkunft.updateMany({ where: { artikelId: id }, data: { artikelId: bestehender.id } });
+    await prisma.einkaufsArtikel.delete({ where: { id } });
+  } else {
+    await prisma.einkaufsArtikel.update({ where: { id }, data: { menge, bestaetigt: true } });
+  }
+  revalidatePath("/einkaufsliste");
+}
+
+// Lehnt einen "noch nicht zugesagten" Artikel ab (z. B. schon zu Hause vorrätig) — löscht
+// ihn samt Essensplan-Herkunfts-Verknüpfung (Cascade) wieder.
+export async function lehneArtikelAb(id: string) {
+  await requireParent();
+  await prisma.einkaufsArtikel.delete({ where: { id } }).catch(() => {});
+  revalidatePath("/einkaufsliste");
 }
 
 // Eltern sehen alle Wünsche, ein Kind sieht ausschließlich seine eigenen —

@@ -3,7 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { requireParent } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
-import { autoKategorieId, findeOffenenArtikel, mergeMenge } from "../einkaufsliste/actions";
+import { autoKategorieId, findeOffenenArtikel, findeOffenenUnbestaetigtenArtikel, mergeMenge } from "../einkaufsliste/actions";
 import { erkenneRezeptAusBild, type ErkanntesRezept } from "@/lib/rezeptErkennung";
 
 function getSamstagWocheStart(date: Date): Date {
@@ -189,11 +189,11 @@ export async function setTag(wocheStartIso: string, tagIso: string, rezeptId: st
   revalidatePath("/essensplan");
 }
 
-export async function toggleLock(id: string) {
+// Sperrt einen Tag manuell — folgenlos, da noch keine Zutaten übernommen wurden
+// (sonst wäre der Tag durch fuegeZutatenDesTagsHinzu ohnehin schon gesperrt).
+export async function sperren(eintragId: string) {
   await requireParent();
-  const e = await prisma.essensplanEintrag.findUnique({ where: { id } });
-  if (!e) return;
-  await prisma.essensplanEintrag.update({ where: { id }, data: { gelockt: !e.gelockt } });
+  await prisma.essensplanEintrag.update({ where: { id: eintragId }, data: { gelockt: true } });
   revalidatePath("/essensplan");
 }
 
@@ -211,17 +211,61 @@ export async function setEsser(eintragId: string, personIds: string[]) {
   revalidatePath("/essensplan");
 }
 
-// Schritt 1 des Prüf-Schritts: zeigt die (mit dem Esser-Faktor skalierten) Zutatenzeilen
-// zur Auswahl, bevor irgendetwas auf die Einkaufsliste kommt (Fahrplan §3, Kernfeature).
-// Die Skalierung kommt allein aus Esser-Auswahl × Rezept-Portionsbasis (Fix-Batch 22/23) —
-// KEIN zusätzlicher manueller Hebel hier (Florian: das war ein Missverständnis, der Hebel
-// gehört nur zur unabhängigen Extra-Rezept-Funktion, siehe pruefeZutatenFuerRezept unten).
-export async function pruefeZutaten(eintragId: string) {
+// Zutaten eines Tages auf die Einkaufsliste übertragen (Fix-Batch 24) — landen als
+// "noch nicht zugesagt" (bestaetigt=false) und müssen dort erst geprüft/angepasst/bestätigt
+// werden. Die Skalierung kommt allein aus Esser-Auswahl × Rezept-Portionsbasis (Fix-Batch
+// 22/23) — KEIN zusätzlicher manueller Hebel hier (Florian: das war ein Missverständnis,
+// der Hebel gehört nur zur unabhängigen Extra-Rezept-Funktion, siehe pruefeZutatenFuerRezept
+// unten). Sperrt den Tag automatisch, da jetzt Mengen auf der Einkaufsliste davon abhängen.
+export async function fuegeZutatenDesTagsHinzu(eintragId: string) {
   await requireParent();
   const eintrag = await prisma.essensplanEintrag.findUnique({ where: { id: eintragId }, include: { rezept: true } });
-  if (!eintrag) return [];
-  const zeilen = eintrag.rezept.zutaten.split("\n").map((z) => z.trim()).filter(Boolean);
-  return zeilen.map((z) => skaliereZeile(parseZutatZeile(z), eintrag.esserFaktor || 1));
+  if (!eintrag) return;
+  const zeilen = eintrag.rezept.zutaten
+    .split("\n")
+    .map((z) => z.trim())
+    .filter(Boolean)
+    .map((z) => skaliereZeile(parseZutatZeile(z), eintrag.esserFaktor || 1));
+
+  for (const zeile of zeilen) {
+    const bestehender = await findeOffenenUnbestaetigtenArtikel(zeile.name);
+    let artikelId: string;
+    if (bestehender) {
+      await prisma.einkaufsArtikel.update({
+        where: { id: bestehender.id },
+        data: { menge: await mergeMenge(bestehender.menge, zeile.menge) },
+      });
+      artikelId = bestehender.id;
+    } else {
+      const kategorieId = await autoKategorieId(zeile.name);
+      const neu = await prisma.einkaufsArtikel.create({
+        data: { name: zeile.name, menge: zeile.menge, kategorieId: kategorieId || null, quelle: "essensplan", bestaetigt: false },
+      });
+      artikelId = neu.id;
+    }
+    await prisma.essensplanHerkunft.upsert({
+      where: { artikelId_eintragId: { artikelId, eintragId } },
+      update: { menge: zeile.menge },
+      create: { artikelId, eintragId, menge: zeile.menge },
+    });
+  }
+
+  await prisma.essensplanEintrag.update({ where: { id: eintragId }, data: { gelockt: true } });
+  revalidatePath("/essensplan");
+  revalidatePath("/einkaufsliste");
+}
+
+// Bequemlichkeits-Variante für die ganze Woche auf einmal ("oder eben die ganze Woche",
+// Florians Feedback) — ruft dieselbe Logik für jeden noch nicht gesperrten Tag mit
+// geplantem Gericht auf (bereits gesperrte Tage wurden schon hinzugefügt, sonst würden
+// ihre Zutaten doppelt gezählt).
+export async function fuegeZutatenDerWocheHinzu(wocheStartIso: string) {
+  await requireParent();
+  const wocheStart = new Date(wocheStartIso);
+  const eintraege = await prisma.essensplanEintrag.findMany({ where: { wocheStart, gelockt: false } });
+  for (const e of eintraege) {
+    await fuegeZutatenDesTagsHinzu(e.id);
+  }
 }
 
 // Ad-hoc-Ergänzung unabhängig vom Essensplan-Tag (Fix-Batch 22) — z.B. ein bereits
@@ -266,53 +310,21 @@ export async function uebernehmeZusaetzlicheZutaten(rezeptId: string, zeilen: { 
   revalidatePath("/einkaufsliste");
 }
 
-// Schritt 2: übernimmt nur die vom Elternteil bestätigten Zeilen ("Brauche ich") und
-// merkt sich die Herkunft je Artikel/Tag für den späteren Entfernen/Behalten-Dialog.
-export async function uebernehmeAusgewaehlteZutaten(eintragId: string, zeilen: { name: string; menge?: string }[]) {
-  await requireParent();
-  for (const zeile of zeilen) {
-    const bestehender = await findeOffenenArtikel(zeile.name);
-    let artikelId: string;
-    if (bestehender) {
-      await prisma.einkaufsArtikel.update({
-        where: { id: bestehender.id },
-        data: { menge: await mergeMenge(bestehender.menge, zeile.menge) },
-      });
-      artikelId = bestehender.id;
-    } else {
-      const kategorieId = await autoKategorieId(zeile.name);
-      const neu = await prisma.einkaufsArtikel.create({
-        data: { name: zeile.name, menge: zeile.menge, kategorieId: kategorieId || null, quelle: "essensplan" },
-      });
-      artikelId = neu.id;
-    }
-    await prisma.essensplanHerkunft.upsert({
-      where: { artikelId_eintragId: { artikelId, eintragId } },
-      update: { menge: zeile.menge },
-      create: { artikelId, eintragId, menge: zeile.menge },
-    });
-  }
-  revalidatePath("/essensplan");
-  revalidatePath("/einkaufsliste");
-}
-
-// Prüft vor einer Änderung eines gelockten Tages, ob dafür schon Zutaten auf die
-// Einkaufsliste übernommen wurden — nur dann muss überhaupt gefragt werden.
+// Prüft vor einer Änderung/Entsperrung eines gesperrten Tages, ob dafür schon Zutaten auf
+// die Einkaufsliste übertragen wurden — nur dann muss überhaupt gefragt werden.
 export async function pruefeGelocktenTagWechsel(eintragId: string) {
   await requireParent();
   const herkuenfte = await prisma.essensplanHerkunft.findMany({ where: { eintragId }, include: { artikel: true } });
   return herkuenfte.map((h) => ({ artikelId: h.artikelId, artikelName: h.artikel.name, menge: h.menge }));
 }
 
-// Ändert das Gericht eines gelockten Tages trotzdem — je betroffenem Mengen-Anteil
-// gezielt "Entfernen" (aus der Einkaufsliste herausrechnen) oder "Behalten"
-// (Einkaufsliste bleibt wie sie ist, nur die Herkunfts-Verknüpfung wird gelöst).
-export async function setTagTrotzSperre(
-  eintragId: string,
-  neuesRezeptId: string,
-  entscheidungen: { artikelId: string; aktion: "entfernen" | "behalten" }[]
-) {
-  await requireParent();
+// Wendet die Entfernen/Behalten-Entscheidungen für einen Tag an — geteilt zwischen
+// "Gericht trotz Sperre ändern" und "Tag entsperren" (Fix-Batch 24), da beide dieselbe
+// Frage stellen: "was passiert mit den schon übernommenen Zutaten dieses Tages?".
+// "entfernen" rechnet den Mengen-Anteil dieses Tages aus dem Artikel heraus (bzw. löscht
+// ihn ganz, wenn dieser Tag der einzige Beitrag war); "behalten" löst nur die
+// Herkunfts-Verknüpfung, der Artikel/die Menge bleibt unangetastet stehen.
+async function wendeEntscheidungenAn(eintragId: string, entscheidungen: { artikelId: string; aktion: "entfernen" | "behalten" }[]) {
   for (const e of entscheidungen) {
     if (e.aktion === "entfernen") {
       const uebrige = await prisma.essensplanHerkunft.findMany({
@@ -333,7 +345,29 @@ export async function setTagTrotzSperre(
     }
     await prisma.essensplanHerkunft.deleteMany({ where: { artikelId: e.artikelId, eintragId } });
   }
+}
+
+// Ändert das Gericht eines gesperrten Tages trotzdem — bleibt danach weiterhin gesperrt,
+// da für das neue Gericht wieder "Zutaten hinzufügen" gebraucht wird.
+export async function setTagTrotzSperre(
+  eintragId: string,
+  neuesRezeptId: string,
+  entscheidungen: { artikelId: string; aktion: "entfernen" | "behalten" }[]
+) {
+  await requireParent();
+  await wendeEntscheidungenAn(eintragId, entscheidungen);
   await prisma.essensplanEintrag.update({ where: { id: eintragId }, data: { rezeptId: neuesRezeptId } });
+  revalidatePath("/essensplan");
+  revalidatePath("/einkaufsliste");
+}
+
+// Entsperrt einen Tag — wie beim Gericht-Ändern muss erst geklärt werden, was mit den
+// schon übernommenen Zutaten passiert (Fix-Batch 24, Florians Wunsch: Warnung mit
+// Entfernen/Behalten-Auswahl statt stillschweigendem Entsperren).
+export async function entsperren(eintragId: string, entscheidungen: { artikelId: string; aktion: "entfernen" | "behalten" }[]) {
+  await requireParent();
+  await wendeEntscheidungenAn(eintragId, entscheidungen);
+  await prisma.essensplanEintrag.update({ where: { id: eintragId }, data: { gelockt: false } });
   revalidatePath("/essensplan");
   revalidatePath("/einkaufsliste");
 }
