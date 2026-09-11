@@ -100,6 +100,9 @@ export default function KalenderClient({
   const erkannteKategorie = useMemo(() => erkenneTerminKategorie(titel), [titel]);
 
   function passtFilter(t: Termin): boolean {
+    // Geburtstage gehören der ganzen Familie, keiner einzelnen Person — sollen daher nie
+    // durch den Personen-Filter ausgeblendet werden (Florians Ticket "Lösung für Geburtstage").
+    if (t.typ === "geburtstag") return true;
     if (filter.length === 0) return true;
     return t.personen.some((p) => filter.includes(p.id));
   }
@@ -484,9 +487,9 @@ export default function KalenderClient({
                 style={{
                   aspectRatio: "1",
                   minWidth: 0,
-                  border: zelle.iso === ausgewaehlterTag ? "2px solid var(--accent)" : zelle.heute ? "2px solid var(--accent)" : "1px solid rgba(128,128,128,0.25)",
+                  border: zelle.iso === ausgewaehlterTag ? "2px solid var(--accent)" : zelle.heute ? "2px solid var(--success)" : "1px solid rgba(128,128,128,0.25)",
                   borderRadius: 8,
-                  background: "transparent",
+                  background: zelle.heute && zelle.iso !== ausgewaehlterTag ? "rgba(107,143,90,0.12)" : "transparent",
                   color: "inherit",
                   opacity: zelle.imMonat ? 1 : 0.35,
                   display: "flex",

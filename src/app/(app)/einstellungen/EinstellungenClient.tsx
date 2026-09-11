@@ -417,8 +417,9 @@ export default function EinstellungenClient({
           Einreichen
         </button>
         {meineTickets.length > 0 && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 6, borderTop: "1px solid var(--border)", paddingTop: 8, marginTop: 4 }}>
-            <strong style={{ fontSize: 13 }}>Meine gemeldeten Tickets</strong>
+          <details style={{ borderTop: "1px solid var(--border)", paddingTop: 8, marginTop: 4 }}>
+            <summary style={{ cursor: "pointer", fontSize: 13, fontWeight: 600 }}>Meine gemeldeten Tickets ({meineTickets.length})</summary>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 6 }}>
             {meineTickets.map((t) => (
               <details key={t.id} style={{ fontSize: 13 }}>
                 <summary style={{ cursor: "pointer", display: "flex", justifyContent: "space-between", gap: 8, listStyle: "none" }}>
@@ -445,31 +446,38 @@ export default function EinstellungenClient({
                 </div>
               </details>
             ))}
-          </div>
+            </div>
+          </details>
         )}
       </div>
     </details>
   );
 
   const kind = kinder.find((k) => k.id === ausgewaehltesKind) ?? kinder[0];
-  const eigenePerson = personen.find((p) => p.id === eigeneId);
 
-  // Geburtstag (Fix-Batch 30) — jede Person (auch Kinder ohne Eltern-Rechte) trägt hier
-  // ihren eigenen Geburtstag ein; erscheint danach automatisch im Kalender ALLER.
-  const geburtstagSektion = eigenePerson && (
+  // Geburtstage (Fix-Batch 35 Nachtrag, korrigiertes Ticket "Lösung für Geburtstage") — nur
+  // noch Eltern pflegen die Geburtstage ALLER Personen zentral hier; nicht mehr selbst durch
+  // jede Person einstellbar. Erscheint danach jedes Jahr automatisch im Kalender der ganzen
+  // Familie, ohne einer einzelnen Person zugeordnet zu sein.
+  const geburtstagSektion = istEltern && (
     <details>
-      <summary style={{ cursor: "pointer", fontWeight: 600 }}>🎂 Mein Geburtstag</summary>
+      <summary style={{ cursor: "pointer", fontWeight: 600 }}>🎂 Geburtstage verwalten</summary>
       <div className="card" style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
-        <input
-          type="date"
-          value={geburtstagEntwuerfe[eigenePerson.id] ?? eigenePerson.geburtsdatum?.slice(0, 10) ?? ""}
-          onChange={(e) => setGeburtstagEntwuerfe((prev) => ({ ...prev, [eigenePerson.id]: e.target.value }))}
-          onBlur={(e) => {
-            if (e.target.value) startTransition(() => setGeburtsdatum(eigenePerson.id, e.target.value));
-          }}
-        />
+        {personen.map((p) => (
+          <label key={p.id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ width: 90, fontSize: 14 }}>{p.name}</span>
+            <input
+              type="date"
+              value={geburtstagEntwuerfe[p.id] ?? p.geburtsdatum?.slice(0, 10) ?? ""}
+              onChange={(e) => setGeburtstagEntwuerfe((prev) => ({ ...prev, [p.id]: e.target.value }))}
+              onBlur={(e) => {
+                if (e.target.value) startTransition(() => setGeburtsdatum(p.id, e.target.value));
+              }}
+            />
+          </label>
+        ))}
         <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>
-          Erscheint danach jedes Jahr automatisch im Kalender der ganzen Familie.
+          Erscheint danach jedes Jahr automatisch im Kalender der ganzen Familie — nicht einer einzelnen Person zugeordnet.
         </p>
       </div>
     </details>

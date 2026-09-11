@@ -111,6 +111,11 @@ export async function listAufgabenMitFaelligkeit() {
 // Geburtstage aller aktiven Familienmitglieder (Fix-Batch 30) — erscheinen bei JEDEM im
 // Kalender, nicht nur bei der Person selbst ("die ganze Familie soll informiert sein").
 // Pragmatischer Horizont statt echter Ewigkeits-Wiederholung (analog Termin-/Aufgaben-Serien).
+// Geburtstage gehören der ganzen Familie, nicht einer einzelnen Person (Florians Ticket
+// "Lösung für Geburtstage") — deshalb bewusst eine neutrale, feste "Geburtstags-Farbe" statt
+// der individuellen Personen-Farbe, damit es nicht wie ein Termin EINER Person aussieht.
+const GEBURTSTAG_FARBE = "#c99a3f";
+
 export async function listGeburtstageFuerKalender() {
   await requirePerson();
   const personen = await prisma.person.findMany({ where: { aktiv: true, geburtsdatum: { not: null } } });
@@ -126,7 +131,7 @@ export async function listGeburtstageFuerKalender() {
         titel: `🎂 ${p.name} hat Geburtstag`,
         start: new Date(Date.UTC(jahr, monat, tag)),
         personName: p.name,
-        personFarbe: p.farbe,
+        personFarbe: GEBURTSTAG_FARBE,
       });
     }
   }

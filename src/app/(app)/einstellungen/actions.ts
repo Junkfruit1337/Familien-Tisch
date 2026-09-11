@@ -55,9 +55,11 @@ export async function setPortionsGewicht(personId: string, portionsGewicht: numb
 
 // Geburtstag (Fix-Batch 30) — jede Person trägt ihr eigenes Geburtsdatum ein (auch Kinder
 // ohne Eltern-Rechte), damit es automatisch jedes Jahr im Kalender der ganzen Familie erscheint.
+// Fix-Batch 35 Nachtrag (Florians korrigiertes Ticket "Lösung für Geburtstage"): NICHT mehr
+// selbst durch die Person einstellbar — nur noch Eltern, und für jede Person (nicht nur sich
+// selbst). Grund: Geburtstage sollen zentral von den Erwachsenen gepflegt werden.
 export async function setGeburtsdatum(personId: string, datum: string) {
-  const person = await requirePerson();
-  if (person.rolle !== "ELTERN" && person.id !== personId) throw new Error("Nicht erlaubt.");
+  await requireParent();
   await prisma.person.update({ where: { id: personId }, data: { geburtsdatum: new Date(datum) } });
   revalidatePath("/einstellungen");
   revalidatePath("/kalender");
