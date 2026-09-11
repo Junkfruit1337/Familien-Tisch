@@ -252,12 +252,32 @@ export default function EinstellungenClient({
         </details>
       )}
 
-      <details>
+      <details open>
         <summary style={{ cursor: "pointer", fontWeight: 600 }}>🧹 Dienstplan: Dienstkatalog</summary>
         <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 8 }}>
           <p style={{ fontSize: 12, color: "var(--text-muted)", margin: 0 }}>
             Änderungen hier wirken dauerhaft ab sofort — auch rückwirkend für die aktuelle Woche, nicht nur für zukünftige.
           </p>
+
+          <div className="card" style={{ display: "flex", flexDirection: "column", gap: 6, background: "var(--accent)", color: "var(--accent-contrast)" }}>
+            <strong>Einmalig: Vorlage aus Florians Dokument laden</strong>
+            <p style={{ fontSize: 13, margin: 0 }}>
+              Überträgt die echten Dienst-Bezeichnungen/-Regeltexte, Tagesroutinen und den Körperpflegeplan aus dem Schichtsystem-Dokument in
+              diese Datenbank. Überschreibt eventuell schon vorgenommene eigene Änderungen an diesen Bereichen.
+            </p>
+            <button
+              className="btn-secondary"
+              style={{ alignSelf: "flex-start", background: "var(--surface)", color: "var(--text)" }}
+              onClick={() => {
+                if (confirm("Dienstkatalog, Tagesroutinen und Körperpflegeplan wirklich mit der Vorlage überschreiben?")) {
+                  startTransition(() => installiereSchichtsystemVorlage());
+                }
+              }}
+            >
+              Jetzt laden
+            </button>
+          </div>
+
           {[1, 2, 3].map((schicht) => {
             const diensteDerSchicht = dienstkatalog.filter((d) => d.schichtNummer === schicht);
             return (
@@ -366,26 +386,6 @@ export default function EinstellungenClient({
               </div>
             );
           })}
-          <details>
-            <summary style={{ cursor: "pointer", color: "var(--text-muted)", fontSize: 13 }}>Vorlage aus Florians Dokument laden</summary>
-            <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
-              <p style={{ fontSize: 12, color: "var(--text-muted)", margin: 0 }}>
-                Überschreibt die Dienst-Bezeichnungen/-Regeltexte, die Tagesroutinen und den Körperpflegeplan mit dem hinterlegten Originaltext.
-                Bereits vorgenommene eigene Änderungen an diesen Bereichen gehen dabei verloren.
-              </p>
-              <button
-                className="btn-secondary"
-                style={{ alignSelf: "flex-start" }}
-                onClick={() => {
-                  if (confirm("Dienstkatalog, Tagesroutinen und Körperpflegeplan wirklich mit der Vorlage überschreiben?")) {
-                    startTransition(() => installiereSchichtsystemVorlage());
-                  }
-                }}
-              >
-                Jetzt laden
-              </button>
-            </div>
-          </details>
         </div>
       </details>
     </div>
