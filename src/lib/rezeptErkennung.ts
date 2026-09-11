@@ -1,13 +1,13 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 
-export type ErkanntesRezept = { name: string; zutaten: string; zubereitung: string };
+export type ErkanntesRezept = { name: string; zutaten: string; zubereitung: string; portionen: number | null };
 
 const PROMPT =
   "Auf diesem Foto ist ein Rezept (aus einem Kochbuch, einer Zeitschrift oder handschriftlich notiert). " +
-  "Lies den Namen des Gerichts, die Zutatenliste und die Zubereitung heraus.\n" +
+  "Lies den Namen des Gerichts, die Zutatenliste, die Zubereitung sowie — falls angegeben — für wie viele Portionen/Personen das Rezept geschrieben ist heraus (z. B. \"Für 1 Portion\", \"für 4 Personen\").\n" +
   "Antworte AUSSCHLIESSLICH mit einem JSON-Objekt, ohne Markdown-Codeblock, ohne weiteren Text, in genau diesem Format:\n" +
-  '{"name": "Gerichtname", "zutaten": "eine Zutat pro Zeile, Format \'Menge Einheit Name\', z.B. 500 g Spaghetti", "zubereitung": "Zubereitungsschritte als Fließtext oder nummerierte Liste"}\n' +
+  '{"name": "Gerichtname", "zutaten": "eine Zutat pro Zeile, Format \'Menge Einheit Name\', z.B. 500 g Spaghetti", "zubereitung": "Zubereitungsschritte als Fließtext oder nummerierte Liste", "portionen": Zahl oder null, falls keine Portionsangabe erkennbar ist}\n' +
   "Wenn du eine Zutatenmenge nicht sicher lesen kannst, schätze plausibel oder lass die Mengenangabe weg und schreibe nur den Namen der Zutat. " +
   'Wenn keine Zubereitung erkennbar ist, lass das Feld als leeren String ("").';
 
@@ -61,5 +61,6 @@ export async function erkenneRezeptAusBild(fotoDataUrl: string): Promise<Erkannt
     name: typeof d.name === "string" ? d.name : "",
     zutaten: typeof d.zutaten === "string" ? d.zutaten : "",
     zubereitung: typeof d.zubereitung === "string" ? d.zubereitung : "",
+    portionen: typeof d.portionen === "number" && d.portionen > 0 ? Math.round(d.portionen) : null,
   };
 }

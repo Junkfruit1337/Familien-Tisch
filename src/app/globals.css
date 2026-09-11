@@ -146,7 +146,7 @@ details + details {
   color: #fff;
 }
 
-input,
+input:not([type="checkbox"]):not([type="radio"]),
 select,
 textarea {
   background: var(--surface);
@@ -156,6 +156,18 @@ textarea {
   color: var(--text);
   font-size: 15px;
   width: 100%;
+}
+
+/* Checkboxen/Radios dürfen NICHT die width:100%-Regel oben erben — sonst werden sie in
+   jedem Flex-Label (z. B. Zutaten-Listen) auf die volle Zeilenbreite gestreckt und drängen
+   den Text daneben in eine schmale, wild umbrechende Spalte (siehe Screenshot-Bugreport
+   Essensplan-Zutatenliste, Fix-Batch 22). */
+input[type="checkbox"],
+input[type="radio"] {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  accent-color: var(--accent);
 }
 
 .pill {

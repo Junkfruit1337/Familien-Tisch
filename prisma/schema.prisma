@@ -387,6 +387,12 @@ model Rezept {
   name      String
   zutaten   String // eine Zutat pro Zeile, "Menge Einheit Name"
   zubereitung String?
+  // Für wie viele Portionen die Mengenangaben in "zutaten" geschrieben sind (Kochbücher/
+  // Internet-Rezepte geben oft z.B. "für 1 Portion" oder "für 4 Personen" an, nicht für
+  // die ganze Familie) — Grundlage für die automatische Skalierung auf die Esser-Anzahl
+  // (Fix-Batch 22). Default 6 entspricht dem bisherigen impliziten Verhalten (alle Rezepte
+  // gelten als für die ganze 6-köpfige Familie geschrieben).
+  portionenBasis Int @default(6)
   createdAt DateTime @default(now())
 
   planEintraege  EssensplanEintrag[]

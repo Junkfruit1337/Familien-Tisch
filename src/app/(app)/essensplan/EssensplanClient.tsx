@@ -17,7 +17,9 @@ import {
   pruefeGelocktenTagWechsel,
   setTagTrotzSperre,
   erkenneRezeptAusFoto,
+  updateRezeptPortionenBasis,
 } from "./actions";
+import FaktorLeiste from "@/components/FaktorLeiste";
 
 // Für die Foto-Erkennung etwas größer/hochwertiger als bei Notenfotos (Batch 3),
 // damit auch kleinere Kochbuch-/Handschrift-Texte für die Bilderkennung lesbar bleiben.
@@ -55,7 +57,7 @@ type TagEintrag = {
 };
 type Tag = { tag: string; vergangen: boolean; eintrag: TagEintrag | null };
 type Plan = { wocheStart: string; wocheEnde: string; tage: Tag[] };
-type RezeptDetail = { id: string; name: string; zutaten: string; zubereitung: string | null };
+type RezeptDetail = { id: string; name: string; zutaten: string; zubereitung: string | null; portionenBasis: number };
 type RezeptKurz = { id: string; name: string };
 type Familienmitglied = { id: string; name: string; farbe: string };
 type Zutat = { name: string; menge?: string };
@@ -87,6 +89,8 @@ export default function EssensplanClient({
   const [pruefTagId, setPruefTagId] = useState<string | null>(null);
   const [pruefZeilen, setPruefZeilen] = useState<Zutat[]>([]);
   const [pruefAusgewaehlt, setPruefAusgewaehlt] = useState<boolean[]>([]);
+  const [pruefFaktor, setPruefFaktor] = useState(1);
+  const [portionenEntwuerfe, setPortionenEntwuerfe] = useState<Record<string, string>>({});
 
   const [sperrDialog, setSperrDialog] = useState<{ eintragId: string; neuesRezeptId: string; herkuenfte: Herkunft[] } | null>(null);
   const [sperrEntscheidungen, setSperrEntscheidungen] = useState<Record<string, "entfernen" | "behalten">>({});
@@ -94,6 +98,7 @@ export default function EssensplanClient({
   const [neuName, setNeuName] = useState("");
   const [neuZutaten, setNeuZutaten] = useState("");
   const [neuZubereitung, setNeuZubereitung] = useState("");
+  const [neuPortionenBasis, setNeuPortionenBasis] = useState("6");
   const [erkennungLaeuft, setErkennungLaeuft] = useState(false);
 
   async function ladeWoche(neuerOffset: number) {
@@ -114,8 +119,17 @@ export default function EssensplanClient({
   }
 
   async function starteZutatenPruefung(eintragId: string) {
-    const zeilen = await pruefeZutaten(eintragId);
+    setPruefFaktor(1);
+    const zeilen = await pruefeZutaten(eintragId, 1);
     setPruefTagId(eintragId);
+    setPruefZeilen(zeilen);
+    setPruefAusgewaehlt(zeilen.map(() => true));
+  }
+
+  async function aendereZutatenFaktor(faktor: number) {
+    if (!pruefTagId) return;
+    setPruefFaktor(faktor);
+    const zeilen = await pruefeZutaten(pruefTagId, faktor);
     setPruefZeilen(zeilen);
     setPruefAusgewaehlt(zeilen.map(() => true));
   }
@@ -157,39 +171,35 @@ export default function EssensplanClient({
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {plan.tage.map((t) => (
           <div key={t.tag} className="card" style={{ display: "flex", flexDirection: "column", gap: 8, opacity: t.vergangen ? 0.6 : 1 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 13, color: "var(--text-muted)" }}>
-                  {new Date(t.tag).toLocaleDateString("de-DE", { weekday: "long", day: "2-digit", month: "2-digit" })}
-                  {t.vergangen && " · ✓ erledigt"}
-                </div>
-                {istEltern ? (
-                  <select value={t.eintrag?.rezeptId ?? ""} onChange={(e) => e.target.value && versucheTagAendern(t, e.target.value)}>
-                    <option value="">– kein Gericht –</option>
-                    {vorschlaege.map((r) => (
-                      <option key={r.id} value={r.id}>
-                        {r.name}
-                      </option>
-                    ))}
-                    {t.eintrag && !vorschlaege.some((r) => r.id === t.eintrag!.rezeptId) && (
-                      <option value={t.eintrag.rezeptId}>{t.eintrag.rezeptName}</option>
-                    )}
-                  </select>
-                ) : (
-                  <div>{t.eintrag?.rezeptName ?? "– kein Gericht –"}</div>
-                )}
-              </div>
-              {istEltern && t.eintrag && (
-                <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-                  <button className="btn-secondary" style={{ fontSize: 12 }} onClick={() => startTransition(() => toggleLock(t.eintrag!.id).then(() => ladeWoche(offset)))}>
-                    {t.eintrag.gelockt ? "🔒" : "🔓"}
-                  </button>
-                  <button className="btn-secondary" style={{ fontSize: 12 }} onClick={() => starteZutatenPruefung(t.eintrag!.id)}>
-                    Zutaten prüfen
-                  </button>
-                </div>
-              )}
+            <div style={{ fontSize: 13, color: "var(--text-muted)" }}>
+              {new Date(t.tag).toLocaleDateString("de-DE", { weekday: "long", day: "2-digit", month: "2-digit" })}
+              {t.vergangen && " · ✓ erledigt"}
             </div>
+            {istEltern ? (
+              <select value={t.eintrag?.rezeptId ?? ""} onChange={(e) => e.target.value && versucheTagAendern(t, e.target.value)}>
+                <option value="">– kein Gericht –</option>
+                {vorschlaege.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.name}
+                  </option>
+                ))}
+                {t.eintrag && !vorschlaege.some((r) => r.id === t.eintrag!.rezeptId) && (
+                  <option value={t.eintrag.rezeptId}>{t.eintrag.rezeptName}</option>
+                )}
+              </select>
+            ) : (
+              <div>{t.eintrag?.rezeptName ?? "– kein Gericht –"}</div>
+            )}
+            {istEltern && t.eintrag && (
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                <button className="btn-secondary" style={{ fontSize: 12 }} onClick={() => startTransition(() => toggleLock(t.eintrag!.id).then(() => ladeWoche(offset)))}>
+                  {t.eintrag.gelockt ? "🔒 Gesperrt" : "🔓 Entsperrt"}
+                </button>
+                <button className="btn-secondary" style={{ fontSize: 12 }} onClick={() => starteZutatenPruefung(t.eintrag!.id)}>
+                  Zutaten prüfen
+                </button>
+              </div>
+            )}
 
             {istEltern && t.eintrag && (
               <div>
@@ -221,6 +231,7 @@ export default function EssensplanClient({
             {pruefTagId === t.eintrag?.id && (
               <div style={{ borderTop: "1px solid var(--border)", paddingTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
                 <strong style={{ fontSize: 13 }}>Zutaten prüfen — schon zu Hause?</strong>
+                <FaktorLeiste faktor={pruefFaktor} onChange={aendereZutatenFaktor} />
                 {pruefZeilen.map((z, i) => (
                   <label key={i} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14 }}>
                     <input
@@ -363,6 +374,37 @@ export default function EssensplanClient({
                   </div>
                 )}
                 {istEltern && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, flexWrap: "wrap" }}>
+                    <span style={{ color: "var(--text-muted)" }}>Rezept ist geschrieben für</span>
+                    <input
+                      type="number"
+                      min={1}
+                      value={portionenEntwuerfe[r.id] ?? String(r.portionenBasis)}
+                      onChange={(e) => setPortionenEntwuerfe((prev) => ({ ...prev, [r.id]: e.target.value }))}
+                      style={{ width: 60 }}
+                    />
+                    <span style={{ color: "var(--text-muted)" }}>Portion(en)</span>
+                    <button
+                      className="btn-secondary"
+                      style={{ fontSize: 12, padding: "3px 8px" }}
+                      onClick={() => {
+                        const wert = parseInt(portionenEntwuerfe[r.id] ?? String(r.portionenBasis), 10);
+                        if (!wert || wert < 1) return;
+                        startTransition(async () => {
+                          await updateRezeptPortionenBasis(r.id, wert);
+                          setPortionenEntwuerfe((prev) => {
+                            const rest = { ...prev };
+                            delete rest[r.id];
+                            return rest;
+                          });
+                        });
+                      }}
+                    >
+                      Speichern
+                    </button>
+                  </div>
+                )}
+                {istEltern && (
                   <button
                     className="btn-secondary"
                     style={{ fontSize: 12, alignSelf: "flex-start" }}
@@ -411,6 +453,7 @@ export default function EssensplanClient({
                     setNeuName(ergebnis.rezept.name);
                     setNeuZutaten(ergebnis.rezept.zutaten);
                     setNeuZubereitung(ergebnis.rezept.zubereitung);
+                    if (ergebnis.rezept.portionen) setNeuPortionenBasis(String(ergebnis.rezept.portionen));
                   } catch (err: any) {
                     alert(err.message ?? "Foto konnte nicht erkannt werden.");
                   } finally {
@@ -431,16 +474,33 @@ export default function EssensplanClient({
               onChange={(e) => setNeuZutaten(e.target.value)}
             />
             <textarea placeholder="Zubereitung (optional)" rows={4} value={neuZubereitung} onChange={(e) => setNeuZubereitung(e.target.value)} />
+            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
+              Rezept ist geschrieben für
+              <input
+                type="number"
+                min={1}
+                value={neuPortionenBasis}
+                onChange={(e) => setNeuPortionenBasis(e.target.value)}
+                style={{ width: 60 }}
+              />
+              Portion(en)
+            </label>
+            <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>
+              Steht z. B. im Rezept als „Für 1 Portion" oder „für 4 Personen" — Grundlage für die
+              automatische Mengen-Anpassung, wenn ihr als Familie alle 6 esst.
+            </p>
             <button
               className="btn"
               disabled={pending || erkennungLaeuft}
               onClick={() =>
                 startTransition(async () => {
                   if (!neuName) return;
-                  await addRezept(neuName, neuZutaten, neuZubereitung || undefined);
+                  const portionenBasis = parseInt(neuPortionenBasis, 10) || 6;
+                  await addRezept(neuName, neuZutaten, neuZubereitung || undefined, portionenBasis);
                   setNeuName("");
                   setNeuZutaten("");
                   setNeuZubereitung("");
+                  setNeuPortionenBasis("6");
                 })
               }
             >

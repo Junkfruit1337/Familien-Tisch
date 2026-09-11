@@ -14,14 +14,19 @@ import {
   verwirfVorschlag,
   setzeVorschlaegeZurueck,
 } from "./actions";
+import { pruefeZutaten, uebernehmeAusgewaehlteZutaten, pruefeZutatenFuerRezept, uebernehmeZusaetzlicheZutaten } from "../essensplan/actions";
 import { erkenneKategorie } from "@/lib/kategorisierung";
 import HistorieVerlauf from "@/components/HistorieVerlauf";
+import FaktorLeiste from "@/components/FaktorLeiste";
 
 type Artikel = { id: string; name: string; menge: string | null; erledigt: boolean; kategorieId: string | null; kategorieName: string };
 type Wunsch = { id: string; artikelName: string; menge: string | null; status: string; kindName: string; entschiedenAm: string | null };
 type Kategorie = { id: string; name: string };
 type Quelle = { id: string; beschreibung: string; menge: string | null; zeitpunkt: string };
 type Vorschlag = { name: string; menge: string | null };
+type WochenTag = { eintragId: string; tag: string; rezeptName: string };
+type RezeptKurz = { id: string; name: string };
+type Zutat = { name: string; menge?: string };
 
 function ArtikelHerkunft({ artikelId }: { artikelId: string }) {
   const [quellen, setQuellen] = useState<Quelle[] | null>(null);
@@ -56,12 +61,16 @@ export default function EinkaufslisteClient({
   wuensche,
   kategorien,
   vorschlaege,
+  wochenTage,
+  rezepte,
 }: {
   istEltern: boolean;
   artikel: Artikel[];
   wuensche: Wunsch[];
   kategorien: Kategorie[];
   vorschlaege: Vorschlag[];
+  wochenTage: WochenTag[];
+  rezepte: RezeptKurz[];
 }) {
   const [pending, startTransition] = useTransition();
   const [name, setName] = useState("");
@@ -71,6 +80,51 @@ export default function EinkaufslisteClient({
   const [bearbeiteName, setBearbeiteName] = useState("");
   const [bearbeiteMenge, setBearbeiteMenge] = useState("");
   const [wunschKategorie, setWunschKategorie] = useState<Record<string, string>>({});
+
+  const [pruefTagId, setPruefTagId] = useState<string | null>(null);
+  const [pruefZeilen, setPruefZeilen] = useState<Zutat[]>([]);
+  const [pruefAusgewaehlt, setPruefAusgewaehlt] = useState<boolean[]>([]);
+  const [pruefFaktor, setPruefFaktor] = useState(1);
+  const [erledigteTage, setErledigteTage] = useState<string[]>([]);
+
+  const [extraRezeptId, setExtraRezeptId] = useState("");
+  const [extraFaktor, setExtraFaktor] = useState(1);
+  const [extraZeilen, setExtraZeilen] = useState<Zutat[]>([]);
+  const [extraAusgewaehlt, setExtraAusgewaehlt] = useState<boolean[]>([]);
+  const [extraGeprueft, setExtraGeprueft] = useState(false);
+
+  async function starteWochenPruefung(eintragId: string) {
+    setPruefFaktor(1);
+    const zeilen = await pruefeZutaten(eintragId, 1);
+    setPruefTagId(eintragId);
+    setPruefZeilen(zeilen);
+    setPruefAusgewaehlt(zeilen.map(() => true));
+  }
+
+  async function aendereWochenFaktor(faktor: number) {
+    if (!pruefTagId) return;
+    setPruefFaktor(faktor);
+    const zeilen = await pruefeZutaten(pruefTagId, faktor);
+    setPruefZeilen(zeilen);
+    setPruefAusgewaehlt(zeilen.map(() => true));
+  }
+
+  async function aendereExtraFaktor(faktor: number) {
+    setExtraFaktor(faktor);
+    if (extraGeprueft && extraRezeptId) {
+      const zeilen = await pruefeZutatenFuerRezept(extraRezeptId, faktor);
+      setExtraZeilen(zeilen);
+      setExtraAusgewaehlt(zeilen.map(() => true));
+    }
+  }
+
+  async function starteExtraPruefung() {
+    if (!extraRezeptId) return;
+    const zeilen = await pruefeZutatenFuerRezept(extraRezeptId, extraFaktor);
+    setExtraZeilen(zeilen);
+    setExtraAusgewaehlt(zeilen.map(() => true));
+    setExtraGeprueft(true);
+  }
 
   const kategorieNachName = useMemo(() => {
     const m: Record<string, string> = {};
@@ -175,6 +229,141 @@ export default function EinkaufslisteClient({
             Wunsch einreichen
           </button>
         </div>
+      )}
+
+      {istEltern && wochenTage.filter((t) => !erledigteTage.includes(t.eintragId)).length > 0 && (
+        <details open>
+          <summary style={{ cursor: "pointer", color: "var(--text-muted)" }}>🍽️ Zutaten aus dem Essensplan (diese Woche)</summary>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
+            <p style={{ fontSize: 12, color: "var(--text-muted)", margin: 0 }}>
+              Geplante Gerichte dieser Woche einzeln prüfen und auswählen, was wirklich noch eingekauft werden muss.
+            </p>
+            {wochenTage
+              .filter((t) => !erledigteTage.includes(t.eintragId))
+              .map((t) => (
+                <div key={t.eintragId} className="card" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                    <span style={{ fontSize: 14 }}>
+                      <strong>{new Date(t.tag).toLocaleDateString("de-DE", { weekday: "long", day: "2-digit", month: "2-digit" })}</strong>
+                      {" · "}
+                      {t.rezeptName}
+                    </span>
+                    {pruefTagId !== t.eintragId && (
+                      <button className="btn-secondary" style={{ fontSize: 12 }} onClick={() => starteWochenPruefung(t.eintragId)}>
+                        Zutaten prüfen
+                      </button>
+                    )}
+                  </div>
+                  {pruefTagId === t.eintragId && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                      <FaktorLeiste faktor={pruefFaktor} onChange={aendereWochenFaktor} />
+                      {pruefZeilen.map((z, i) => (
+                        <label key={i} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14 }}>
+                          <input
+                            type="checkbox"
+                            checked={pruefAusgewaehlt[i]}
+                            onChange={() => setPruefAusgewaehlt((prev) => prev.map((v, idx) => (idx === i ? !v : v)))}
+                          />
+                          <span style={{ textDecoration: pruefAusgewaehlt[i] ? "none" : "line-through", color: pruefAusgewaehlt[i] ? undefined : "var(--text-muted)" }}>
+                            {z.menge ? `${z.menge} ${z.name}` : z.name}
+                          </span>
+                        </label>
+                      ))}
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <button
+                          className="btn"
+                          disabled={pending}
+                          onClick={() =>
+                            startTransition(async () => {
+                              const ausgewaehlt = pruefZeilen.filter((_, i) => pruefAusgewaehlt[i]);
+                              await uebernehmeAusgewaehlteZutaten(t.eintragId, ausgewaehlt);
+                              setErledigteTage((prev) => [...prev, t.eintragId]);
+                              setPruefTagId(null);
+                            })
+                          }
+                        >
+                          Übernehmen ({pruefAusgewaehlt.filter(Boolean).length})
+                        </button>
+                        <button className="btn-secondary" onClick={() => setPruefTagId(null)}>
+                          Abbrechen
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+          </div>
+        </details>
+      )}
+
+      {istEltern && rezepte.length > 0 && (
+        <details>
+          <summary style={{ cursor: "pointer", color: "var(--text-muted)" }}>➕ Extra-Gericht zur Einkaufsliste hinzufügen</summary>
+          <div className="card" style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
+            <p style={{ fontSize: 12, color: "var(--text-muted)", margin: 0 }}>
+              Für Anlässe außerhalb des Essensplans — z. B. ein Dip fürs Grillen zusätzlich einkaufen.
+            </p>
+            <select
+              value={extraRezeptId}
+              onChange={(e) => {
+                setExtraRezeptId(e.target.value);
+                setExtraGeprueft(false);
+                setExtraZeilen([]);
+              }}
+            >
+              <option value="">– Rezept wählen –</option>
+              {rezepte.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.name}
+                </option>
+              ))}
+            </select>
+            <FaktorLeiste faktor={extraFaktor} onChange={aendereExtraFaktor} />
+            {!extraGeprueft && (
+              <button className="btn-secondary" style={{ alignSelf: "flex-start" }} disabled={!extraRezeptId} onClick={() => startTransition(starteExtraPruefung)}>
+                Zutaten anzeigen
+              </button>
+            )}
+            {extraGeprueft && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {extraZeilen.map((z, i) => (
+                  <label key={i} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14 }}>
+                    <input
+                      type="checkbox"
+                      checked={extraAusgewaehlt[i]}
+                      onChange={() => setExtraAusgewaehlt((prev) => prev.map((v, idx) => (idx === i ? !v : v)))}
+                    />
+                    <span style={{ textDecoration: extraAusgewaehlt[i] ? "none" : "line-through", color: extraAusgewaehlt[i] ? undefined : "var(--text-muted)" }}>
+                      {z.menge ? `${z.menge} ${z.name}` : z.name}
+                    </span>
+                  </label>
+                ))}
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button
+                    className="btn"
+                    disabled={pending}
+                    onClick={() =>
+                      startTransition(async () => {
+                        const ausgewaehlt = extraZeilen.filter((_, i) => extraAusgewaehlt[i]);
+                        const faktorLabel = `${extraFaktor}×`.replace(".", ",");
+                        await uebernehmeZusaetzlicheZutaten(extraRezeptId, ausgewaehlt, faktorLabel);
+                        setExtraRezeptId("");
+                        setExtraFaktor(1);
+                        setExtraZeilen([]);
+                        setExtraGeprueft(false);
+                      })
+                    }
+                  >
+                    Zur Einkaufsliste hinzufügen ({extraAusgewaehlt.filter(Boolean).length})
+                  </button>
+                  <button className="btn-secondary" onClick={() => setExtraGeprueft(false)}>
+                    Abbrechen
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </details>
       )}
 
       {istEltern && vorschlaege.length > 0 && (

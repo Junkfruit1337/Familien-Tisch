@@ -49,10 +49,22 @@ export async function listRezepteDetail() {
   return prisma.rezept.findMany({ orderBy: { name: "asc" } });
 }
 
-export async function addRezept(name: string, zutaten: string, zubereitung?: string) {
+export async function addRezept(name: string, zutaten: string, zubereitung?: string, portionenBasis?: number) {
   await requireParent();
-  await prisma.rezept.create({ data: { name, zutaten, zubereitung: zubereitung || undefined } });
+  await prisma.rezept.create({
+    data: { name, zutaten, zubereitung: zubereitung || undefined, portionenBasis: portionenBasis && portionenBasis > 0 ? portionenBasis : 6 },
+  });
   revalidatePath("/essensplan");
+}
+
+// Korrigiert nachträglich, für wie viele Portionen ein bereits gespeichertes Rezept
+// geschrieben ist (Fix-Batch 22) — z.B. wenn beim Anlegen der Wert falsch geschätzt wurde.
+export async function updateRezeptPortionenBasis(rezeptId: string, portionenBasis: number) {
+  await requireParent();
+  if (!portionenBasis || portionenBasis < 1) return;
+  await prisma.rezept.update({ where: { id: rezeptId }, data: { portionenBasis } });
+  revalidatePath("/essensplan");
+  revalidatePath("/einkaufsliste");
 }
 
 // Rezept-Erfassung per Foto (Fragenkatalog Frage 25, Batch 8) — füllt nur das
@@ -194,20 +206,70 @@ export async function toggleLock(id: string) {
 
 export async function setEsser(eintragId: string, personIds: string[]) {
   await requireParent();
+  const eintrag = await prisma.essensplanEintrag.findUnique({ where: { id: eintragId }, include: { rezept: true } });
+  if (!eintrag) return;
   const alle = await prisma.person.findMany({ where: { id: { in: personIds } } });
-  const faktor = personIds.length === 0 ? 1 : alle.reduce((s, p) => s + personGewicht(p.name), 0) / 6;
+  // Skaliert nicht mehr fest auf 6, sondern auf die Portionsgrundlage des jeweiligen Rezepts
+  // (Fix-Batch 22) — ein Rezept "für 1 Portion" ergibt bei allen 6 Essern jetzt Faktor 6, statt
+  // fälschlich Faktor 1 wie zuvor.
+  const faktor = personIds.length === 0 ? 1 : alle.reduce((s, p) => s + personGewicht(p.name), 0) / eintrag.rezept.portionenBasis;
   await prisma.essensplanEintrag.update({ where: { id: eintragId }, data: { esserIds: personIds, esserFaktor: faktor } });
   revalidatePath("/essensplan");
 }
 
 // Schritt 1 des Prüf-Schritts: zeigt die (mit dem Esser-Faktor skalierten) Zutatenzeilen
 // zur Auswahl, bevor irgendetwas auf die Einkaufsliste kommt (Fahrplan §3, Kernfeature).
-export async function pruefeZutaten(eintragId: string) {
+// zusatzFaktor (Fix-Batch 22): zusätzlicher manueller Hebel ("wir brauchen die doppelte
+// Menge"), multipliziert oben auf den automatischen Esser-Faktor.
+export async function pruefeZutaten(eintragId: string, zusatzFaktor = 1) {
   await requireParent();
   const eintrag = await prisma.essensplanEintrag.findUnique({ where: { id: eintragId }, include: { rezept: true } });
   if (!eintrag) return [];
   const zeilen = eintrag.rezept.zutaten.split("\n").map((z) => z.trim()).filter(Boolean);
-  return zeilen.map((z) => skaliereZeile(parseZutatZeile(z), eintrag.esserFaktor || 1));
+  const faktor = (eintrag.esserFaktor || 1) * (zusatzFaktor || 1);
+  return zeilen.map((z) => skaliereZeile(parseZutatZeile(z), faktor));
+}
+
+// Ad-hoc-Ergänzung unabhängig vom Essensplan-Tag (Fix-Batch 22) — z.B. ein bereits
+// bekanntes Rezept (Dip, Salat) zusätzlich zu einem geplanten Tag dazu einkaufen, etwa
+// weil an dem Tag gegrillt wird. faktor bezieht sich direkt auf die im Rezept geschriebene
+// Menge (1 = wie geschrieben, 2 = doppelte Menge), unabhängig von der Esser-Auswahl.
+export async function pruefeZutatenFuerRezept(rezeptId: string, faktor = 1) {
+  await requireParent();
+  const rezept = await prisma.rezept.findUnique({ where: { id: rezeptId } });
+  if (!rezept) return [];
+  const zeilen = rezept.zutaten.split("\n").map((z) => z.trim()).filter(Boolean);
+  return zeilen.map((z) => skaliereZeile(parseZutatZeile(z), faktor || 1));
+}
+
+// Übernimmt die geprüften Zeilen einer Ad-hoc-Rezept-Ergänzung auf die Einkaufsliste,
+// mit Herkunfts-Vermerk (analog "Manuell hinzugefügt"/"Wunsch von X", Fix-Batch 22).
+export async function uebernehmeZusaetzlicheZutaten(rezeptId: string, zeilen: { name: string; menge?: string }[], faktorLabel: string) {
+  await requireParent();
+  const rezept = await prisma.rezept.findUnique({ where: { id: rezeptId } });
+  if (!rezept) return;
+  for (const zeile of zeilen) {
+    const bestehender = await findeOffenenArtikel(zeile.name);
+    let artikelId: string;
+    if (bestehender) {
+      await prisma.einkaufsArtikel.update({
+        where: { id: bestehender.id },
+        data: { menge: await mergeMenge(bestehender.menge, zeile.menge) },
+      });
+      artikelId = bestehender.id;
+    } else {
+      const kategorieId = await autoKategorieId(zeile.name);
+      const neu = await prisma.einkaufsArtikel.create({
+        data: { name: zeile.name, menge: zeile.menge, kategorieId: kategorieId || null, quelle: "essensplan" },
+      });
+      artikelId = neu.id;
+    }
+    await prisma.artikelQuelle.create({
+      data: { artikelId, beschreibung: `Extra: ${rezept.name} (${faktorLabel})`, menge: zeile.menge },
+    });
+  }
+  revalidatePath("/essensplan");
+  revalidatePath("/einkaufsliste");
 }
 
 // Schritt 2: übernimmt nur die vom Elternteil bestätigten Zeilen ("Brauche ich") und
