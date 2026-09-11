@@ -2,7 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { requirePerson, requireParent } from "@/lib/auth";
-import { logAenderung } from "@/lib/history";
+import { logAenderung, getHistorieFuerTyp } from "@/lib/history";
 import { getWeekStart, getEffectiveWeek, getBadReihenfolge } from "@/lib/dienstplan";
 import { DIENSTE_VORLAGE, TAGESROUTINEN_VORLAGE, KOERPERPFLEGE_VORLAGE } from "@/lib/schichtsystemVorlage";
 import { revalidatePath } from "next/cache";
@@ -139,6 +139,21 @@ export async function setzeDauerhafteBadZuordnung(data: {
     geaendertVonId: person.id,
   });
   revalidatePath("/dienstplan");
+}
+
+// Dienste-Historie fürs Dienstplan-Tab (Fix-Batch 35, Florians Wunsch) — alle bisherigen
+// Dienst-/Bad-Reihenfolge-Tausche (auch aufgehobene/vergangene Wochen), nicht nur die
+// aktuell aktiven. Jede Person darf mitlesen, nicht nur Eltern (reine Info, keine Aktion).
+export async function listDienstHistorie() {
+  await requirePerson();
+  const eintraege = await getHistorieFuerTyp("DIENST_TAUSCH", 40);
+  return eintraege.map((e) => ({
+    id: e.id,
+    zeitpunkt: e.zeitpunkt.toISOString(),
+    personName: e.geaendertVon.name,
+    aktion: e.aktion,
+    bezug: e.neuerWert ?? e.alterWert ?? null,
+  }));
 }
 
 export async function listAktiveTausche(wocheStartIso: string) {

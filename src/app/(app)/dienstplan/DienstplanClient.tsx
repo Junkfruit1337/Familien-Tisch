@@ -36,6 +36,7 @@ type BadPosition = { position: number; kindName: string; kindFarbe: string };
 type BadPlan = { morgens: BadPosition[]; abends: BadPosition[] };
 type Tagesroutine = { id: string; kategorie: string; reihenfolge: number; text: string };
 type Koerperpflegetag = { id: string; wochentag: number; text: string };
+type HistorieEintrag = { id: string; zeitpunkt: string; personName: string; aktion: string; bezug: string | null };
 
 export default function DienstplanClient({
   istEltern,
@@ -46,6 +47,7 @@ export default function DienstplanClient({
   badplan: initialBadplan,
   tagesroutinen,
   koerperpflegeplan,
+  historie,
 }: {
   istEltern: boolean;
   wocheStart: string;
@@ -55,6 +57,7 @@ export default function DienstplanClient({
   badplan: BadPlan;
   tagesroutinen: Tagesroutine[];
   koerperpflegeplan: Koerperpflegetag[];
+  historie: HistorieEintrag[];
 }) {
   const [pending, startTransition] = useTransition();
   const [wocheStart, setWocheStart] = useState(initialWocheStart);
@@ -482,6 +485,21 @@ export default function DienstplanClient({
         </div>
       </details>
 
+      <details className="card">
+        <summary style={{ cursor: "pointer", fontWeight: 600 }}>🕘 Dienste-Historie ({historie.length})</summary>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 10 }}>
+          {historie.length === 0 && <p style={{ margin: 0, color: "var(--text-muted)" }}>Noch keine Tausche erfasst.</p>}
+          {historie.map((h) => (
+            <div key={h.id} style={{ fontSize: 13, borderBottom: "1px solid rgba(128,128,128,0.15)", paddingBottom: 4 }}>
+              <span style={{ color: "var(--text-muted)" }}>
+                {new Date(h.zeitpunkt).toLocaleString("de-DE", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+              </span>{" "}
+              — <strong>{h.personName}</strong>: {h.aktion}
+              {h.bezug ? ` „${h.bezug}"` : ""}
+            </div>
+          ))}
+        </div>
+      </details>
     </div>
   );
 }

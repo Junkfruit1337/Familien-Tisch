@@ -31,3 +31,15 @@ export async function getHistorie(entityTyp: EntityTyp, entityId: string) {
     orderBy: { zeitpunkt: "desc" },
   });
 }
+
+// Für Sammel-Ansichten wie "Dienste-Historie" im Dienstplan-Tab (Fix-Batch 35) — im
+// Unterschied zu getHistorie() NICHT auf eine einzelne entityId beschränkt, sondern alle
+// Einträge eines Typs (z.B. alle DIENST_TAUSCH-Änderungen, egal welcher Tausch/welche Woche).
+export async function getHistorieFuerTyp(entityTyp: EntityTyp, limit = 30) {
+  return prisma.aenderungsLog.findMany({
+    where: { entityTyp },
+    include: { geaendertVon: true },
+    orderBy: { zeitpunkt: "desc" },
+    take: limit,
+  });
+}
