@@ -154,6 +154,7 @@ export default function EinkaufslisteClient({
 
   const [unbestaetigt, setUnbestaetigt] = useState(initialUnbestaetigt);
   const [unbestaetigtMengen, setUnbestaetigtMengen] = useState<Record<string, string>>({});
+  const [unbestaetigtNamen, setUnbestaetigtNamen] = useState<Record<string, string>>({});
 
   const [extraRezeptId, setExtraRezeptId] = useState("");
   const [extraFaktor, setExtraFaktor] = useState(1);
@@ -388,12 +389,11 @@ export default function EinkaufslisteClient({
             </p>
             {unbestaetigt.map((a) => (
               <div key={a.id} className="card" style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-                  <span style={{ fontSize: 14 }}>
-                    {a.menge ? `${a.menge} ` : ""}
-                    {a.name}
-                  </span>
-                </div>
+                <input
+                  value={unbestaetigtNamen[a.id] ?? a.name}
+                  onChange={(e) => setUnbestaetigtNamen((prev) => ({ ...prev, [a.id]: e.target.value }))}
+                  style={{ fontSize: 14, fontWeight: 600 }}
+                />
                 {a.herkunft.length > 0 && (
                   <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>
                     Für:{" "}
@@ -415,7 +415,10 @@ export default function EinkaufslisteClient({
                     disabled={pending}
                     onClick={() =>
                       startTransition(async () => {
-                        await bestaetigeArtikel(a.id, unbestaetigtMengen[a.id] ?? a.menge ?? undefined);
+                        await bestaetigeArtikel(a.id, {
+                          menge: unbestaetigtMengen[a.id] ?? a.menge ?? undefined,
+                          name: unbestaetigtNamen[a.id] ?? a.name,
+                        });
                         setUnbestaetigt((prev) => prev.filter((x) => x.id !== a.id));
                       })
                     }
@@ -433,7 +436,7 @@ export default function EinkaufslisteClient({
                       })
                     }
                   >
-                    ✕ Ablehnen
+                    ✕ Brauchen wir nicht
                   </button>
                 </div>
               </div>

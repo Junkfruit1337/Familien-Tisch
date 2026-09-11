@@ -41,14 +41,28 @@ Entwicklung direkt hier in Claude Code weiter, mit vollem Git- und Terminal-Zugr
 Bitte im Anforderungs-Log (FAHRPLAN.md, Abschnitt 5) weiter dokumentieren, was umgesetzt
 wird, damit der Verlauf lückenlos bleibt — Florian legt darauf Wert.
 
-## Ticketsystem (Fix-Batch 26)
+## Ticketsystem (Fix-Batch 26, automatisierter Abruf seit Fix-Batch 34)
 
 Familienmitglieder können über Einstellungen → „Fehler melden" Bugs/Verbesserungsvorschläge
 einreichen (Modell `Ticket` in `prisma/schema.prisma`, Status-Workflow EINGEREICHT →
-GENEHMIGT/ABGELEHNT/IN_UMSETZUNG → UMGESETZT). **Zu Beginn jeder Sitzung, in der Florian
-neue Arbeit anfragt: frag nach, ob es genehmigte, noch nicht umgesetzte Tickets gibt** (diese
-Codebase hat keinen direkten Lesezugriff auf die Produktions-Datenbank, daher kann der
-Ticketstand nicht automatisch ausgelesen werden — Florian muss die Liste selbst in den
-Einstellungen prüfen und mitteilen, oder einen Screenshot schicken). Sobald ein Ticket
-tatsächlich umgesetzt ist, seinen Status per `setzeTicketStatus(id, "UMGESETZT")` (oder über
-die Oberfläche) auf „Umgesetzt" setzen — das passiert nicht automatisch.
+GENEHMIGT/ABGELEHNT/IN_UMSETZUNG → UMGESETZT).
+
+**Automatisierter Abruf über `src/app/api/tickets/route.ts`** — da diese Dev-Umgebung keinen
+direkten Zugriff auf die Live-Datenbank hat, aber sehr wohl auf https://familien-tisch.de
+zugreifen kann, gibt es einen eigenen, per Bearer-Token abgesicherten API-Endpunkt (Token in
+Coolify als Umgebungsvariable `TICKET_API_TOKEN` hinterlegt, NICHT im Repo):
+
+- **Zu Beginn jeder Sitzung, in der Florian neue Arbeit anfragt** (oder wenn er explizit danach
+  fragt): offene, genehmigte Tickets abrufen mit
+  `curl -s -H "Authorization: Bearer $TICKET_API_TOKEN" https://familien-tisch.de/api/tickets`
+  (Token steht in der lokalen `.env` als `TICKET_API_TOKEN`, nicht raten/neu generieren).
+  Liefert JSON `{ tickets: [{ id, titel, beschreibung, status, begruendung, erstellerName,
+  createdAt }] }`, standardmäßig nur Status `GENEHMIGT`. Mit `?alle=1` als Query-Parameter
+  werden alle Status zurückgegeben (zum Nachschauen/Debuggen).
+- **Sobald ein Ticket umgesetzt ist**, seinen Status automatisch selbst zurückmelden statt nur
+  im Code zu ändern:
+  `curl -s -X PATCH -H "Authorization: Bearer $TICKET_API_TOKEN" -H "Content-Type: application/json" -d '{"id":"<ticket-id>","status":"UMGESETZT"}' https://familien-tisch.de/api/tickets`
+- Falls `TICKET_API_TOKEN` in Coolify (noch) nicht gesetzt ist, antwortet der Endpunkt mit 401 —
+  dann wie bisher Florian nach Screenshots/der Liste fragen, nicht raten.
+- Dieser Endpunkt läuft völlig unabhängig von der normalen Cookie-Session-Anmeldung der App
+  (kein Login, kein Browser nötig) — nur für diesen Zweck gedacht, nicht für App-Funktionen.

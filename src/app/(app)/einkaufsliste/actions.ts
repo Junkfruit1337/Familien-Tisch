@@ -133,12 +133,16 @@ export async function listUnbestaetigteArtikel() {
 
 // Übernimmt einen "noch nicht zugesagten" Artikel — mergt in einen ggf. schon bestätigt
 // offenen Artikel gleichen Namens, statt zwei Zeilen nebeneinander stehen zu lassen.
-export async function bestaetigeArtikel(id: string, neueMenge?: string) {
+// data.name erlaubt, den vom Essensplan übernommenen Namen vorm Bestätigen noch zu
+// korrigieren (Fix-Batch 34, Florians Wunsch) — der Merge-Check auf einen schon offenen
+// gleichnamigen Artikel läuft dann gegen den ggf. korrigierten Namen.
+export async function bestaetigeArtikel(id: string, data?: { menge?: string; name?: string }) {
   await requireParent();
   const artikel = await prisma.einkaufsArtikel.findUnique({ where: { id } });
   if (!artikel) return;
-  const menge = neueMenge !== undefined ? neueMenge || null : artikel.menge;
-  const bestehender = await findeOffenenArtikel(artikel.name);
+  const menge = data?.menge !== undefined ? data.menge || null : artikel.menge;
+  const name = data?.name?.trim() ? data.name.trim() : artikel.name;
+  const bestehender = await findeOffenenArtikel(name);
   if (bestehender) {
     await prisma.einkaufsArtikel.update({
       where: { id: bestehender.id },
@@ -147,7 +151,7 @@ export async function bestaetigeArtikel(id: string, neueMenge?: string) {
     await prisma.essensplanHerkunft.updateMany({ where: { artikelId: id }, data: { artikelId: bestehender.id } });
     await prisma.einkaufsArtikel.delete({ where: { id } });
   } else {
-    await prisma.einkaufsArtikel.update({ where: { id }, data: { menge, bestaetigt: true } });
+    await prisma.einkaufsArtikel.update({ where: { id }, data: { menge, name, bestaetigt: true } });
   }
   revalidatePath("/einkaufsliste");
 }
