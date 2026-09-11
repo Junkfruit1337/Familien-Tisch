@@ -23,12 +23,51 @@ export async function findeOffenenArtikel(name: string) {
   });
 }
 
-// Führt zwei Mengenangaben zusammen. Da "Menge" freier Text ist (z. B. "3 kg", "1 Packung"),
-// wird nicht gerechnet, sondern lesbar zusammengehängt statt eine zweite Zeile anzulegen.
-export function mergeMenge(bestehend: string | null, neu?: string | null): string | null {
+// Echte Einheiten-Umrechnung für Gewicht (g/kg) und Volumen (ml/l) — Entscheidung
+// 10.09.2026: nur diese beiden Familien, keine Stück-Sonderfälle. Alles andere
+// (z. B. "1 Packung") wird weiterhin nur lesbar zusammengehängt.
+const GEWICHT_EINHEITEN: Record<string, number> = { g: 1, gramm: 1, kg: 1000, kilo: 1000, kilogramm: 1000 };
+const VOLUMEN_EINHEITEN: Record<string, number> = { ml: 1, l: 1000, liter: 1000 };
+
+function parseMenge(text: string): { basiswert: number; family: "gewicht" | "volumen" } | null {
+  const m = text.trim().match(/^([\d]+(?:[.,]\d+)?)\s*([a-zA-Zäöü]+)\.?$/);
+  if (!m) return null;
+  const zahl = parseFloat(m[1].replace(",", "."));
+  if (Number.isNaN(zahl)) return null;
+  const einheit = m[2].toLowerCase();
+  if (einheit in GEWICHT_EINHEITEN) return { basiswert: zahl * GEWICHT_EINHEITEN[einheit], family: "gewicht" };
+  if (einheit in VOLUMEN_EINHEITEN) return { basiswert: zahl * VOLUMEN_EINHEITEN[einheit], family: "volumen" };
+  return null;
+}
+
+function formatZahl(n: number): string {
+  return Number(n.toFixed(2)).toString().replace(".", ",");
+}
+
+function formatMenge(basiswert: number, family: "gewicht" | "volumen"): string {
+  if (family === "gewicht") {
+    return basiswert >= 1000 ? `${formatZahl(basiswert / 1000)} kg` : `${formatZahl(basiswert)} g`;
+  }
+  return basiswert >= 1000 ? `${formatZahl(basiswert / 1000)} l` : `${formatZahl(basiswert)} ml`;
+}
+
+// Führt zwei Mengenangaben zusammen. Bei erkennbar gleicher Einheiten-Familie
+// (g/kg oder ml/l) wird echt umgerechnet und addiert; sonst bleibt es beim
+// lesbaren Aneinanderhängen (z. B. bei "1 Packung").
+// Muss "async" sein, obwohl intern nichts asynchrones passiert: Next.js verlangt,
+// dass jeder Export aus einer "use server"-Datei eine async-Funktion ist — ein
+// synchroner Export hier lässt "next build" fehlschlagen (Ursache des Deploy-Fehlers
+// vom 10.09.2026, siehe Anforderungs-Log).
+export async function mergeMenge(bestehend: string | null, neu?: string | null): Promise<string | null> {
   if (!neu) return bestehend;
   if (!bestehend) return neu;
   if (bestehend === neu || bestehend.includes(neu)) return bestehend;
+
+  const a = parseMenge(bestehend);
+  const b = parseMenge(neu);
+  if (a && b && a.family === b.family) {
+    return formatMenge(a.basiswert + b.basiswert, a.family);
+  }
   return `${bestehend} + ${neu}`;
 }
 
@@ -60,7 +99,7 @@ export async function addArtikel(data: { name: string; menge?: string; kategorie
   if (bestehender) {
     const artikel = await prisma.einkaufsArtikel.update({
       where: { id: bestehender.id },
-      data: { menge: mergeMenge(bestehender.menge, data.menge) },
+      data: { menge: await mergeMenge(bestehender.menge, data.menge) },
     });
     revalidatePath("/einkaufsliste");
     return artikel;
@@ -130,7 +169,7 @@ export async function entscheideWunsch(id: string, genehmigt: boolean, kategorie
       await prisma.einkaufsArtikel.update({
         where: { id: bestehender.id },
         data: {
-          menge: mergeMenge(bestehender.menge, wunsch.menge),
+          menge: await mergeMenge(bestehender.menge, wunsch.menge),
           vonWunschId: wunsch.id,
           kategorieId: bestehender.kategorieId || kategorieId || (await autoKategorieId(wunsch.artikelName)),
         },
@@ -161,5 +200,22 @@ export async function addKategorie(name: string) {
   await requireParent();
   const anzahl = await prisma.einkaufsKategorie.count();
   await prisma.einkaufsKategorie.create({ data: { name, reihenfolge: anzahl } });
+  revalidatePath("/einkaufsliste");
+}
+
+// Kategorie-Reihenfolge in der App änderbar machen (Fragenkatalog Frage 7).
+export async function verschiebeKategorie(id: string, richtung: "hoch" | "runter") {
+  await requireParent();
+  const kategorien = await prisma.einkaufsKategorie.findMany({ orderBy: { reihenfolge: "asc" } });
+  const index = kategorien.findIndex((k) => k.id === id);
+  if (index === -1) return;
+  const zielIndex = richtung === "hoch" ? index - 1 : index + 1;
+  if (zielIndex < 0 || zielIndex >= kategorien.length) return;
+  const a = kategorien[index];
+  const b = kategorien[zielIndex];
+  await prisma.$transaction([
+    prisma.einkaufsKategorie.update({ where: { id: a.id }, data: { reihenfolge: b.reihenfolge } }),
+    prisma.einkaufsKategorie.update({ where: { id: b.id }, data: { reihenfolge: a.reihenfolge } }),
+  ]);
   revalidatePath("/einkaufsliste");
 }

@@ -83,7 +83,7 @@ export async function zutatenUebernehmen(eintragId: string) {
     if (bestehender) {
       await prisma.einkaufsArtikel.update({
         where: { id: bestehender.id },
-        data: { menge: mergeMenge(bestehender.menge, menge) },
+        data: { menge: await mergeMenge(bestehender.menge, menge) },
       });
     } else {
       const kategorieId = await autoKategorieId(name);
