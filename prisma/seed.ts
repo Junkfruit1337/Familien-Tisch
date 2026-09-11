@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import { DIENSTE_VORLAGE, TAGESROUTINEN_VORLAGE, KOERPERPFLEGE_VORLAGE } from "../src/lib/schichtsystemVorlage";
 
 const prisma = new PrismaClient();
 
@@ -10,18 +11,6 @@ const FAMILIE = [
   { name: "Emil", rolle: "KIND" as const, farbe: "#6e8fa9" },
   { name: "Emma", rolle: "KIND" as const, farbe: "#b58fc9" },
   { name: "Ayla", rolle: "KIND_OHNE_ZUGANG" as const, farbe: "#d9b25c" },
-];
-
-const DIENSTE = [
-  { schichtNummer: 1, reihenfolge: 1, bezeichnung: "Küchendienst", beschreibung: "Küche nach dem Essen aufräumen" },
-  { schichtNummer: 1, reihenfolge: 2, bezeichnung: "Tisch decken", beschreibung: "" },
-  { schichtNummer: 1, reihenfolge: 3, bezeichnung: "Mülleimer leeren", beschreibung: "" },
-  { schichtNummer: 2, reihenfolge: 1, bezeichnung: "Badputzdienst", beschreibung: "" },
-  { schichtNummer: 2, reihenfolge: 2, bezeichnung: "Staubsaugen", beschreibung: "" },
-  { schichtNummer: 2, reihenfolge: 3, bezeichnung: "Wäsche zusammenlegen", beschreibung: "" },
-  { schichtNummer: 3, reihenfolge: 1, bezeichnung: "Tiere versorgen", beschreibung: "" },
-  { schichtNummer: 3, reihenfolge: 2, bezeichnung: "Pflanzen gießen", beschreibung: "" },
-  { schichtNummer: 3, reihenfolge: 3, bezeichnung: "Schuhe/Flur aufräumen", beschreibung: "" },
 ];
 
 const KATEGORIEN = ["Obst & Gemüse", "Milchprodukte", "Fleisch & Fisch", "Backwaren", "Tiefkühl", "Getränke", "Drogerie", "Sonstiges"];
@@ -47,9 +36,29 @@ async function main() {
     });
   }
 
-  for (const d of DIENSTE) {
+  for (const d of DIENSTE_VORLAGE) {
     const existing = await prisma.dienstDefinition.findFirst({ where: { schichtNummer: d.schichtNummer, reihenfolge: d.reihenfolge } });
-    if (!existing) await prisma.dienstDefinition.create({ data: d });
+    if (existing) {
+      await prisma.dienstDefinition.update({ where: { id: existing.id }, data: { bezeichnung: d.bezeichnung, beschreibung: d.beschreibung } });
+    } else {
+      await prisma.dienstDefinition.create({ data: d });
+    }
+  }
+
+  if ((await prisma.tagesroutine.count()) === 0) {
+    for (const gruppe of TAGESROUTINEN_VORLAGE) {
+      for (let i = 0; i < gruppe.texte.length; i++) {
+        await prisma.tagesroutine.create({ data: { kategorie: gruppe.kategorie, reihenfolge: i, text: gruppe.texte[i] } });
+      }
+    }
+  }
+
+  for (const [wochentag, text] of Object.entries(KOERPERPFLEGE_VORLAGE)) {
+    await prisma.koerperpflegetag.upsert({
+      where: { wochentag: Number(wochentag) },
+      update: { text },
+      create: { wochentag: Number(wochentag), text },
+    });
   }
 
   for (let i = 0; i < KATEGORIEN.length; i++) {

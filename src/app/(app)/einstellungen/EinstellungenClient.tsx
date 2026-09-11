@@ -4,12 +4,21 @@ import { useState, useTransition } from "react";
 import { createPerson, setPin, setFarbe, setAktiv } from "./actions";
 import { addKategorie, verschiebeKategorie } from "../einkaufsliste/actions";
 import { addFach, deleteFach } from "../schule/actions";
+import {
+  addDienst,
+  updateDienst,
+  verschiebeDienstSchicht,
+  verschiebeDienstReihenfolge,
+  deleteDienst,
+  installiereSchichtsystemVorlage,
+} from "../dienstplan/actions";
 import NotengewichtungSektion from "@/components/NotengewichtungSektion";
 
 type Person = { id: string; name: string; rolle: string; farbe: string; aktiv: boolean; hatPin: boolean };
 type Kategorie = { id: string; name: string; reihenfolge: number };
 type Gewichtung = { fachId: string; fachName: string; gewichtungen: { art: string; gewichtung: number }[] };
 type Kind = { id: string; name: string; faecher: { id: string; name: string }[]; gewichtung: Gewichtung[] };
+type Dienst = { id: string; schichtNummer: number; reihenfolge: number; bezeichnung: string; beschreibung: string | null };
 
 const ROLLEN = [
   { value: "ELTERN", label: "Elternteil" },
@@ -22,11 +31,13 @@ export default function EinstellungenClient({
   personen,
   kategorien,
   kinder,
+  dienstkatalog,
 }: {
   istEltern: boolean;
   personen: Person[];
   kategorien: Kategorie[];
   kinder: Kind[];
+  dienstkatalog: Dienst[];
 }) {
   const [pending, startTransition] = useTransition();
   const [name, setName] = useState("");
@@ -37,6 +48,10 @@ export default function EinstellungenClient({
   const [neueKategorie, setNeueKategorie] = useState("");
   const [ausgewaehltesKind, setAusgewaehltesKind] = useState(kinder[0]?.id ?? "");
   const [neuesFach, setNeuesFach] = useState("");
+  const [bearbeiteDienstId, setBearbeiteDienstId] = useState<string | null>(null);
+  const [dienstBezeichnung, setDienstBezeichnung] = useState("");
+  const [dienstBeschreibung, setDienstBeschreibung] = useState("");
+  const [neuerDienst, setNeuerDienst] = useState<Record<number, string>>({});
 
   if (!istEltern) {
     return (
@@ -236,6 +251,143 @@ export default function EinstellungenClient({
           </div>
         </details>
       )}
+
+      <details>
+        <summary style={{ cursor: "pointer", fontWeight: 600 }}>🧹 Dienstplan: Dienstkatalog</summary>
+        <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 8 }}>
+          <p style={{ fontSize: 12, color: "var(--text-muted)", margin: 0 }}>
+            Änderungen hier wirken dauerhaft ab sofort — auch rückwirkend für die aktuelle Woche, nicht nur für zukünftige.
+          </p>
+          {[1, 2, 3].map((schicht) => {
+            const diensteDerSchicht = dienstkatalog.filter((d) => d.schichtNummer === schicht);
+            return (
+              <div key={schicht} className="card" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                <strong style={{ fontSize: 14 }}>Schicht {schicht}</strong>
+                {diensteDerSchicht.map((d, i) => (
+                  <div key={d.id} style={{ borderTop: "1px solid var(--border)", paddingTop: 8 }}>
+                    {bearbeiteDienstId === d.id ? (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                        <input value={dienstBezeichnung} onChange={(e) => setDienstBezeichnung(e.target.value)} placeholder="Bezeichnung" />
+                        <textarea rows={4} value={dienstBeschreibung} onChange={(e) => setDienstBeschreibung(e.target.value)} placeholder="Regeltext" />
+                        <div style={{ display: "flex", gap: 6 }}>
+                          <button
+                            className="btn"
+                            style={{ fontSize: 12, padding: "4px 10px" }}
+                            onClick={() =>
+                              startTransition(async () => {
+                                await updateDienst(d.id, { bezeichnung: dienstBezeichnung, beschreibung: dienstBeschreibung });
+                                setBearbeiteDienstId(null);
+                              })
+                            }
+                          >
+                            Speichern
+                          </button>
+                          <button className="btn-secondary" style={{ fontSize: 12, padding: "4px 10px" }} onClick={() => setBearbeiteDienstId(null)}>
+                            Abbrechen
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <span style={{ flex: 1, fontSize: 14, fontWeight: 600 }}>{d.bezeichnung}</span>
+                          <button
+                            className="btn-secondary"
+                            style={{ fontSize: 12, padding: "3px 8px" }}
+                            disabled={i === 0}
+                            onClick={() => startTransition(() => verschiebeDienstReihenfolge(d.id, "hoch"))}
+                          >
+                            ↑
+                          </button>
+                          <button
+                            className="btn-secondary"
+                            style={{ fontSize: 12, padding: "3px 8px" }}
+                            disabled={i === diensteDerSchicht.length - 1}
+                            onClick={() => startTransition(() => verschiebeDienstReihenfolge(d.id, "runter"))}
+                          >
+                            ↓
+                          </button>
+                          <select
+                            value={schicht}
+                            onChange={(e) => startTransition(() => verschiebeDienstSchicht(d.id, Number(e.target.value)))}
+                            style={{ fontSize: 12, padding: "2px 4px", width: "auto" }}
+                            title="In andere Schicht verschieben"
+                          >
+                            {[1, 2, 3].map((s) => (
+                              <option key={s} value={s}>
+                                Schicht {s}
+                              </option>
+                            ))}
+                          </select>
+                          <button
+                            className="btn-secondary"
+                            style={{ fontSize: 12, padding: "3px 8px" }}
+                            onClick={() => {
+                              setBearbeiteDienstId(d.id);
+                              setDienstBezeichnung(d.bezeichnung);
+                              setDienstBeschreibung(d.beschreibung ?? "");
+                            }}
+                          >
+                            ✎
+                          </button>
+                          <button
+                            className="btn-secondary"
+                            style={{ fontSize: 12, padding: "3px 8px" }}
+                            onClick={() => startTransition(() => deleteDienst(d.id))}
+                          >
+                            🗑
+                          </button>
+                        </div>
+                        {d.beschreibung && <p style={{ fontSize: 12, color: "var(--text-muted)", margin: 0, whiteSpace: "pre-wrap" }}>{d.beschreibung}</p>}
+                      </div>
+                    )}
+                  </div>
+                ))}
+                <div style={{ display: "flex", gap: 8, borderTop: "1px solid var(--border)", paddingTop: 8 }}>
+                  <input
+                    placeholder="Neuer Dienst"
+                    value={neuerDienst[schicht] ?? ""}
+                    onChange={(e) => setNeuerDienst((prev) => ({ ...prev, [schicht]: e.target.value }))}
+                  />
+                  <button
+                    className="btn"
+                    onClick={() =>
+                      startTransition(async () => {
+                        const titel = neuerDienst[schicht];
+                        if (!titel) return;
+                        await addDienst(schicht, titel);
+                        setNeuerDienst((prev) => ({ ...prev, [schicht]: "" }));
+                      })
+                    }
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+          <details>
+            <summary style={{ cursor: "pointer", color: "var(--text-muted)", fontSize: 13 }}>Vorlage aus Florians Dokument laden</summary>
+            <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
+              <p style={{ fontSize: 12, color: "var(--text-muted)", margin: 0 }}>
+                Überschreibt die Dienst-Bezeichnungen/-Regeltexte, die Tagesroutinen und den Körperpflegeplan mit dem hinterlegten Originaltext.
+                Bereits vorgenommene eigene Änderungen an diesen Bereichen gehen dabei verloren.
+              </p>
+              <button
+                className="btn-secondary"
+                style={{ alignSelf: "flex-start" }}
+                onClick={() => {
+                  if (confirm("Dienstkatalog, Tagesroutinen und Körperpflegeplan wirklich mit der Vorlage überschreiben?")) {
+                    startTransition(() => installiereSchichtsystemVorlage());
+                  }
+                }}
+              >
+                Jetzt laden
+              </button>
+            </div>
+          </details>
+        </div>
+      </details>
     </div>
   );
 }

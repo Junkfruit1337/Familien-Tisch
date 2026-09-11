@@ -2,6 +2,7 @@ import { getCurrentPerson } from "@/lib/auth";
 import { listPersonen } from "./actions";
 import { listKategorien } from "../einkaufsliste/actions";
 import { listKinder, listFaecher, listNotenGewichtung } from "../schule/actions";
+import { listDienstkatalog } from "../dienstplan/actions";
 import EinstellungenClient from "./EinstellungenClient";
 
 export default async function EinstellungenPage() {
@@ -10,6 +11,7 @@ export default async function EinstellungenPage() {
   const personen = await listPersonen();
 
   const kategorien = istEltern ? await listKategorien() : [];
+  const dienstkatalog = istEltern ? await listDienstkatalog() : [];
   const kinder = istEltern ? await listKinder() : [];
   const kinderDaten = istEltern
     ? await Promise.all(
@@ -31,6 +33,13 @@ export default async function EinstellungenPage() {
       personen={personen.map((p) => ({ id: p.id, name: p.name, rolle: p.rolle, farbe: p.farbe, aktiv: p.aktiv, hatPin: !!p.pinHash }))}
       kategorien={kategorien.map((k) => ({ id: k.id, name: k.name, reihenfolge: k.reihenfolge }))}
       kinder={kinderDaten}
+      dienstkatalog={dienstkatalog.map((d) => ({
+        id: d.id,
+        schichtNummer: d.schichtNummer,
+        reihenfolge: d.reihenfolge,
+        bezeichnung: d.bezeichnung,
+        beschreibung: d.beschreibung,
+      }))}
     />
   );
 }
