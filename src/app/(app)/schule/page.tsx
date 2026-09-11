@@ -1,5 +1,15 @@
 import { getCurrentPerson } from "@/lib/auth";
-import { listKinder, listFaecher, listNoten, kontostand, listTaschengeld, getSparziel, listSchulEintraege, listFachNamenFuerKinder } from "./actions";
+import {
+  listKinder,
+  listFaecher,
+  listNoten,
+  kontostand,
+  listTaschengeld,
+  getSparziel,
+  listSchulEintraege,
+  listFachNamenFuerKinder,
+  listFerienFuerKind,
+} from "./actions";
 import SchuleClient from "./SchuleClient";
 
 export default async function SchulePage() {
@@ -9,17 +19,21 @@ export default async function SchulePage() {
 
   const kinderDaten = await Promise.all(
     kinder.map(async (k) => {
-      const [faecher, noten, stand, taschengeld, sparziel] = await Promise.all([
+      const [faecher, noten, stand, taschengeld, sparziel, ferien] = await Promise.all([
         listFaecher(k.id),
         listNoten(k.id),
         kontostand(k.id),
         listTaschengeld(k.id),
         getSparziel(k.id),
+        listFerienFuerKind(k.id),
       ]);
       return {
         id: k.id,
         name: k.name,
         farbe: k.farbe,
+        bundesland: k.bundesland,
+        klassenstufe: k.klassenstufe,
+        klasse: k.klasse,
         faecher: faecher.map((f) => ({ id: f.id, name: f.name })),
         noten: noten.map((n) => ({
           id: n.id,
@@ -42,6 +56,7 @@ export default async function SchulePage() {
           createdAt: t.createdAt.toISOString(),
         })),
         sparziel: sparziel ? { bezeichnung: sparziel.bezeichnung, zielbetrag: sparziel.zielbetrag } : null,
+        ferien,
       };
     })
   );

@@ -12,7 +12,7 @@ import {
   setzeTicketStatus,
 } from "./actions";
 import { addKategorie, verschiebeKategorie } from "../einkaufsliste/actions";
-import { addFach, deleteFach } from "../schule/actions";
+import { addFach, deleteFach, setSchulProfil } from "../schule/actions";
 import {
   addDienst,
   updateDienst,
@@ -28,7 +28,34 @@ import Spracheingabe from "@/components/Spracheingabe";
 type Person = { id: string; name: string; rolle: string; farbe: string; aktiv: boolean; hatPin: boolean; portionsGewicht: number };
 type Kategorie = { id: string; name: string; reihenfolge: number };
 type Gewichtung = { fachId: string; fachName: string; gewichtungen: { art: string; gewichtung: number }[] };
-type Kind = { id: string; name: string; faecher: { id: string; name: string }[]; gewichtung: Gewichtung[] };
+type Kind = {
+  id: string;
+  name: string;
+  faecher: { id: string; name: string }[];
+  gewichtung: Gewichtung[];
+  bundesland: string | null;
+  klassenstufe: number | null;
+  klasse: string | null;
+};
+
+const BUNDESLAENDER = [
+  "Baden-Württemberg",
+  "Bayern",
+  "Berlin",
+  "Brandenburg",
+  "Bremen",
+  "Hamburg",
+  "Hessen",
+  "Mecklenburg-Vorpommern",
+  "Niedersachsen",
+  "Nordrhein-Westfalen",
+  "Rheinland-Pfalz",
+  "Saarland",
+  "Sachsen",
+  "Sachsen-Anhalt",
+  "Schleswig-Holstein",
+  "Thüringen",
+];
 type Dienst = { id: string; schichtNummer: number; reihenfolge: number; bezeichnung: string; beschreibung: string | null };
 type HistorieEintrag = { id: string; zeitpunkt: string; personName: string; typLabel: string; aktion: string; bezug: string | null };
 type Ticket = { id: string; titel: string; beschreibung: string; status: string; begruendung: string | null; createdAt: string };
@@ -77,6 +104,8 @@ export default function EinstellungenClient({
   const [neueKategorie, setNeueKategorie] = useState("");
   const [ausgewaehltesKind, setAusgewaehltesKind] = useState(kinder[0]?.id ?? "");
   const [neuesFach, setNeuesFach] = useState("");
+  const [klassenstufeEntwuerfe, setKlassenstufeEntwuerfe] = useState<Record<string, string>>({});
+  const [klasseEntwuerfe, setKlasseEntwuerfe] = useState<Record<string, string>>({});
   const [bearbeiteDienstId, setBearbeiteDienstId] = useState<string | null>(null);
   const [dienstBezeichnung, setDienstBezeichnung] = useState("");
   const [dienstBeschreibung, setDienstBeschreibung] = useState("");
@@ -381,6 +410,53 @@ export default function EinstellungenClient({
             )}
             {kind && (
               <>
+                <div className="card" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  <strong style={{ fontSize: 14 }}>Schulprofil ({kind.name})</strong>
+                  <label style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: -6 }}>Bundesland</label>
+                  <select
+                    value={kind.bundesland ?? ""}
+                    onChange={(e) => startTransition(() => setSchulProfil(kind.id, { bundesland: e.target.value }))}
+                  >
+                    <option value="">– wählen –</option>
+                    {BUNDESLAENDER.map((b) => (
+                      <option key={b} value={b}>
+                        {b}
+                      </option>
+                    ))}
+                  </select>
+                  <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>
+                    Grundlage für die echten Ferientermine/den Ferien-Countdown im Schule-Tab.
+                  </p>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <label style={{ flex: 1, display: "flex", flexDirection: "column", gap: 4 }}>
+                      <span style={{ fontSize: 12, color: "var(--text-muted)" }}>Klassenstufe</span>
+                      <input
+                        type="number"
+                        min={1}
+                        max={13}
+                        value={klassenstufeEntwuerfe[kind.id] ?? (kind.klassenstufe ? String(kind.klassenstufe) : "")}
+                        onChange={(e) => setKlassenstufeEntwuerfe((prev) => ({ ...prev, [kind.id]: e.target.value }))}
+                        onBlur={(e) => {
+                          const wert = parseInt(e.target.value, 10);
+                          if (!wert || wert === kind.klassenstufe) return;
+                          if (kind.klassenstufe && !confirm(`Klassenstufe wirklich von ${kind.klassenstufe} auf ${wert} ändern?`)) {
+                            setKlassenstufeEntwuerfe((prev) => ({ ...prev, [kind.id]: String(kind.klassenstufe) }));
+                            return;
+                          }
+                          startTransition(() => setSchulProfil(kind.id, { klassenstufe: wert }));
+                        }}
+                      />
+                    </label>
+                    <label style={{ flex: 1, display: "flex", flexDirection: "column", gap: 4 }}>
+                      <span style={{ fontSize: 12, color: "var(--text-muted)" }}>Klasse (z. B. 5a)</span>
+                      <input
+                        value={klasseEntwuerfe[kind.id] ?? kind.klasse ?? ""}
+                        onChange={(e) => setKlasseEntwuerfe((prev) => ({ ...prev, [kind.id]: e.target.value }))}
+                        onBlur={(e) => startTransition(() => setSchulProfil(kind.id, { klasse: e.target.value }))}
+                      />
+                    </label>
+                  </div>
+                </div>
                 <div className="card" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                   <strong style={{ fontSize: 14 }}>Fächer ({kind.name})</strong>
                   {kind.faecher.map((f) => (

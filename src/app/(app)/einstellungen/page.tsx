@@ -26,6 +26,9 @@ export default async function EinstellungenPage() {
             name: k.name,
             faecher: faecher.map((f) => ({ id: f.id, name: f.name })),
             gewichtung,
+            bundesland: k.bundesland,
+            klassenstufe: k.klassenstufe,
+            klasse: k.klasse,
           };
         })
       )

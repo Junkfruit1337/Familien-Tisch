@@ -17,6 +17,53 @@ export async function listKinder() {
   return prisma.person.findMany({ where: { rolle: "KIND" }, orderBy: { reihenfolge: "asc" } });
 }
 
+// Aktuelles Schuljahr nach der bundesweit einheitlichen Konvention (1. August – 31. Juli,
+// Fix-Batch 27 — Recherche bestätigt: gilt gleich für alle 16 Bundesländer). Bewusst nicht
+// exportiert: jeder Export aus einer "use server"-Datei muss async sein, sobald er (auch
+// nur transitiv) von einer Client-Komponente importiert wird — als reine interne
+// Hilfsfunktion bleibt sie synchron und einfach.
+function aktuellesSchuljahr(datum: Date = new Date()): string {
+  const jahr = datum.getMonth() >= 7 ? datum.getFullYear() : datum.getFullYear() - 1;
+  return `${jahr}/${jahr + 1}`;
+}
+
+// Bundesland/Klassenstufe/Klasse (Fix-Batch 27) — vom Kind selbst oder von Eltern editierbar.
+export async function setSchulProfil(kindId: string, data: { bundesland?: string; klassenstufe?: number; klasse?: string }) {
+  const person = await requirePerson();
+  if (person.rolle !== "ELTERN" && person.id !== kindId) throw new Error("Nicht erlaubt.");
+  await prisma.person.update({
+    where: { id: kindId },
+    data: {
+      bundesland: data.bundesland !== undefined ? data.bundesland || null : undefined,
+      klassenstufe: data.klassenstufe !== undefined ? data.klassenstufe : undefined,
+      klasse: data.klasse !== undefined ? data.klasse || null : undefined,
+    },
+  });
+  revalidatePath("/einstellungen");
+  revalidatePath("/schule");
+}
+
+// Ferien-Countdown fürs Schule-Tab (Fix-Batch 27) — null, wenn das Kind noch kein
+// Bundesland gewählt hat.
+export async function listFerienFuerKind(kindId: string) {
+  const kind = await prisma.person.findUnique({ where: { id: kindId } });
+  if (!kind?.bundesland) return null;
+  const schuljahr = aktuellesSchuljahr();
+  const eintraege = await prisma.schulferien.findMany({
+    where: { bundesland: kind.bundesland, schuljahr },
+    orderBy: { start: "asc" },
+  });
+  const heute = new Date();
+  const ferien = eintraege.map((f) => ({
+    typ: f.typ,
+    start: f.start.toISOString(),
+    ende: f.ende.toISOString(),
+    tageBis: Math.ceil((f.start.getTime() - heute.getTime()) / (1000 * 60 * 60 * 24)),
+  }));
+  const naechste = ferien.find((f) => f.tageBis >= 0) ?? null;
+  return { bundesland: kind.bundesland, schuljahr, ferien, naechste };
+}
+
 // Spracheingabe fürs Noten-Formular (Fix-Batch 26) — füllt nur die Formularfelder vor,
 // Prüfung/Korrektur/Speichern bleibt beim Nutzer. Fehler als Ergebnis-Objekt statt Wurf
 // (analog Rezept-Foto/Termine/Aufgaben, siehe Fix-Batch 19).

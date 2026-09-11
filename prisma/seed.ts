@@ -1,6 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { DIENSTE_VORLAGE, TAGESROUTINEN_VORLAGE, KOERPERPFLEGE_VORLAGE } from "../src/lib/schichtsystemVorlage";
+import { SCHULFERIEN } from "../src/lib/schulferienDaten";
 
 const prisma = new PrismaClient();
 
@@ -66,6 +67,16 @@ async function main() {
       where: { name: KATEGORIEN[i] },
       update: {},
       create: { name: KATEGORIEN[i], reihenfolge: i },
+    });
+  }
+
+  // Schulferien-Referenzdaten (Fix-Batch 27) — jedes Jahr per Deploy neu synchronisiert,
+  // sobald schulferienDaten.ts um ein weiteres Schuljahr ergänzt wird.
+  for (const f of SCHULFERIEN) {
+    await prisma.schulferien.upsert({
+      where: { bundesland_schuljahr_typ: { bundesland: f.bundesland, schuljahr: f.schuljahr, typ: f.typ } },
+      update: { start: new Date(f.start), ende: new Date(f.ende) },
+      create: { bundesland: f.bundesland, schuljahr: f.schuljahr, typ: f.typ, start: new Date(f.start), ende: new Date(f.ende) },
     });
   }
 

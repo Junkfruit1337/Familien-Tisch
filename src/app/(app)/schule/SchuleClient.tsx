@@ -32,15 +32,21 @@ type Note = {
   fotoBase64: string | null;
 };
 type Transaktion = { id: string; betrag: number; typ: string; grund: string | null; createdAt: string };
+type FerienEintrag = { typ: string; start: string; ende: string; tageBis: number };
+type FerienUebersicht = { bundesland: string; schuljahr: string; ferien: FerienEintrag[]; naechste: FerienEintrag | null } | null;
 type Kind = {
   id: string;
   name: string;
   farbe: string;
+  bundesland: string | null;
+  klassenstufe: number | null;
+  klasse: string | null;
   faecher: { id: string; name: string }[];
   noten: Note[];
   kontostand: number;
   taschengeld: Transaktion[];
   sparziel: { bezeichnung: string; zielbetrag: number } | null;
+  ferien: FerienUebersicht;
 };
 type SchulEintrag = {
   id: string;
@@ -58,6 +64,28 @@ const ART_LABEL: Record<string, string> = {
   HAUSAUFGABEN_KONTROLLE: "Hausaufgaben-Kontrolle",
   EPOCHALNOTE: "Epochalnote",
 };
+
+const FERIEN_LABEL: Record<string, string> = {
+  HERBST: "Herbstferien",
+  WEIHNACHTEN: "Weihnachtsferien",
+  WINTER: "Winterferien",
+  OSTERN: "Osterferien",
+  PFINGSTEN: "Pfingstferien",
+  SOMMER: "Sommerferien",
+};
+
+// Schuljahr-Grenze für die Durchschnittsnote (Fix-Batch 27) — bundesweit einheitlich
+// 1. August – 31. Juli (siehe aktuellesSchuljahr() in schule/actions.ts, hier dupliziert
+// als kleine reine Funktion, da Server-Action-Dateien nicht direkt in Client-Komponenten
+// importiert werden können).
+function istImLaufendenSchuljahr(datumIso: string): boolean {
+  const datum = new Date(datumIso);
+  const jetzt = new Date();
+  const startJahr = jetzt.getMonth() >= 7 ? jetzt.getFullYear() : jetzt.getFullYear() - 1;
+  const start = new Date(startJahr, 7, 1);
+  const ende = new Date(startJahr + 1, 6, 31, 23, 59, 59);
+  return datum >= start && datum <= ende;
+}
 
 function resizeBildAufBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -436,6 +464,12 @@ export default function SchuleClient({
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <h1 style={{ fontSize: 22, margin: 0 }}>Schule &amp; Taschengeld</h1>
+      {(kind.klasse || kind.klassenstufe) && (
+        <p style={{ margin: "-8px 0 0", fontSize: 13, color: "var(--text-muted)" }}>
+          {kind.klasse ? `Klasse ${kind.klasse}` : `${kind.klassenstufe}. Klasse`}
+          {kind.bundesland ? ` · ${kind.bundesland}` : ""}
+        </p>
+      )}
 
       {feier && <Feier onEnde={() => setFeier(false)} />}
       {grossesBild && <BildModal src={grossesBild} onClose={() => setGrossesBild(null)} />}
@@ -458,6 +492,7 @@ export default function SchuleClient({
               onClick={() => setAusgewaehlt(k.id)}
             >
               {k.name}
+              {k.klasse ? ` (${k.klasse})` : ""}
             </button>
           ))}
         </div>
@@ -706,7 +741,9 @@ export default function SchuleClient({
         {kind.faecher.map((f) => {
           const notenDesFachs = kind.noten.filter((n) => n.fachId === f.id);
           if (notenDesFachs.length === 0) return null;
-          const genehmigt = notenDesFachs.filter((n) => n.status === "GENEHMIGT");
+          // Durchschnitt zählt nur Noten des laufenden Schuljahres (Fix-Batch 27) —
+          // ältere Noten bleiben in der Liste sichtbar, fließen aber nicht mehr in den Ø ein.
+          const genehmigt = notenDesFachs.filter((n) => n.status === "GENEHMIGT" && istImLaufendenSchuljahr(n.datum));
           const summeGewicht = genehmigt.reduce((s, n) => s + n.gewichtung, 0);
           const schnitt = summeGewicht > 0 ? genehmigt.reduce((s, n) => s + n.note * n.gewichtung, 0) / summeGewicht : null;
           return (
@@ -815,6 +852,44 @@ export default function SchuleClient({
           ))}
         </div>
       </details>
+
+      {kind.ferien ? (
+        <details>
+          <summary style={{ cursor: "pointer", color: "var(--text-muted)" }}>
+            🏖️{" "}
+            {kind.ferien.naechste
+              ? kind.ferien.naechste.tageBis === 0
+                ? `Heute beginnen die ${FERIEN_LABEL[kind.ferien.naechste.typ] ?? kind.ferien.naechste.typ}!`
+                : `Noch ${kind.ferien.naechste.tageBis} Tag(e) bis zu den ${FERIEN_LABEL[kind.ferien.naechste.typ] ?? kind.ferien.naechste.typ}`
+              : "Ferien dieses Schuljahres"}
+          </summary>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 8 }}>
+            <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>
+              Schuljahr {kind.ferien.schuljahr} · {kind.ferien.bundesland}
+            </p>
+            {kind.ferien.ferien.map((f) => (
+              <div key={f.typ} className="card" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", opacity: f.tageBis < 0 ? 0.5 : 1 }}>
+                <span style={{ fontSize: 14 }}>
+                  {FERIEN_LABEL[f.typ] ?? f.typ}
+                  <br />
+                  <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
+                    {new Date(f.start).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" })} – {new Date(f.ende).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" })}
+                  </span>
+                </span>
+                <span style={{ fontSize: 13, fontWeight: 600 }}>
+                  {f.tageBis < 0 ? "vorbei" : f.tageBis === 0 ? "heute!" : `noch ${f.tageBis} Tag(e)`}
+                </span>
+              </div>
+            ))}
+          </div>
+        </details>
+      ) : (
+        !istEltern && (
+          <p style={{ fontSize: 12, color: "var(--text-muted)" }}>
+            Für den Ferien-Countdown bitte in den Einstellungen dein Bundesland auswählen.
+          </p>
+        )
+      )}
     </div>
   );
 }

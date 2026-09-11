@@ -29,6 +29,11 @@ model Person {
   // Portionsgröße für den Essensplan-Skalierungsrechner (Fix-Batch 23) — vorher fest im
   // Code hinterlegt (Flo 1.5, Ayla 0.5, Rest 1), jetzt in den Einstellungen editierbar.
   portionsGewicht Float @default(1)
+  // Für den Ferien-Countdown und die Schuljahr-Zuordnung (Fix-Batch 27) — nur für Kinder
+  // relevant, in den Einstellungen von jedem Kind selbst wählbar.
+  bundesland    String?
+  klassenstufe  Int?
+  klasse        String? // z.B. "5a"
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -490,4 +495,18 @@ model Ticket {
   erstelltVon   Person       @relation(fields: [erstelltVonId], references: [id])
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
+}
+
+// ---------- Schulferien (Fix-Batch 27) ----------
+// Statische Referenzdaten (aus src/lib/schulferienDaten.ts, jährlich per Deploy neu
+// synchronisiert — analog dem Dienstkatalog-Vorlage-Mechanismus), nicht in der App editierbar.
+model Schulferien {
+  id         String   @id @default(cuid())
+  bundesland String
+  schuljahr  String // z.B. "2026/2027"
+  typ        String // HERBST | WEIHNACHTEN | WINTER | OSTERN | PFINGSTEN | SOMMER
+  start      DateTime
+  ende       DateTime
+
+  @@unique([bundesland, schuljahr, typ])
 }
