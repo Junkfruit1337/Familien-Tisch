@@ -5,7 +5,7 @@ import { requirePerson, requireParent } from "@/lib/auth";
 import { logAenderung } from "@/lib/history";
 import { revalidatePath } from "next/cache";
 import { sendePushAnEltern, sendePushAnPerson } from "@/lib/push";
-import { erkenneNoteAusSprache, type ErkannteNote } from "@/lib/spracheErkennung";
+import { erkenneNoteAusSprache, type ErkannteNote, erkenneSchulEintragAusSprache, type ErkannterSchulEintrag, pruefeFachDuplikatKI } from "@/lib/spracheErkennung";
 
 function betragFuerNote(note: number): number {
   if (note === 1) return 10;
@@ -99,6 +99,38 @@ export async function addFach(kindId: string, name: string) {
   revalidatePath("/einstellungen");
 }
 
+// KI-gestützter Duplikat-Check vor dem eigentlichen Anlegen (Fix-Batch 30) — erkennt auch
+// Schreibvarianten/Abkürzungen/Synonyme, die der reine (exakte) Textvergleich in addFach
+// nicht abdeckt. Gibt bei einem KI-Fehler bewusst "kein Duplikat" zurück, damit das Anlegen
+// eines Fachs nie an einem Spracherkennungs-Ausfall scheitert.
+export async function pruefeFachDuplikat(kindId: string, name: string) {
+  await requirePerson();
+  const bestehende = await prisma.fach.findMany({ where: { kindId } });
+  const exakt = bestehende.find((f) => f.name.trim().toLowerCase() === name.trim().toLowerCase());
+  if (exakt) return { istVermutlichDuplikat: true, aehnlichesFach: exakt.name };
+  if (bestehende.length === 0) return { istVermutlichDuplikat: false, aehnlichesFach: null };
+  try {
+    return await pruefeFachDuplikatKI(name, bestehende.map((f) => f.name));
+  } catch {
+    return { istVermutlichDuplikat: false, aehnlichesFach: null };
+  }
+}
+
+// Fix-Batch 30: Fächer sind jetzt auch umbenennbar (vorher nur anlegen/löschen möglich).
+export async function updateFach(id: string, name: string) {
+  const person = await requirePerson();
+  const fach = await prisma.fach.findUnique({ where: { id } });
+  if (!fach) throw new Error("Fach nicht gefunden.");
+  if (person.rolle !== "ELTERN" && person.id !== fach.kindId) throw new Error("Nicht erlaubt.");
+  const bestehende = await prisma.fach.findMany({ where: { kindId: fach.kindId, id: { not: id } } });
+  if (bestehende.some((f) => f.name.trim().toLowerCase() === name.trim().toLowerCase())) {
+    throw new Error(`„${name}" ist für dieses Kind schon angelegt.`);
+  }
+  await prisma.fach.update({ where: { id }, data: { name: name.trim() } });
+  revalidatePath("/schule");
+  revalidatePath("/einstellungen");
+}
+
 export async function deleteFach(id: string) {
   await requireParent();
   try {
@@ -133,6 +165,10 @@ export async function pruefeNotenDuplikat(params: { fachId: string; art: string;
   return !!treffer;
 }
 
+// notiz enthält seit Fix-Batch 30 das PFLICHT-"Thema" (vorher optionale Notiz, wurde aber
+// tatsächlich fürs Thema der Arbeit genutzt — Florian wollte das verbindlich machen, damit
+// auch im Nachhinein nachvollziehbar bleibt, worum es ging). Kein Schema-Feld umbenannt,
+// nur hier verbindlich gemacht und im Formular als "Thema" beschriftet.
 export async function einreichenNote(data: {
   fachId: string;
   art: string;
@@ -142,6 +178,7 @@ export async function einreichenNote(data: {
   fotoBase64?: string;
 }) {
   const person = await requirePerson();
+  if (!data.notiz?.trim()) throw new Error("Bitte das Thema der Arbeit/Kontrolle angeben.");
   const istEltern = person.rolle === "ELTERN";
   const fach = await prisma.fach.findUnique({ where: { id: data.fachId } });
   if (!fach) throw new Error("Fach nicht gefunden.");
@@ -404,59 +441,91 @@ export async function listAnstehendeSchulEintraege() {
   const person = await requirePerson();
   const where =
     person.rolle === "ELTERN" ? { datum: { gte: new Date() } } : { personId: person.id, datum: { gte: new Date() } };
-  return prisma.schulEintrag.findMany({ where, include: { person: true }, orderBy: { datum: "asc" }, take: 5 });
+  return prisma.schulEintrag.findMany({ where, include: { person: true, fach: true }, orderBy: { datum: "asc" }, take: 5 });
 }
 
 export async function listSchulEintraege(kindId?: string) {
   const person = await requirePerson();
   const where = person.rolle === "ELTERN" ? (kindId ? { personId: kindId } : {}) : { personId: person.id };
-  return prisma.schulEintrag.findMany({ where, include: { person: true }, orderBy: { datum: "asc" } });
+  return prisma.schulEintrag.findMany({ where, include: { person: true, fach: true }, orderBy: { datum: "asc" } });
 }
 
-export async function listFachNamenFuerKinder(kindIds: string[]) {
-  if (kindIds.length === 0) return [];
-  const faecher = await prisma.fach.findMany({
-    where: { kindId: { in: kindIds } },
-    select: { name: true },
-    distinct: ["name"],
-  });
-  return faecher.map((f) => f.name).sort((a, b) => a.localeCompare(b, "de"));
+// Spracheingabe fürs Klassenarbeiten/HÜ-Kontrollen-Formular (Fix-Batch 30). fachOptionen wird
+// vom Client mitgegeben (die aktuell relevanten Fächer, je nachdem welche(s) Kind(er) gerade
+// ausgewählt sind) statt hier anhand einer kindId neu geladen zu werden.
+export async function erkenneSchulEintragAusText(
+  text: string,
+  fachOptionen: { id: string; name: string }[]
+): Promise<{ ok: true; eintrag: ErkannterSchulEintrag } | { ok: false; fehler: string }> {
+  await requirePerson();
+  try {
+    const personen = await prisma.person.findMany({ where: { rolle: "KIND", aktiv: true }, select: { id: true, name: true } });
+    const eintrag = await erkenneSchulEintragAusSprache(text, fachOptionen, personen);
+    return { ok: true, eintrag };
+  } catch (err) {
+    console.error("Spracheingabe (Schul-Eintrag) fehlgeschlagen:", err);
+    const fehler = err instanceof Error ? err.message : "Unbekannter Fehler bei der Spracherkennung.";
+    return { ok: false, fehler };
+  }
 }
 
-export async function createSchulEintrag(data: { titel: string; fachName?: string; art: string; datum: string; personIds?: string[] }) {
+// titel enthält seit Fix-Batch 30 das "Thema" (siehe Kommentar bei einreichenNote) statt
+// eines generischen, wenig aussagekräftigen "Titels". fachName wird weiterhin als NAME
+// entgegengenommen (nicht als ID) und pro Zielperson gegen deren eigene Fächerliste
+// aufgelöst — nötig, weil beim Anlegen für mehrere Kinder gleichzeitig jedes Kind sein
+// eigenes Fach mit eigener ID hat.
+export async function createSchulEintrag(data: { thema: string; fachName?: string; art: string; datum: string; personIds?: string[] }) {
   const person = await requirePerson();
   const istEltern = person.rolle === "ELTERN";
   const zielIds = istEltern ? (data.personIds && data.personIds.length > 0 ? data.personIds : [person.id]) : [person.id];
 
-  await prisma.schulEintrag.createMany({
-    data: zielIds.map((personId) => ({
-      titel: data.titel,
-      fachName: data.fachName || undefined,
-      art: data.art as any,
-      datum: new Date(data.datum),
-      personId,
-    })),
-  });
+  const rows = await Promise.all(
+    zielIds.map(async (personId) => {
+      let fachId: string | null = null;
+      if (data.fachName) {
+        const fach = await prisma.fach.findFirst({ where: { kindId: personId, name: { equals: data.fachName, mode: "insensitive" } } });
+        fachId = fach?.id ?? null;
+      }
+      return {
+        titel: data.thema,
+        fachName: data.fachName || undefined,
+        fachId,
+        art: data.art as any,
+        datum: new Date(data.datum),
+        personId,
+      };
+    })
+  );
+
+  await prisma.schulEintrag.createMany({ data: rows });
   revalidatePath("/schule");
   revalidatePath("/dashboard");
+  revalidatePath("/kalender");
 }
 
-export async function updateSchulEintrag(id: string, data: { titel?: string; fachName?: string; art?: string; datum?: string }) {
+export async function updateSchulEintrag(id: string, data: { thema?: string; fachName?: string; art?: string; datum?: string }) {
   const person = await requirePerson();
   const bestehend = await prisma.schulEintrag.findUnique({ where: { id } });
   if (!bestehend) throw new Error("Eintrag nicht gefunden.");
   if (person.rolle !== "ELTERN" && bestehend.personId !== person.id) throw new Error("Nicht erlaubt.");
+  let fachId: string | null | undefined = undefined;
+  if (data.fachName !== undefined) {
+    const fach = data.fachName ? await prisma.fach.findFirst({ where: { kindId: bestehend.personId, name: { equals: data.fachName, mode: "insensitive" } } }) : null;
+    fachId = fach?.id ?? null;
+  }
   await prisma.schulEintrag.update({
     where: { id },
     data: {
-      titel: data.titel,
+      titel: data.thema,
       fachName: data.fachName,
+      fachId,
       art: data.art ? (data.art as any) : undefined,
       datum: data.datum ? new Date(data.datum) : undefined,
     },
   });
   revalidatePath("/schule");
   revalidatePath("/dashboard");
+  revalidatePath("/kalender");
 }
 
 export async function deleteSchulEintrag(id: string) {

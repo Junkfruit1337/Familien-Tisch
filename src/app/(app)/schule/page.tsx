@@ -7,7 +7,6 @@ import {
   listTaschengeld,
   getSparziel,
   listSchulEintraege,
-  listFachNamenFuerKinder,
   listFerienFuerKind,
 } from "./actions";
 import SchuleClient from "./SchuleClient";
@@ -62,7 +61,6 @@ export default async function SchulePage() {
   );
 
   const schulEintraege = await listSchulEintraege();
-  const fachNamen = await listFachNamenFuerKinder(kinder.map((k) => k.id));
 
   return (
     <SchuleClient
@@ -72,14 +70,13 @@ export default async function SchulePage() {
       schulEintraege={schulEintraege.map((s) => ({
         id: s.id,
         titel: s.titel,
-        fachName: s.fachName,
+        fachName: s.fach?.name ?? s.fachName,
         art: s.art,
         datum: s.datum.toISOString(),
         personId: s.personId,
         personName: s.person.name,
         personFarbe: s.person.farbe,
       }))}
-      fachNamen={fachNamen}
     />
   );
 }

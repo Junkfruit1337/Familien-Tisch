@@ -4,7 +4,22 @@ import { prisma } from "@/lib/prisma";
 import { requirePerson, requireParent } from "@/lib/auth";
 import { logAenderung } from "@/lib/history";
 import { erkenneKategorie } from "@/lib/kategorisierung";
+import { erkenneArtikelAusSprache, type ErkannterArtikel } from "@/lib/spracheErkennung";
 import { revalidatePath } from "next/cache";
+
+// Spracheingabe fürs Artikel-/Wunsch-Formular (Fix-Batch 30) — für Eltern (Artikel direkt
+// hinzufügen) und Kinder (Wunsch einreichen) gleichermaßen nutzbar.
+export async function erkenneArtikelAusText(text: string): Promise<{ ok: true; artikel: ErkannterArtikel } | { ok: false; fehler: string }> {
+  await requirePerson();
+  try {
+    const artikel = await erkenneArtikelAusSprache(text);
+    return { ok: true, artikel };
+  } catch (err) {
+    console.error("Spracheingabe (Artikel) fehlgeschlagen:", err);
+    const fehler = err instanceof Error ? err.message : "Unbekannter Fehler bei der Spracherkennung.";
+    return { ok: false, fehler };
+  }
+}
 
 // Ermittelt automatisch eine Kategorie-ID anhand des Artikelnamens (Stichwort-Erkennung).
 // Wird nur genutzt, wenn keine Kategorie manuell ausgewählt wurde.

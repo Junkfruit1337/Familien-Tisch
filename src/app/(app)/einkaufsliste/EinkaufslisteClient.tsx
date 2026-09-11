@@ -15,12 +15,14 @@ import {
   setzeVorschlaegeZurueck,
   bestaetigeArtikel,
   lehneArtikelAb,
+  erkenneArtikelAusText,
 } from "./actions";
 import { pruefeZutatenFuerRezept, uebernehmeZusaetzlicheZutaten } from "../essensplan/actions";
 import { erkenneKategorie } from "@/lib/kategorisierung";
 import { erkenneArtikelIcon } from "@/lib/artikelIcon";
 import HistorieVerlauf from "@/components/HistorieVerlauf";
 import FaktorLeiste from "@/components/FaktorLeiste";
+import Spracheingabe from "@/components/Spracheingabe";
 
 type Artikel = { id: string; name: string; menge: string | null; erledigt: boolean; kategorieId: string | null; kategorieName: string };
 type Wunsch = { id: string; artikelName: string; menge: string | null; status: string; kindName: string; entschiedenAm: string | null };
@@ -145,6 +147,22 @@ export default function EinkaufslisteClient({
   const [extraZeilen, setExtraZeilen] = useState<Zutat[]>([]);
   const [extraAusgewaehlt, setExtraAusgewaehlt] = useState<boolean[]>([]);
   const [extraGeprueft, setExtraGeprueft] = useState(false);
+  const [spracheVerarbeitung, setSpracheVerarbeitung] = useState(false);
+
+  async function spracheErkannt(text: string) {
+    setSpracheVerarbeitung(true);
+    try {
+      const ergebnis = await erkenneArtikelAusText(text);
+      if (!ergebnis.ok) {
+        alert(ergebnis.fehler);
+        return;
+      }
+      setName(ergebnis.artikel.name);
+      setMenge(ergebnis.artikel.menge ?? "");
+    } finally {
+      setSpracheVerarbeitung(false);
+    }
+  }
 
   async function aendereExtraFaktor(faktor: number) {
     setExtraFaktor(faktor);
@@ -211,6 +229,8 @@ export default function EinkaufslisteClient({
 
       {istEltern ? (
         <div className="card" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <Spracheingabe onErgebnis={spracheErkannt} disabled={spracheVerarbeitung} />
+          {spracheVerarbeitung && <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>Spracheingabe wird verarbeitet …</p>}
           <input placeholder="Artikel" value={name} onChange={(e) => setName(e.target.value)} />
           <input placeholder="Menge (optional)" value={menge} onChange={(e) => setMenge(e.target.value)} />
           <select value={kategorieId} onChange={(e) => setKategorieId(e.target.value)}>
@@ -249,6 +269,8 @@ export default function EinkaufslisteClient({
           <p style={{ margin: 0, fontSize: 14, color: "var(--text-muted)" }}>
             Du kannst die Liste nicht direkt ändern — reiche stattdessen einen Wunsch ein, den die Eltern genehmigen.
           </p>
+          <Spracheingabe onErgebnis={spracheErkannt} disabled={spracheVerarbeitung} />
+          {spracheVerarbeitung && <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>Spracheingabe wird verarbeitet …</p>}
           <input placeholder="Was wünschst du dir?" value={name} onChange={(e) => setName(e.target.value)} />
           <input placeholder="Menge (optional)" value={menge} onChange={(e) => setMenge(e.target.value)} />
           <button

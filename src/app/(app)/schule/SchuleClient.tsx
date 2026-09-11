@@ -15,6 +15,7 @@ import {
   updateSchulEintrag,
   deleteSchulEintrag,
   erkenneNoteAusText,
+  erkenneSchulEintragAusText,
 } from "./actions";
 import HistorieVerlauf from "@/components/HistorieVerlauf";
 import Spracheingabe from "@/components/Spracheingabe";
@@ -185,29 +186,63 @@ function SchulEintraegeSektion({
   istEltern,
   eigeneId,
   kinder,
-  fachNamen,
   eintraege,
 }: {
   istEltern: boolean;
   eigeneId: string;
-  kinder: { id: string; name: string; farbe: string }[];
-  fachNamen: string[];
+  kinder: { id: string; name: string; farbe: string; faecher: { id: string; name: string }[] }[];
   eintraege: SchulEintrag[];
 }) {
   const [pending, startTransition] = useTransition();
   const [zeigeForm, setZeigeForm] = useState(false);
-  const [titel, setTitel] = useState("");
+  const [thema, setThema] = useState("");
   const [fachName, setFachName] = useState("");
   const [art, setArt] = useState("KLASSENARBEIT");
   const [datum, setDatum] = useState("");
   const [ausgewaehlteKinder, setAusgewaehlteKinder] = useState<string[]>(istEltern ? [] : [eigeneId]);
   const [filterKindId, setFilterKindId] = useState<string>("alle");
   const [bearbeiteId, setBearbeiteId] = useState<string | null>(null);
-  const [bearbeitenTitel, setBearbeitenTitel] = useState("");
+  const [bearbeitenThema, setBearbeitenThema] = useState("");
   const [bearbeitenDatum, setBearbeitenDatum] = useState("");
+  const [spracheVerarbeitung, setSpracheVerarbeitung] = useState(false);
 
   function toggleKind(id: string) {
     setAusgewaehlteKinder((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  }
+
+  // Fächer der aktuell ausgewählten Kinder (bei Eltern: nur wenn welche angehakt sind;
+  // sonst — bzw. beim Kind selbst — automatisch dessen eigene Fächer), als echtes Dropdown
+  // statt freiem Text (Fix-Batch 30). Nach Name dedupliziert, da mehrere Kinder dasselbe
+  // Fach unter je eigener ID haben.
+  const relevanteKinder = istEltern && ausgewaehlteKinder.length > 0 ? kinder.filter((k) => ausgewaehlteKinder.includes(k.id)) : kinder;
+  const faecherOptionen = useMemo(() => {
+    const namen = new Map<string, { id: string; name: string }>();
+    for (const k of relevanteKinder) for (const f of k.faecher) if (!namen.has(f.name)) namen.set(f.name, f);
+    return [...namen.values()].sort((a, b) => a.name.localeCompare(b.name, "de"));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [istEltern, ausgewaehlteKinder, kinder]);
+
+  async function spracheErkannt(text: string) {
+    setSpracheVerarbeitung(true);
+    try {
+      const ergebnis = await erkenneSchulEintragAusText(text, faecherOptionen);
+      if (!ergebnis.ok) {
+        alert(ergebnis.fehler);
+        return;
+      }
+      const e = ergebnis.eintrag;
+      setZeigeForm(true);
+      setThema(e.thema);
+      setArt(e.art);
+      setDatum(e.datum ?? "");
+      if (e.fachId) {
+        const f = faecherOptionen.find((x) => x.id === e.fachId);
+        if (f) setFachName(f.name);
+      }
+      if (istEltern && e.personIds.length > 0) setAusgewaehlteKinder(e.personIds);
+    } finally {
+      setSpracheVerarbeitung(false);
+    }
   }
 
   const sichtbareEintraege = eintraege.filter((e) => filterKindId === "alle" || e.personId === filterKindId);
@@ -245,23 +280,8 @@ function SchulEintraegeSektion({
 
       {zeigeForm && (
         <div style={{ display: "flex", flexDirection: "column", gap: 8, borderTop: "1px solid var(--border)", paddingTop: 10 }}>
-          <input placeholder="Titel (z. B. Mathe-Arbeit)" value={titel} onChange={(e) => setTitel(e.target.value)} />
-          <input
-            list="fachnamen-liste"
-            placeholder="Fach (optional)"
-            value={fachName}
-            onChange={(e) => setFachName(e.target.value)}
-          />
-          <datalist id="fachnamen-liste">
-            {fachNamen.map((f) => (
-              <option key={f} value={f} />
-            ))}
-          </datalist>
-          <select value={art} onChange={(e) => setArt(e.target.value)}>
-            <option value="KLASSENARBEIT">Klassenarbeit</option>
-            <option value="HAUSAUFGABEN_KONTROLLE">Hausaufgaben-Kontrolle</option>
-          </select>
-          <input type="date" value={datum} onChange={(e) => setDatum(e.target.value)} />
+          <Spracheingabe onErgebnis={spracheErkannt} disabled={spracheVerarbeitung} />
+          {spracheVerarbeitung && <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>Spracheingabe wird verarbeitet …</p>}
 
           {istEltern && (
             <div>
@@ -276,21 +296,35 @@ function SchulEintraegeSektion({
               </div>
             </div>
           )}
+          <select value={fachName} onChange={(e) => setFachName(e.target.value)}>
+            <option value="">Fach wählen (optional)</option>
+            {faecherOptionen.map((f) => (
+              <option key={f.id} value={f.name}>
+                {f.name}
+              </option>
+            ))}
+          </select>
+          <input placeholder="Thema (z. B. Bruchrechnung)" value={thema} onChange={(e) => setThema(e.target.value)} />
+          <select value={art} onChange={(e) => setArt(e.target.value)}>
+            <option value="KLASSENARBEIT">Klassenarbeit</option>
+            <option value="HAUSAUFGABEN_KONTROLLE">Hausaufgaben-Kontrolle</option>
+          </select>
+          <input type="date" value={datum} onChange={(e) => setDatum(e.target.value)} />
 
           <button
             className="btn"
             disabled={pending}
             onClick={() =>
               startTransition(async () => {
-                if (!titel || !datum) return;
+                if (!thema || !datum) return;
                 await createSchulEintrag({
-                  titel,
+                  thema,
                   fachName: fachName || undefined,
                   art,
                   datum,
                   personIds: istEltern ? ausgewaehlteKinder : undefined,
                 });
-                setTitel("");
+                setThema("");
                 setFachName("");
                 setDatum("");
                 setAusgewaehlteKinder(istEltern ? [] : [eigeneId]);
@@ -313,7 +347,7 @@ function SchulEintraegeSektion({
             <div key={e.id} className="card">
               {wirdBearbeitet ? (
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  <input value={bearbeitenTitel} onChange={(ev) => setBearbeitenTitel(ev.target.value)} />
+                  <input value={bearbeitenThema} onChange={(ev) => setBearbeitenThema(ev.target.value)} placeholder="Thema" />
                   <input type="date" value={bearbeitenDatum} onChange={(ev) => setBearbeitenDatum(ev.target.value)} />
                   <div style={{ display: "flex", gap: 8 }}>
                     <button
@@ -321,7 +355,7 @@ function SchulEintraegeSektion({
                       style={{ padding: "6px 10px" }}
                       onClick={() =>
                         startTransition(async () => {
-                          await updateSchulEintrag(e.id, { titel: bearbeitenTitel, datum: bearbeitenDatum });
+                          await updateSchulEintrag(e.id, { thema: bearbeitenThema, datum: bearbeitenDatum });
                           setBearbeiteId(null);
                         })
                       }
@@ -360,7 +394,7 @@ function SchulEintraegeSektion({
                           style={{ fontSize: 12, padding: "4px 8px" }}
                           onClick={() => {
                             setBearbeiteId(e.id);
-                            setBearbeitenTitel(e.titel);
+                            setBearbeitenThema(e.titel);
                             setBearbeitenDatum(e.datum.slice(0, 10));
                           }}
                         >
@@ -391,13 +425,11 @@ export default function SchuleClient({
   eigeneId,
   kinder,
   schulEintraege,
-  fachNamen,
 }: {
   istEltern: boolean;
   eigeneId: string;
   kinder: Kind[];
   schulEintraege: SchulEintrag[];
-  fachNamen: string[];
 }) {
   const [ausgewaehlt, setAusgewaehlt] = useState(kinder[0]?.id ?? "");
   const [pending, startTransition] = useTransition();
@@ -449,6 +481,10 @@ export default function SchuleClient({
 
   async function jetztEinreichen() {
     if (!fachId) return;
+    if (!notiz.trim()) {
+      alert("Bitte das Thema der Arbeit/Kontrolle angeben.");
+      return;
+    }
     const istDuplikat = await pruefeNotenDuplikat({ fachId, art, datum });
     if (istDuplikat && !confirm("Für dieses Fach/diese Art gibt es an diesem Tag schon eine Note. Trotzdem speichern?")) {
       return;
@@ -477,8 +513,7 @@ export default function SchuleClient({
       <SchulEintraegeSektion
         istEltern={istEltern}
         eigeneId={eigeneId}
-        kinder={kinder.map((k) => ({ id: k.id, name: k.name, farbe: k.farbe }))}
-        fachNamen={fachNamen}
+        kinder={kinder.map((k) => ({ id: k.id, name: k.name, farbe: k.farbe, faecher: k.faecher }))}
         eintraege={schulEintraege}
       />
 
@@ -706,7 +741,7 @@ export default function SchuleClient({
             ))}
           </select>
           <input type="date" value={datum} onChange={(e) => setDatum(e.target.value)} />
-          <input placeholder="Notiz (optional)" value={notiz} onChange={(e) => setNotiz(e.target.value)} />
+          <input placeholder="Thema (Pflichtfeld, z. B. Bruchrechnung)" value={notiz} onChange={(e) => setNotiz(e.target.value)} />
           <label style={{ fontSize: 13, display: "flex", flexDirection: "column", gap: 4 }}>
             Foto vom Notenzettel (optional)
             <input
