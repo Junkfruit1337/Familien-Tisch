@@ -16,7 +16,34 @@ import {
   uebernehmeAusgewaehlteZutaten,
   pruefeGelocktenTagWechsel,
   setTagTrotzSperre,
+  erkenneRezeptAusFoto,
 } from "./actions";
+
+// Für die Foto-Erkennung etwas größer/hochwertiger als bei Notenfotos (Batch 3),
+// damit auch kleinere Kochbuch-/Handschrift-Texte für die Bilderkennung lesbar bleiben.
+function rezeptfotoAufBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const bild = new Image();
+    const reader = new FileReader();
+    reader.onerror = reject;
+    reader.onload = () => {
+      bild.onerror = reject;
+      bild.onload = () => {
+        const maxBreite = 1500;
+        const skalierung = Math.min(1, maxBreite / bild.width);
+        const canvas = document.createElement("canvas");
+        canvas.width = bild.width * skalierung;
+        canvas.height = bild.height * skalierung;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return reject(new Error("Canvas nicht verfügbar"));
+        ctx.drawImage(bild, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL("image/jpeg", 0.88));
+      };
+      bild.src = reader.result as string;
+    };
+    reader.readAsDataURL(file);
+  });
+}
 
 type TagEintrag = {
   id: string;
@@ -67,6 +94,7 @@ export default function EssensplanClient({
   const [neuName, setNeuName] = useState("");
   const [neuZutaten, setNeuZutaten] = useState("");
   const [neuZubereitung, setNeuZubereitung] = useState("");
+  const [erkennungLaeuft, setErkennungLaeuft] = useState(false);
 
   async function ladeWoche(neuerOffset: number) {
     const neuerPlan = await getWochenplan(neuerOffset);
@@ -361,6 +389,36 @@ export default function EssensplanClient({
         <details>
           <summary style={{ cursor: "pointer", color: "var(--text-muted)" }}>➕ Neues Rezept hinzufügen (Elternbereich)</summary>
           <div className="card" style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
+            <label style={{ fontSize: 13, display: "flex", flexDirection: "column", gap: 4 }}>
+              📷 Rezept aus Foto erkennen (Kochbuch, Zeitschrift oder handschriftlich)
+              <input
+                type="file"
+                accept="image/*"
+                capture="environment"
+                disabled={erkennungLaeuft}
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  e.target.value = "";
+                  setErkennungLaeuft(true);
+                  try {
+                    const base64 = await rezeptfotoAufBase64(file);
+                    const erkannt = await erkenneRezeptAusFoto(base64);
+                    setNeuName(erkannt.name);
+                    setNeuZutaten(erkannt.zutaten);
+                    setNeuZubereitung(erkannt.zubereitung);
+                  } catch (err: any) {
+                    alert(err.message ?? "Foto konnte nicht erkannt werden.");
+                  } finally {
+                    setErkennungLaeuft(false);
+                  }
+                }}
+              />
+            </label>
+            {erkennungLaeuft && <p style={{ fontSize: 13, color: "var(--text-muted)", margin: 0 }}>Foto wird erkannt …</p>}
+            <p style={{ fontSize: 12, color: "var(--text-muted)", margin: 0 }}>
+              Ergebnis bitte immer prüfen und bei Bedarf korrigieren, bevor du speicherst.
+            </p>
             <input placeholder="Name" value={neuName} onChange={(e) => setNeuName(e.target.value)} />
             <textarea
               placeholder={"Zutaten, eine pro Zeile, z.B.\n500 g Spaghetti\n2 Zwiebeln"}
@@ -371,7 +429,7 @@ export default function EssensplanClient({
             <textarea placeholder="Zubereitung (optional)" rows={4} value={neuZubereitung} onChange={(e) => setNeuZubereitung(e.target.value)} />
             <button
               className="btn"
-              disabled={pending}
+              disabled={pending || erkennungLaeuft}
               onClick={() =>
                 startTransition(async () => {
                   if (!neuName) return;

@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { requireParent } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import { autoKategorieId, findeOffenenArtikel, mergeMenge } from "../einkaufsliste/actions";
+import { erkenneRezeptAusBild } from "@/lib/rezeptErkennung";
 
 function getSamstagWocheStart(date: Date): Date {
   // Essensplan-Woche läuft Samstag–Samstag.
@@ -52,6 +53,13 @@ export async function addRezept(name: string, zutaten: string, zubereitung?: str
   await requireParent();
   await prisma.rezept.create({ data: { name, zutaten, zubereitung: zubereitung || undefined } });
   revalidatePath("/essensplan");
+}
+
+// Rezept-Erfassung per Foto (Fragenkatalog Frage 25, Batch 8) — füllt nur das
+// "Neues Rezept"-Formular vor, gespeichert wird erst nach Prüfung/Korrektur durch die Eltern.
+export async function erkenneRezeptAusFoto(fotoDataUrl: string) {
+  await requireParent();
+  return erkenneRezeptAusBild(fotoDataUrl);
 }
 
 export async function deleteRezept(id: string) {
