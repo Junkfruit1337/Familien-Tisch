@@ -19,7 +19,6 @@ import {
   erkenneRezeptAusFoto,
   updateRezeptPortionenBasis,
 } from "./actions";
-import FaktorLeiste from "@/components/FaktorLeiste";
 
 // Für die Foto-Erkennung etwas größer/hochwertiger als bei Notenfotos (Batch 3),
 // damit auch kleinere Kochbuch-/Handschrift-Texte für die Bilderkennung lesbar bleiben.
@@ -89,7 +88,6 @@ export default function EssensplanClient({
   const [pruefTagId, setPruefTagId] = useState<string | null>(null);
   const [pruefZeilen, setPruefZeilen] = useState<Zutat[]>([]);
   const [pruefAusgewaehlt, setPruefAusgewaehlt] = useState<boolean[]>([]);
-  const [pruefFaktor, setPruefFaktor] = useState(1);
   const [portionenEntwuerfe, setPortionenEntwuerfe] = useState<Record<string, string>>({});
 
   const [sperrDialog, setSperrDialog] = useState<{ eintragId: string; neuesRezeptId: string; herkuenfte: Herkunft[] } | null>(null);
@@ -119,17 +117,8 @@ export default function EssensplanClient({
   }
 
   async function starteZutatenPruefung(eintragId: string) {
-    setPruefFaktor(1);
-    const zeilen = await pruefeZutaten(eintragId, 1);
+    const zeilen = await pruefeZutaten(eintragId);
     setPruefTagId(eintragId);
-    setPruefZeilen(zeilen);
-    setPruefAusgewaehlt(zeilen.map(() => true));
-  }
-
-  async function aendereZutatenFaktor(faktor: number) {
-    if (!pruefTagId) return;
-    setPruefFaktor(faktor);
-    const zeilen = await pruefeZutaten(pruefTagId, faktor);
     setPruefZeilen(zeilen);
     setPruefAusgewaehlt(zeilen.map(() => true));
   }
@@ -231,7 +220,6 @@ export default function EssensplanClient({
             {pruefTagId === t.eintrag?.id && (
               <div style={{ borderTop: "1px solid var(--border)", paddingTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
                 <strong style={{ fontSize: 13 }}>Zutaten prüfen — schon zu Hause?</strong>
-                <FaktorLeiste faktor={pruefFaktor} onChange={aendereZutatenFaktor} />
                 {pruefZeilen.map((z, i) => (
                   <label key={i} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14 }}>
                     <input

@@ -41,3 +41,13 @@ export async function setAktiv(personId: string, aktiv: boolean) {
   await prisma.person.update({ where: { id: personId }, data: { aktiv } });
   revalidatePath("/einstellungen");
 }
+
+// Portionsgröße für den Essensplan-Skalierungsrechner (Fix-Batch 23) — vorher fest im Code
+// (Flo 1.5, Ayla 0.5, Rest 1), jetzt von den Eltern hier pro Person editierbar.
+export async function setPortionsGewicht(personId: string, portionsGewicht: number) {
+  await requireParent();
+  if (!(portionsGewicht > 0)) return;
+  await prisma.person.update({ where: { id: personId }, data: { portionsGewicht } });
+  revalidatePath("/einstellungen");
+  revalidatePath("/essensplan");
+}

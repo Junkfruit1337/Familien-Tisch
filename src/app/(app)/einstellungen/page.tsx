@@ -32,7 +32,7 @@ export default async function EinstellungenPage() {
   return (
     <EinstellungenClient
       istEltern={!!istEltern}
-      personen={personen.map((p) => ({ id: p.id, name: p.name, rolle: p.rolle, farbe: p.farbe, aktiv: p.aktiv, hatPin: !!p.pinHash }))}
+      personen={personen.map((p) => ({ id: p.id, name: p.name, rolle: p.rolle, farbe: p.farbe, aktiv: p.aktiv, hatPin: !!p.pinHash, portionsGewicht: p.portionsGewicht }))}
       kategorien={kategorien.map((k) => ({ id: k.id, name: k.name, reihenfolge: k.reihenfolge }))}
       kinder={kinderDaten}
       dienstkatalog={dienstkatalog.map((d) => ({

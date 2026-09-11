@@ -15,13 +15,6 @@ function getSamstagWocheStart(date: Date): Date {
   return d;
 }
 
-// Feste Personen-Gewichtung für den Portionsrechner (Fragenkatalog Frage 26,
-// von Florian bestätigt) — Standard-Summe bei allen 6 anwesend ist 6.
-const PERSON_GEWICHT: Record<string, number> = { Flo: 1.5, Ayla: 0.5 };
-function personGewicht(name: string): number {
-  return PERSON_GEWICHT[name] ?? 1;
-}
-
 function parseZutatZeile(zeile: string): { name: string; menge?: string } {
   const match = zeile.match(/^([\d.,]+\s*\S+)\s+(.+)$/);
   return match ? { menge: match[1], name: match[2] } : { name: zeile };
@@ -211,23 +204,24 @@ export async function setEsser(eintragId: string, personIds: string[]) {
   const alle = await prisma.person.findMany({ where: { id: { in: personIds } } });
   // Skaliert nicht mehr fest auf 6, sondern auf die Portionsgrundlage des jeweiligen Rezepts
   // (Fix-Batch 22) — ein Rezept "für 1 Portion" ergibt bei allen 6 Essern jetzt Faktor 6, statt
-  // fälschlich Faktor 1 wie zuvor.
-  const faktor = personIds.length === 0 ? 1 : alle.reduce((s, p) => s + personGewicht(p.name), 0) / eintrag.rezept.portionenBasis;
+  // fälschlich Faktor 1 wie zuvor. Personen-Gewichtung kommt jetzt aus der Datenbank
+  // (Fix-Batch 23, in den Einstellungen editierbar) statt aus einer festen Code-Tabelle.
+  const faktor = personIds.length === 0 ? 1 : alle.reduce((s, p) => s + p.portionsGewicht, 0) / eintrag.rezept.portionenBasis;
   await prisma.essensplanEintrag.update({ where: { id: eintragId }, data: { esserIds: personIds, esserFaktor: faktor } });
   revalidatePath("/essensplan");
 }
 
 // Schritt 1 des Prüf-Schritts: zeigt die (mit dem Esser-Faktor skalierten) Zutatenzeilen
 // zur Auswahl, bevor irgendetwas auf die Einkaufsliste kommt (Fahrplan §3, Kernfeature).
-// zusatzFaktor (Fix-Batch 22): zusätzlicher manueller Hebel ("wir brauchen die doppelte
-// Menge"), multipliziert oben auf den automatischen Esser-Faktor.
-export async function pruefeZutaten(eintragId: string, zusatzFaktor = 1) {
+// Die Skalierung kommt allein aus Esser-Auswahl × Rezept-Portionsbasis (Fix-Batch 22/23) —
+// KEIN zusätzlicher manueller Hebel hier (Florian: das war ein Missverständnis, der Hebel
+// gehört nur zur unabhängigen Extra-Rezept-Funktion, siehe pruefeZutatenFuerRezept unten).
+export async function pruefeZutaten(eintragId: string) {
   await requireParent();
   const eintrag = await prisma.essensplanEintrag.findUnique({ where: { id: eintragId }, include: { rezept: true } });
   if (!eintrag) return [];
   const zeilen = eintrag.rezept.zutaten.split("\n").map((z) => z.trim()).filter(Boolean);
-  const faktor = (eintrag.esserFaktor || 1) * (zusatzFaktor || 1);
-  return zeilen.map((z) => skaliereZeile(parseZutatZeile(z), faktor));
+  return zeilen.map((z) => skaliereZeile(parseZutatZeile(z), eintrag.esserFaktor || 1));
 }
 
 // Ad-hoc-Ergänzung unabhängig vom Essensplan-Tag (Fix-Batch 22) — z.B. ein bereits

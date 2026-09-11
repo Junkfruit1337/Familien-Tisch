@@ -7,7 +7,7 @@ export type ErkannterTermin = {
   titel: string;
   datum: string | null; // JJJJ-MM-TT
   uhrzeit: string | null; // HH:MM
-  personId: string | null;
+  personIds: string[]; // leer = niemand Bestimmtes genannt/Familie
   wiederholung: "KEINE" | "TAEGLICH" | "WOECHENTLICH" | "ZWEIWOECHENTLICH" | "MONATLICH";
   wiederholungBis: string | null; // JJJJ-MM-TT, null = unbegrenzt (falls wiederholung != KEINE)
 };
@@ -15,7 +15,7 @@ export type ErkannterTermin = {
 export type ErkannteAufgabe = {
   titel: string;
   datum: string | null;
-  personId: string | null;
+  personIds: string[]; // leer = niemand Bestimmtes genannt/Familie
   wiederholung: "KEINE" | "TAEGLICH" | "WOECHENTLICH" | "ZWEIWOECHENTLICH" | "MONATLICH";
   wiederholungBis: string | null;
 };
@@ -69,6 +69,11 @@ function leseDatumsfeld(wert: unknown): string | null {
   return typeof wert === "string" && /^\d{4}-\d{2}-\d{2}$/.test(wert) ? wert : null;
 }
 
+function lesePersonIds(wert: unknown, personen: PersonFuerSprache[]): string[] {
+  if (!Array.isArray(wert)) return [];
+  return wert.filter((id): id is string => typeof id === "string" && personen.some((p) => p.id === id));
+}
+
 export async function erkenneTerminAusSprache(text: string, personen: PersonFuerSprache[]): Promise<ErkannterTermin> {
   const personenListe = personen.length > 0 ? personen.map((p) => `${p.id} = ${p.name}`).join(", ") : "(keine Personen bekannt)";
   const prompt =
@@ -77,9 +82,10 @@ export async function erkenneTerminAusSprache(text: string, personen: PersonFuer
     `Bekannte Personen (ID = Name): ${personenListe}\n\n` +
     "Extrahiere die Termin-Angaben und antworte AUSSCHLIESSLICH mit einem JSON-Objekt, ohne Markdown-Codeblock, ohne weiteren Text, in genau diesem Format:\n" +
     '{"titel": "kurzer prägnanter Titel", "datum": "JJJJ-MM-TT", "uhrzeit": "HH:MM oder null, falls keine Uhrzeit genannt wurde", ' +
-    '"personId": "eine ID aus der Liste oder null, falls niemand Bestimmtes genannt wurde", ' +
+    '"personIds": ["eine oder mehrere IDs aus der Liste — leeres Array, falls niemand Bestimmtes/die ganze Familie gemeint ist"], ' +
     '"wiederholung": "KEINE oder TAEGLICH oder WOECHENTLICH oder ZWEIWOECHENTLICH oder MONATLICH", ' +
     '"wiederholungBis": "JJJJ-MM-TT oder null (null bedeutet unbegrenzt, nur relevant falls wiederholung nicht KEINE ist)"}\n' +
+    "Wenn mehrere Personen genannt werden (z. B. \"Termin für Emma und Emil\"), gib alle passenden IDs in personIds an. " +
     "Rechne relative Datumsangaben (\"morgen\", \"übermorgen\", \"nächsten Montag\", \"in zwei Wochen\") anhand des heutigen Datums in ein konkretes Datum um. " +
     "Wenn kein Datum erkennbar ist, nimm das heutige Datum.";
 
@@ -88,7 +94,7 @@ export async function erkenneTerminAusSprache(text: string, personen: PersonFuer
     titel: typeof d.titel === "string" && d.titel.trim() ? d.titel.trim() : text.trim(),
     datum: leseDatumsfeld(d.datum),
     uhrzeit: typeof d.uhrzeit === "string" && /^\d{1,2}:\d{2}$/.test(d.uhrzeit) ? d.uhrzeit : null,
-    personId: typeof d.personId === "string" && personen.some((p) => p.id === d.personId) ? d.personId : null,
+    personIds: lesePersonIds(d.personIds, personen),
     wiederholung: leseWiederholung(d),
     wiederholungBis: leseDatumsfeld(d.wiederholungBis),
   };
@@ -102,9 +108,10 @@ export async function erkenneAufgabeAusSprache(text: string, personen: PersonFue
     `Bekannte Personen (ID = Name): ${personenListe}\n\n` +
     "Extrahiere die Aufgaben-Angaben und antworte AUSSCHLIESSLICH mit einem JSON-Objekt, ohne Markdown-Codeblock, ohne weiteren Text, in genau diesem Format:\n" +
     '{"titel": "kurzer prägnanter Titel", "datum": "JJJJ-MM-TT oder null, falls kein Fälligkeitsdatum genannt wurde", ' +
-    '"personId": "eine ID aus der Liste oder null, falls niemand Bestimmtes genannt wurde", ' +
+    '"personIds": ["eine oder mehrere IDs aus der Liste — leeres Array, falls niemand Bestimmtes/die ganze Familie gemeint ist"], ' +
     '"wiederholung": "KEINE oder TAEGLICH oder WOECHENTLICH oder ZWEIWOECHENTLICH oder MONATLICH", ' +
     '"wiederholungBis": "JJJJ-MM-TT oder null (null bedeutet unbegrenzt, nur relevant falls wiederholung nicht KEINE ist)"}\n' +
+    "Wenn mehrere Personen genannt werden (z. B. \"Aufgabe für Emma und Emil\"), gib alle passenden IDs in personIds an. " +
     "Rechne relative Datumsangaben (\"morgen\", \"übermorgen\", \"nächsten Montag\", \"in zwei Wochen\") anhand des heutigen Datums in ein konkretes Datum um. " +
     "Wenn erkennbar keine Fälligkeit gemeint ist, lass \"datum\" auf null.";
 
@@ -112,7 +119,7 @@ export async function erkenneAufgabeAusSprache(text: string, personen: PersonFue
   return {
     titel: typeof d.titel === "string" && d.titel.trim() ? d.titel.trim() : text.trim(),
     datum: leseDatumsfeld(d.datum),
-    personId: typeof d.personId === "string" && personen.some((p) => p.id === d.personId) ? d.personId : null,
+    personIds: lesePersonIds(d.personIds, personen),
     wiederholung: leseWiederholung(d),
     wiederholungBis: leseDatumsfeld(d.wiederholungBis),
   };

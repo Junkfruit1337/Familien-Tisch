@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { createPerson, setPin, setFarbe, setAktiv } from "./actions";
+import { createPerson, setPin, setFarbe, setAktiv, setPortionsGewicht } from "./actions";
 import { addKategorie, verschiebeKategorie } from "../einkaufsliste/actions";
 import { addFach, deleteFach } from "../schule/actions";
 import {
@@ -15,7 +15,7 @@ import {
 import NotengewichtungSektion from "@/components/NotengewichtungSektion";
 import PushBenachrichtigungen from "@/components/PushBenachrichtigungen";
 
-type Person = { id: string; name: string; rolle: string; farbe: string; aktiv: boolean; hatPin: boolean };
+type Person = { id: string; name: string; rolle: string; farbe: string; aktiv: boolean; hatPin: boolean; portionsGewicht: number };
 type Kategorie = { id: string; name: string; reihenfolge: number };
 type Gewichtung = { fachId: string; fachName: string; gewichtungen: { art: string; gewichtung: number }[] };
 type Kind = { id: string; name: string; faecher: { id: string; name: string }[]; gewichtung: Gewichtung[] };
@@ -49,6 +49,7 @@ export default function EinstellungenClient({
   const [pin, setPinInput] = useState("");
   const [farbe, setFarbeInput] = useState("#a97155");
   const [pins, setPins] = useState<Record<string, string>>({});
+  const [portionenEntwuerfe, setPortionenEntwuerfe] = useState<Record<string, string>>({});
   const [neueKategorie, setNeueKategorie] = useState("");
   const [ausgewaehltesKind, setAusgewaehltesKind] = useState(kinder[0]?.id ?? "");
   const [neuesFach, setNeuesFach] = useState("");
@@ -105,11 +106,29 @@ export default function EinstellungenClient({
                   </button>
                 </>
               )}
+              <label style={{ fontSize: 12, display: "flex", alignItems: "center", gap: 4 }}>
+                Portionsgröße
+                <input
+                  type="number"
+                  min={0.25}
+                  step={0.25}
+                  style={{ width: 60 }}
+                  value={portionenEntwuerfe[p.id] ?? String(p.portionsGewicht)}
+                  onChange={(e) => setPortionenEntwuerfe((prev) => ({ ...prev, [p.id]: e.target.value }))}
+                  onBlur={(e) => {
+                    const wert = parseFloat(e.target.value.replace(",", "."));
+                    if (wert > 0) startTransition(() => setPortionsGewicht(p.id, wert));
+                  }}
+                />
+              </label>
               <label style={{ fontSize: 12, marginLeft: "auto" }}>
                 <input type="checkbox" checked={p.aktiv} onChange={(e) => startTransition(() => setAktiv(p.id, e.target.checked))} style={{ width: "auto" }} /> aktiv
               </label>
             </div>
           ))}
+          <p style={{ fontSize: 12, color: "var(--text-muted)", margin: 0 }}>
+            Portionsgröße steuert die Mengen-Skalierung beim Essensplan: 1 = normale Portion, 0,5 = halbe, 1,5 = anderthalbfache usw.
+          </p>
 
           <details>
             <summary style={{ cursor: "pointer", color: "var(--text-muted)" }}>Neue Person anlegen</summary>
@@ -206,6 +225,21 @@ export default function EinstellungenClient({
                 ))}
               </div>
             )}
+            {kinder.length > 1 && (
+              <details>
+                <summary style={{ cursor: "pointer", fontSize: 13, color: "var(--text-muted)" }}>Alle Fächer im Überblick</summary>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
+                  <p style={{ fontSize: 12, color: "var(--text-muted)", margin: 0 }}>
+                    Vor dem Anlegen hier prüfen, ob ein Fach bei einem anderen Kind schon (anders geschrieben) existiert.
+                  </p>
+                  {kinder.map((k) => (
+                    <div key={k.id} style={{ fontSize: 13 }}>
+                      <strong>{k.name}:</strong> {k.faecher.length > 0 ? k.faecher.map((f) => f.name).join(", ") : "— keine Fächer —"}
+                    </div>
+                  ))}
+                </div>
+              </details>
+            )}
             {kind && (
               <>
                 <div className="card" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -238,8 +272,12 @@ export default function EinstellungenClient({
                       onClick={() =>
                         startTransition(async () => {
                           if (!neuesFach) return;
-                          await addFach(kind.id, neuesFach);
-                          setNeuesFach("");
+                          try {
+                            await addFach(kind.id, neuesFach);
+                            setNeuesFach("");
+                          } catch (e: any) {
+                            alert(e.message);
+                          }
                         })
                       }
                     >

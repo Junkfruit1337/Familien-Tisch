@@ -23,7 +23,11 @@ export async function listFaecher(kindId: string) {
 export async function addFach(kindId: string, name: string) {
   const person = await requirePerson();
   if (person.rolle !== "ELTERN" && person.id !== kindId) throw new Error("Nicht erlaubt.");
-  await prisma.fach.create({ data: { kindId, name } });
+  const bestehende = await prisma.fach.findMany({ where: { kindId } });
+  if (bestehende.some((f) => f.name.trim().toLowerCase() === name.trim().toLowerCase())) {
+    throw new Error(`„${name}" ist für dieses Kind schon angelegt.`);
+  }
+  await prisma.fach.create({ data: { kindId, name: name.trim() } });
   revalidatePath("/schule");
   revalidatePath("/einstellungen");
 }
@@ -235,6 +239,25 @@ export async function auszahlen(kindId: string, betrag: number, grund?: string) 
     data: { kindId, betrag, typ: "AUSZAHLUNG", grund, erstelltVonId: person.id },
   });
   await logAenderung({ entityTyp: "TASCHENGELD", entityId: t.id, aktion: "auszahlung", neuerWert: `${betrag} €`, geaendertVonId: person.id });
+  revalidatePath("/schule");
+}
+
+// Manuelles Gutschreiben durch Eltern (Fix-Batch 23) — z.B. Extra-Taschengeld ohne
+// Notenbezug. Notiz ist Pflicht, damit in der Historie immer nachvollziehbar bleibt, wofür.
+export async function manuelleGutschrift(kindId: string, betrag: number, grund: string) {
+  const person = await requireParent();
+  if (!(betrag > 0)) throw new Error("Bitte einen Betrag größer als 0 eingeben.");
+  if (!grund.trim()) throw new Error("Bitte eine Notiz angeben, wofür das Geld ist.");
+  const t = await prisma.taschengeldTransaktion.create({
+    data: { kindId, betrag, typ: "GUTSCHRIFT", grund: grund.trim(), erstelltVonId: person.id },
+  });
+  await logAenderung({
+    entityTyp: "TASCHENGELD",
+    entityId: t.id,
+    aktion: "manuelle Gutschrift",
+    neuerWert: `${betrag} € — ${grund.trim()}`,
+    geaendertVonId: person.id,
+  });
   revalidatePath("/schule");
 }
 

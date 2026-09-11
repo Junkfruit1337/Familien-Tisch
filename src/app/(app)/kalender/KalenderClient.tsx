@@ -79,7 +79,7 @@ export default function KalenderClient({
 
   const [titel, setTitel] = useState("");
   const [start, setStart] = useState("");
-  const [personId, setPersonId] = useState<string>(istEltern ? "" : eigeneId);
+  const [personIds, setPersonIds] = useState<string[]>(istEltern ? [] : [eigeneId]);
   const [wiederholung, setWiederholung] = useState("KEINE");
   const [wiederholungBis, setWiederholungBis] = useState("");
   const [spracheVerarbeitung, setSpracheVerarbeitung] = useState(false);
@@ -143,7 +143,7 @@ export default function KalenderClient({
     setBearbeitenId(t.id);
     setTitel(t.titel);
     setStart(t.start.slice(0, 16));
-    setPersonId(t.personId ?? "");
+    setPersonIds(t.personId ? [t.personId] : []);
     setWiederholung("KEINE");
     setWiederholungBis("");
     setZeigeFormular(true);
@@ -162,7 +162,7 @@ export default function KalenderClient({
       setBearbeitenId(null);
       setTitel(t.titel);
       setStart(`${t.datum ?? isoVonDate(new Date())}T${t.uhrzeit ?? "09:00"}`);
-      if (istEltern && t.personId) setPersonId(t.personId);
+      if (istEltern && t.personIds.length > 0) setPersonIds(t.personIds);
       setWiederholung(t.wiederholung);
       setWiederholungBis(t.wiederholungBis ?? "");
     } finally {
@@ -174,13 +174,13 @@ export default function KalenderClient({
     if (!titel || !start) return;
     startTransition(async () => {
       if (bearbeitenId) {
-        await updateTermin(bearbeitenId, { titel, start, personId: personId || null });
+        await updateTermin(bearbeitenId, { titel, start, personId: personIds[0] ?? null });
       } else {
         await createTermin({
           titel,
           start,
           ganztaegig: false,
-          personId: personId || null,
+          personIds,
           wiederholung,
           wiederholungBis: wiederholungBis || undefined,
         });
@@ -298,14 +298,25 @@ export default function KalenderClient({
             </p>
           )}
           {istEltern && (
-            <select value={personId} onChange={(e) => setPersonId(e.target.value)}>
-              <option value="">Familie (alle)</option>
+            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <label style={{ fontSize: 12, color: "var(--text-muted)" }}>Für wen?</label>
+              <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 14 }}>
+                <input type="checkbox" checked={personIds.length === 0} onChange={() => setPersonIds([])} />
+                Familie (alle)
+              </label>
               {personen.map((p) => (
-                <option key={p.id} value={p.id}>
+                <label key={p.id} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 14 }}>
+                  <input
+                    type="checkbox"
+                    checked={personIds.includes(p.id)}
+                    onChange={() =>
+                      setPersonIds((prev) => (prev.includes(p.id) ? prev.filter((id) => id !== p.id) : [...prev, p.id]))
+                    }
+                  />
                   {p.name}
-                </option>
+                </label>
               ))}
-            </select>
+            </div>
           )}
           {!bearbeitenId && (
             <>

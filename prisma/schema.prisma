@@ -26,6 +26,9 @@ model Person {
   pinHash     String? // nur gesetzt, wenn rolle Login erlaubt
   aktiv       Boolean  @default(true)
   reihenfolge Int      @default(0)
+  // Portionsgröße für den Essensplan-Skalierungsrechner (Fix-Batch 23) — vorher fest im
+  // Code hinterlegt (Flo 1.5, Ayla 0.5, Rest 1), jetzt in den Einstellungen editierbar.
+  portionsGewicht Float @default(1)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

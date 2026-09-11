@@ -84,7 +84,6 @@ export default function EinkaufslisteClient({
   const [pruefTagId, setPruefTagId] = useState<string | null>(null);
   const [pruefZeilen, setPruefZeilen] = useState<Zutat[]>([]);
   const [pruefAusgewaehlt, setPruefAusgewaehlt] = useState<boolean[]>([]);
-  const [pruefFaktor, setPruefFaktor] = useState(1);
   const [erledigteTage, setErledigteTage] = useState<string[]>([]);
 
   const [extraRezeptId, setExtraRezeptId] = useState("");
@@ -94,17 +93,8 @@ export default function EinkaufslisteClient({
   const [extraGeprueft, setExtraGeprueft] = useState(false);
 
   async function starteWochenPruefung(eintragId: string) {
-    setPruefFaktor(1);
-    const zeilen = await pruefeZutaten(eintragId, 1);
+    const zeilen = await pruefeZutaten(eintragId);
     setPruefTagId(eintragId);
-    setPruefZeilen(zeilen);
-    setPruefAusgewaehlt(zeilen.map(() => true));
-  }
-
-  async function aendereWochenFaktor(faktor: number) {
-    if (!pruefTagId) return;
-    setPruefFaktor(faktor);
-    const zeilen = await pruefeZutaten(pruefTagId, faktor);
     setPruefZeilen(zeilen);
     setPruefAusgewaehlt(zeilen.map(() => true));
   }
@@ -256,7 +246,6 @@ export default function EinkaufslisteClient({
                   </div>
                   {pruefTagId === t.eintragId && (
                     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                      <FaktorLeiste faktor={pruefFaktor} onChange={aendereWochenFaktor} />
                       {pruefZeilen.map((z, i) => (
                         <label key={i} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14 }}>
                           <input

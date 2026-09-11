@@ -2,11 +2,11 @@
 
 import { useMemo, useState, useTransition, useEffect } from "react";
 import {
-  addFach,
   einreichenNote,
   entscheideNote,
   loescheNote,
   auszahlen,
+  manuelleGutschrift,
   setSparziel,
   pruefeNotenDuplikat,
   korrigiereNote,
@@ -373,7 +373,6 @@ export default function SchuleClient({
   const [pending, startTransition] = useTransition();
   const kind = useMemo(() => kinder.find((k) => k.id === ausgewaehlt) ?? kinder[0], [kinder, ausgewaehlt]);
 
-  const [neuesFach, setNeuesFach] = useState("");
   const [fachId, setFachId] = useState("");
   const [art, setArt] = useState("KLASSENARBEIT");
   const [noteWert, setNoteWert] = useState(1);
@@ -381,6 +380,8 @@ export default function SchuleClient({
   const [notiz, setNotiz] = useState("");
   const [foto, setFoto] = useState<string | null>(null);
   const [auszahlBetrag, setAuszahlBetrag] = useState("");
+  const [gutschriftBetrag, setGutschriftBetrag] = useState("");
+  const [gutschriftGrund, setGutschriftGrund] = useState("");
   const [zielBezeichnung, setZielBezeichnung] = useState(kind?.sparziel?.bezeichnung ?? "");
   const [zielBetrag, setZielBetrag] = useState(kind?.sparziel?.zielbetrag?.toString() ?? "");
   const [feier, setFeier] = useState(false);
@@ -588,6 +589,34 @@ export default function SchuleClient({
             )}
           </details>
         )}
+        {istEltern && (
+          <details style={{ marginTop: 10 }}>
+            <summary style={{ cursor: "pointer", fontSize: 13 }}>Geld manuell gutschreiben</summary>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
+              <input type="number" placeholder="Betrag €" value={gutschriftBetrag} onChange={(e) => setGutschriftBetrag(e.target.value)} />
+              <input placeholder="Notiz (Pflicht) — z. B. Geburtstagsgeld" value={gutschriftGrund} onChange={(e) => setGutschriftGrund(e.target.value)} />
+              <button
+                className="btn"
+                disabled={pending}
+                onClick={() =>
+                  startTransition(async () => {
+                    const b = parseFloat(gutschriftBetrag);
+                    if (!b) return;
+                    try {
+                      await manuelleGutschrift(kind.id, b, gutschriftGrund);
+                      setGutschriftBetrag("");
+                      setGutschriftGrund("");
+                    } catch (e: any) {
+                      alert(e.message);
+                    }
+                  })
+                }
+              >
+                Gutschreiben
+              </button>
+            </div>
+          </details>
+        )}
       </div>
 
       {(istEltern || kind.id === eigeneId) && (
@@ -645,25 +674,6 @@ export default function SchuleClient({
           <button className="btn" disabled={pending} onClick={() => startTransition(jetztEinreichen)}>
             Eintragen
           </button>
-
-          <details>
-            <summary style={{ cursor: "pointer", fontSize: 13 }}>Fach hinzufügen</summary>
-            <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-              <input placeholder="Neues Fach" value={neuesFach} onChange={(e) => setNeuesFach(e.target.value)} />
-              <button
-                className="btn"
-                onClick={() =>
-                  startTransition(async () => {
-                    if (!neuesFach) return;
-                    await addFach(kind.id, neuesFach);
-                    setNeuesFach("");
-                  })
-                }
-              >
-                +
-              </button>
-            </div>
-          </details>
         </div>
       )}
 

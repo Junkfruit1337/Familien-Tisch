@@ -73,23 +73,27 @@ export async function erkenneTerminAusText(
   }
 }
 
+// personIds: leer = Familie (alle). Für mehrere ausgewählte Personen wird pro Person eine
+// eigene Zeile (bzw. eigene Serie) angelegt — analog dem bereits bestehenden Muster bei
+// Schul-Einträgen (createSchulEintrag), damit jede Person ihre Zuweisung unabhängig
+// bearbeiten/löschen kann (Fix-Batch 23: "für mehrere Personen gleichzeitig").
 export async function createTermin(data: {
   titel: string;
   start: string;
   ende?: string;
   ganztaegig: boolean;
-  personId: string | null;
+  personIds: string[];
   wiederholung?: string;
   wiederholungBis?: string;
 }) {
   const person = await requirePerson();
-  const personId = person.rolle === "ELTERN" ? data.personId : person.id;
+  const zielIds: (string | null)[] =
+    person.rolle === "ELTERN" ? (data.personIds.length > 0 ? data.personIds : [null]) : [person.id];
   // Kategorie wird nicht mehr manuell ausgewählt, sondern serverseitig erkannt
   // (Fragenkatalog Frage 3: "die App soll das selbst erkennen/zuordnen").
   const kategorie = erkenneTerminKategorie(data.titel);
 
   const wiederholung = data.wiederholung && data.wiederholung !== "KEINE" ? data.wiederholung : "KEINE";
-  const seriesId = wiederholung !== "KEINE" ? randomUUID() : null;
   const unbegrenzt = wiederholung !== "KEINE" && !data.wiederholungBis;
   const horizont = new Date();
   horizont.setDate(horizont.getDate() + UNBEGRENZT_HORIZONT_TAGE);
@@ -108,29 +112,32 @@ export async function createTermin(data: {
   const enDauer = data.ende ? new Date(data.ende).getTime() - new Date(data.start).getTime() : null;
 
   const erstellte = [];
-  for (const start of startDaten) {
-    const termin = await prisma.termin.create({
-      data: {
-        titel: data.titel,
-        start,
-        ende: enDauer !== null ? new Date(start.getTime() + enDauer) : null,
-        ganztaegig: data.ganztaegig,
-        kategorie,
-        personId,
-        seriesId,
-        wiederholung: wiederholung as any,
-        wiederholungBis: unbegrenzt ? null : wiederholungBis,
-        erstelltVonId: person.id,
-      },
-    });
-    erstellte.push(termin);
+  for (const personId of zielIds) {
+    const seriesId = wiederholung !== "KEINE" ? randomUUID() : null;
+    for (const start of startDaten) {
+      const termin = await prisma.termin.create({
+        data: {
+          titel: data.titel,
+          start,
+          ende: enDauer !== null ? new Date(start.getTime() + enDauer) : null,
+          ganztaegig: data.ganztaegig,
+          kategorie,
+          personId,
+          seriesId,
+          wiederholung: wiederholung as any,
+          wiederholungBis: unbegrenzt ? null : wiederholungBis,
+          erstelltVonId: person.id,
+        },
+      });
+      erstellte.push(termin);
+    }
   }
 
   await logAenderung({
     entityTyp: "TERMIN",
     entityId: erstellte[0].id,
     aktion: "erstellt",
-    neuerWert: erstellte.length > 1 ? `${erstellte[0].titel} (Serie, ${erstellte.length}×)` : erstellte[0].titel,
+    neuerWert: erstellte.length > 1 ? `${erstellte[0].titel} (${erstellte.length}×)` : erstellte[0].titel,
     geaendertVonId: person.id,
   });
 
