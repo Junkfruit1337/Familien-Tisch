@@ -13,6 +13,7 @@ import {
   installiereSchichtsystemVorlage,
 } from "../dienstplan/actions";
 import NotengewichtungSektion from "@/components/NotengewichtungSektion";
+import PushBenachrichtigungen from "@/components/PushBenachrichtigungen";
 
 type Person = { id: string; name: string; rolle: string; farbe: string; aktiv: boolean; hatPin: boolean };
 type Kategorie = { id: string; name: string; reihenfolge: number };
@@ -55,9 +56,10 @@ export default function EinstellungenClient({
 
   if (!istEltern) {
     return (
-      <div>
-        <h1 style={{ fontSize: 22 }}>Einstellungen</h1>
-        <p style={{ color: "var(--text-muted)" }}>Dieser Bereich ist nur für Eltern.</p>
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        <h1 style={{ fontSize: 22, margin: 0 }}>Einstellungen</h1>
+        <PushBenachrichtigungen />
+        <p style={{ color: "var(--text-muted)" }}>Der Rest dieses Bereichs ist nur für Eltern.</p>
       </div>
     );
   }
@@ -67,6 +69,8 @@ export default function EinstellungenClient({
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <h1 style={{ fontSize: 22, margin: 0 }}>Einstellungen</h1>
+
+      <PushBenachrichtigungen />
 
       <details open>
         <summary style={{ cursor: "pointer", fontWeight: 600 }}>👪 Personen &amp; Zugänge</summary>
