@@ -939,18 +939,16 @@ export default function EinkaufslisteClient({
                 hintergrund="var(--accent)"
                 textfarbe="var(--accent-contrast)"
                 deaktiviert={!istEltern}
-                onTap={() => startTransition(() => toggleArtikel(a.id))}
-                eckeAktion={
-                  istEltern && !einkaufsmodus ? (
-                    <button
-                      title="Bearbeiten"
-                      onClick={() => beginneBearbeiten(a)}
-                      style={KACHEL_ECKE_BUTTON_STYLE}
-                    >
-                      ⋯
-                    </button>
-                  ) : undefined
-                }
+                onTap={() => {
+                  // Fix-Batch 66 (Ticket "Unterschiedliches Verhalten beim Anklicken je nach
+                  // Modus"): vorher tat ein Antippen in BEIDEN Modi dasselbe (abhaken) — jetzt
+                  // bewusst unterschiedlich, wie von Florian gewünscht. Einkaufsmodus: schnelles
+                  // Antippen entfernt den Artikel sofort komplett (kein Bestätigungsdialog, das
+                  // wäre beim Einkaufen nur im Weg). Normalmodus: öffnet stattdessen das
+                  // Bearbeitungsmenü (mit eigenem Löschen-Button samt Sicherheitsabfrage).
+                  if (einkaufsmodus) startTransition(() => deleteArtikel(a.id));
+                  else beginneBearbeiten(a);
+                }}
               />
             ))}
           </div>
