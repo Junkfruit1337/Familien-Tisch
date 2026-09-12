@@ -15,6 +15,7 @@ import {
   type ErkanntesRezept,
 } from "@/lib/rezeptErkennung";
 import { istGueltigeKategorie } from "@/lib/rezeptKategorien";
+import { parseZutatZeile, skaliereZeile } from "@/lib/zutatenSkalierung";
 
 function getSamstagWocheStart(date: Date): Date {
   // Essensplan-Woche läuft Samstag–Samstag.
@@ -23,30 +24,6 @@ function getSamstagWocheStart(date: Date): Date {
   const diff = (day - 6 + 7) % 7;
   d.setUTCDate(d.getUTCDate() - diff);
   return d;
-}
-
-// Fix-Batch 28: erkennt jetzt auch Zeilen ohne eigenes Einheiten-Wort (z.B. "1 Knoblauchzehe(n)"
-// statt "500 g Spaghetti") — vorher fiel so eine Zeile komplett durch die erste Regel (die
-// verlangt Menge UND Einheit UND Name als drei Teile) und landete unsplittet als kompletter
-// Name ohne separate Menge auf der Einkaufsliste.
-function parseZutatZeile(zeile: string): { name: string; menge?: string } {
-  const mitEinheit = zeile.match(/^([\d.,]+\s*\S+)\s+(.+)$/);
-  if (mitEinheit) return { menge: mitEinheit[1], name: mitEinheit[2] };
-  const nurZahl = zeile.match(/^([\d.,]+)\s+(.+)$/);
-  if (nurZahl) return { menge: nurZahl[1], name: nurZahl[2] };
-  return { name: zeile };
-}
-
-// Skaliert eine Zutatenzeile mit dem Esser-Faktor des Tages (z. B. 3 von 6 Essern → Faktor 0,5).
-function skaliereZeile(zeile: { name: string; menge?: string }, faktor: number): { name: string; menge?: string } {
-  if (!zeile.menge || faktor === 1) return zeile;
-  const m = zeile.menge.match(/^([\d]+(?:[.,]\d+)?)(.*)$/);
-  if (!m) return zeile;
-  const zahl = parseFloat(m[1].replace(",", "."));
-  if (Number.isNaN(zahl)) return zeile;
-  const skaliert = Math.round(zahl * faktor * 100) / 100;
-  const zahlText = Number.isInteger(skaliert) ? String(skaliert) : skaliert.toFixed(2).replace(/0$/, "").replace(".", ",");
-  return { ...zeile, menge: `${zahlText}${m[2]}` };
 }
 
 export async function listRezepte() {
@@ -562,6 +539,7 @@ export async function listExtraMahlzeitenFuerWoche(wocheStartIso: string) {
     rezeptId: e.rezeptId,
     rezeptName: e.rezept.name,
     faktor: e.faktor,
+    gelockt: e.gelockt,
   }));
 }
 
@@ -580,8 +558,15 @@ export async function fuegeExtraMahlzeitHinzu(wocheStartIso: string, tagIso: str
   revalidatePath("/essensplan");
 }
 
+// Fix-Batch 84 (Florians Bug-Meldung): Löschen ist jetzt wie beim Hauptgericht nur bei
+// entsperrter Zusatzmahlzeit möglich — sonst blieben bereits übernommene Einkaufslisten-
+// Mengen als Karteileiche stehen. Erst "entsperreExtraMahlzeit" (mit Entfernen/Behalten-
+// Abfrage) auflösen, danach löschen.
 export async function entferneExtraMahlzeit(id: string) {
   await requireParent();
+  const eintrag = await prisma.extraMahlzeit.findUnique({ where: { id } });
+  if (!eintrag) return;
+  if (eintrag.gelockt) throw new Error("Diese Zusatzmahlzeit ist gesperrt. Erst entsperren.");
   await prisma.extraMahlzeit.delete({ where: { id } }).catch(() => {});
   revalidatePath("/essensplan");
 }
@@ -589,10 +574,16 @@ export async function entferneExtraMahlzeit(id: string) {
 // Ein Klick reicht (keine Zeilen-Auswahl wie bei der allgemeinen Extra-Rezept-Ergänzung in
 // der Einkaufsliste) — die Entscheidung für dieses Gericht+diese Menge ist mit dem Anlegen
 // der ExtraMahlzeit schon getroffen.
+// Fix-Batch 84 (Florians Bug-Meldung): sperrt jetzt nach Übernahme genauso wie das
+// Hauptgericht (fuegeZutatenDesTagsHinzu) — vorher ließ sich derselbe Button beliebig oft
+// erneut anklicken und hat dieselbe Menge jedes Mal zusätzlich auf die Einkaufsliste
+// addiert. Herkunft läuft jetzt über ExtraMahlzeitHerkunft (upsert, wie beim Hauptgericht)
+// statt über eine schlichte ArtikelQuelle-Zeile, damit sich die Menge beim Entsperren
+// wieder sauber herausrechnen lässt.
 export async function fuegeZutatenFuerExtraMahlzeitHinzu(id: string) {
   await requireParent();
   const eintrag = await prisma.extraMahlzeit.findUnique({ where: { id }, include: { rezept: true } });
-  if (!eintrag) return;
+  if (!eintrag || eintrag.gelockt) return;
   const zeilen = eintrag.rezept.zutaten
     .split("\n")
     .map((z) => z.trim())
@@ -615,10 +606,50 @@ export async function fuegeZutatenFuerExtraMahlzeitHinzu(id: string) {
       });
       artikelId = neu.id;
     }
-    await prisma.artikelQuelle.create({
-      data: { artikelId, beschreibung: `Extra: ${eintrag.bezeichnung} — ${eintrag.rezept.name}`, menge: zeile.menge },
+    await prisma.extraMahlzeitHerkunft.upsert({
+      where: { artikelId_extraMahlzeitId: { artikelId, extraMahlzeitId: id } },
+      update: { menge: zeile.menge },
+      create: { artikelId, extraMahlzeitId: id, menge: zeile.menge },
     });
   }
+  await prisma.extraMahlzeit.update({ where: { id }, data: { gelockt: true } });
+  revalidatePath("/essensplan");
+  revalidatePath("/einkaufsliste");
+}
+
+// Prüft vor dem Entsperren, ob für diese Zusatzmahlzeit schon Zutaten übernommen wurden —
+// analog pruefeGelocktenTagWechsel beim Hauptgericht.
+export async function pruefeGelocktenExtraMahlzeitWechsel(extraMahlzeitId: string) {
+  await requireParent();
+  const herkuenfte = await prisma.extraMahlzeitHerkunft.findMany({ where: { extraMahlzeitId }, include: { artikel: true } });
+  return herkuenfte.map((h) => ({ artikelId: h.artikelId, artikelName: h.artikel.name, menge: h.menge }));
+}
+
+// Entsperrt eine Zusatzmahlzeit — dieselbe Entfernen/Behalten-Logik wie beim Hauptgericht
+// (siehe wendeEntscheidungenAn), nur auf ExtraMahlzeitHerkunft statt EssensplanHerkunft.
+export async function entsperreExtraMahlzeit(extraMahlzeitId: string, entscheidungen: { artikelId: string; aktion: "entfernen" | "behalten" }[]) {
+  await requireParent();
+  for (const e of entscheidungen) {
+    if (e.aktion === "entfernen") {
+      const uebrige = await prisma.extraMahlzeitHerkunft.findMany({
+        where: { artikelId: e.artikelId, extraMahlzeitId: { not: extraMahlzeitId } },
+      });
+      let neueMenge: string | null = null;
+      for (const u of uebrige) {
+        neueMenge = await mergeMenge(neueMenge, u.menge);
+      }
+      const artikel = await prisma.einkaufsArtikel.findUnique({ where: { id: e.artikelId } });
+      if (artikel) {
+        if (!neueMenge && artikel.quelle === "essensplan") {
+          await prisma.einkaufsArtikel.delete({ where: { id: e.artikelId } }).catch(() => {});
+        } else {
+          await prisma.einkaufsArtikel.update({ where: { id: e.artikelId }, data: { menge: neueMenge } }).catch(() => {});
+        }
+      }
+    }
+    await prisma.extraMahlzeitHerkunft.deleteMany({ where: { artikelId: e.artikelId, extraMahlzeitId } });
+  }
+  await prisma.extraMahlzeit.update({ where: { id: extraMahlzeitId }, data: { gelockt: false } });
   revalidatePath("/essensplan");
   revalidatePath("/einkaufsliste");
 }

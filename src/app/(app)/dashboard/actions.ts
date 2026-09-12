@@ -5,6 +5,7 @@ import { getWochenplan } from "../essensplan/actions";
 import { listAnstehendeSchulEintraege, listKinder, kontostand, listTaschengeld, getSparziel } from "../schule/actions";
 import { prisma } from "@/lib/prisma";
 import { sendePushAnEltern, sendePushAnPerson } from "@/lib/push";
+import { parseZutatZeile, skaliereZeile } from "@/lib/zutatenSkalierung";
 
 // Fix-Batch 63 (Florians Vorschlag "KI-Einschätzung fürs Sparziel", nur für Eltern im
 // Dashboard): bewusst eine einfache, deterministische Hochrechnung statt eines echten
@@ -98,6 +99,46 @@ export async function getDashboardDaten() {
   const plan = await getWochenplan(0);
   const heutigesEssen = plan.tage.find((t) => new Date(t.tag).toDateString() === heute.toDateString());
 
+  // Fix-Batch 84 (Florians Wunsch): "Heute gibt's" zeigt jetzt alle heutigen Gerichte
+  // (Hauptgericht + Zusatzmahlzeiten wie Frühstück/Snack) und liefert direkt die
+  // Zutatenliste in der tatsächlich geplanten (skalierten) Menge mit, damit man sie ohne
+  // Umweg über den Essensplan öffnen kann.
+  const heutigeGerichte: {
+    bezeichnung: string;
+    rezeptName: string;
+    zutaten: string[];
+    zubereitung: string | null;
+  }[] = [];
+
+  if (heutigesEssen?.eintrag) {
+    const rezept = await prisma.rezept.findUnique({ where: { id: heutigesEssen.eintrag.rezeptId } });
+    if (rezept) {
+      const zutaten = rezept.zutaten
+        .split("\n")
+        .map((z) => z.trim())
+        .filter(Boolean)
+        .map((z) => skaliereZeile(parseZutatZeile(z), heutigesEssen.eintrag!.esserFaktor || 1))
+        .map((z) => (z.menge ? `${z.menge} ${z.name}` : z.name));
+      heutigeGerichte.push({ bezeichnung: "Hauptgericht", rezeptName: rezept.name, zutaten, zubereitung: rezept.zubereitung });
+    }
+  }
+
+  const extraHeute = await prisma.extraMahlzeit.findMany({
+    where: { wocheStart: new Date(plan.wocheStart) },
+    include: { rezept: true },
+    orderBy: { createdAt: "asc" },
+  });
+  for (const e of extraHeute) {
+    if (e.tag.toDateString() !== heute.toDateString()) continue;
+    const zutaten = e.rezept.zutaten
+      .split("\n")
+      .map((z) => z.trim())
+      .filter(Boolean)
+      .map((z) => skaliereZeile(parseZutatZeile(z), e.faktor || 1))
+      .map((z) => (z.menge ? `${z.menge} ${z.name}` : z.name));
+    heutigeGerichte.push({ bezeichnung: e.bezeichnung, rezeptName: e.rezept.name, zutaten, zubereitung: e.rezept.zubereitung });
+  }
+
   const schulEintraege = await listAnstehendeSchulEintraege();
 
   const terminWhere =
@@ -138,7 +179,7 @@ export async function getDashboardDaten() {
 
   return {
     person: { name: person.name, rolle: person.rolle },
-    heutigesEssen: heutigesEssen?.eintrag?.rezeptName ?? null,
+    heutigeGerichte,
     schulEintraege: schulEintraege.map((s) => {
       const tageBis = Math.ceil((s.datum.getTime() - heute.getTime()) / (24 * 60 * 60 * 1000));
       return {

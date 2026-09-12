@@ -32,6 +32,8 @@ import {
   fuegeExtraMahlzeitHinzu,
   entferneExtraMahlzeit,
   fuegeZutatenFuerExtraMahlzeitHinzu,
+  pruefeGelocktenExtraMahlzeitWechsel,
+  entsperreExtraMahlzeit,
 } from "./actions";
 import SeitenTitel from "@/components/SeitenTitel";
 import Spracheingabe from "@/components/Spracheingabe";
@@ -108,7 +110,7 @@ type Familienmitglied = { id: string; name: string; farbe: string; portionsGewic
 type Herkunft = { artikelId: string; artikelName: string; menge: string | null };
 // Fix-Batch 80 (Florians Wunsch): zusätzliche geplante Mahlzeiten an einem Tag neben dem
 // Hauptgericht (Frühstück, zusätzliches warmes Essen, Mittags-Snack, ...).
-type ExtraMahlzeitEintrag = { id: string; tag: string; bezeichnung: string; rezeptId: string; rezeptName: string; faktor: number };
+type ExtraMahlzeitEintrag = { id: string; tag: string; bezeichnung: string; rezeptId: string; rezeptName: string; faktor: number; gelockt: boolean };
 const EXTRA_MAHLZEIT_VORSCHLAEGE = ["Frühstück", "Mittags-Snack", "Zusätzliches warmes Essen"];
 
 const WOCHEN_LABEL = ["Diese Woche", "Nächste Woche", "Übernächste Woche"];
@@ -268,7 +270,9 @@ export default function EssensplanClient({
   const [rezeptZubereitungEntwurf, setRezeptZubereitungEntwurf] = useState("");
   const [extraEntwuerfe, setExtraEntwuerfe] = useState<Record<string, string>>({});
 
-  const [sperrDialog, setSperrDialog] = useState<{ eintragId: string; herkuenfte: Herkunft[] } | null>(null);
+  // Fix-Batch 84: derselbe Entfernen/Behalten-Dialog wird jetzt auch beim Entsperren einer
+  // Zusatzmahlzeit verwendet — "typ" entscheidet, welche Server-Action beim Speichern greift.
+  const [sperrDialog, setSperrDialog] = useState<{ typ: "tag" | "extra"; id: string; herkuenfte: Herkunft[] } | null>(null);
   const [sperrEntscheidungen, setSperrEntscheidungen] = useState<Record<string, "entfernen" | "behalten">>({});
 
   const [neuName, setNeuName] = useState("");
@@ -349,7 +353,20 @@ export default function EssensplanClient({
       startTransition(() => entsperren(t.eintrag!.id, []).then(() => ladeWoche(offset)));
       return;
     }
-    setSperrDialog({ eintragId: t.eintrag.id, herkuenfte });
+    setSperrDialog({ typ: "tag", id: t.eintrag.id, herkuenfte });
+    setSperrEntscheidungen(Object.fromEntries(herkuenfte.map((h) => [h.artikelId, "entfernen" as const])));
+  }
+
+  // Fix-Batch 84: dasselbe Sperren/Entsperren-Prinzip wie beim Hauptgericht, jetzt auch für
+  // Zusatzmahlzeiten — ohne das ließ sich "🛒 Zutaten" beliebig oft erneut anklicken.
+  async function klickSchlossExtra(e: ExtraMahlzeitEintrag) {
+    if (!e.gelockt) return;
+    const herkuenfte = await pruefeGelocktenExtraMahlzeitWechsel(e.id);
+    if (herkuenfte.length === 0) {
+      startTransition(() => entsperreExtraMahlzeit(e.id, []).then(() => ladeWoche(offset)));
+      return;
+    }
+    setSperrDialog({ typ: "extra", id: e.id, herkuenfte });
     setSperrEntscheidungen(Object.fromEntries(herkuenfte.map((h) => [h.artikelId, "entfernen" as const])));
   }
 
@@ -504,25 +521,43 @@ export default function EssensplanClient({
                         {e.rezeptName}
                         {e.faktor !== 1 ? ` (${e.faktor}×)` : ""}
                       </span>
-                      <button
-                        className="btn-secondary"
-                        style={{ fontSize: 11, padding: "2px 8px" }}
-                        disabled={pending}
-                        onClick={() => startTransition(() => fuegeZutatenFuerExtraMahlzeitHinzu(e.id).then(() => ladeWoche(offset)))}
-                      >
-                        🛒 Zutaten
-                      </button>
-                      <button
-                        className="btn-icon btn-icon-danger"
-                        title="Entfernen"
-                        style={{ width: 24, height: 24, fontSize: 12 }}
-                        onClick={() => {
-                          if (!confirm(`„${e.bezeichnung}: ${e.rezeptName}" wirklich entfernen?`)) return;
-                          startTransition(() => entferneExtraMahlzeit(e.id).then(() => ladeWoche(offset)));
-                        }}
-                      >
-                        🗑
-                      </button>
+                      {/* Fix-Batch 84 (Florians Bug-Meldung): dieselbe Sperren-Logik wie beim
+                          Hauptgericht — nach Übernahme gesperrt, Löschen erst nach Entsperren. */}
+                      {e.gelockt ? (
+                        <>
+                          <span className="pill pill-neutral">Gesperrt</span>
+                          <button
+                            className="btn-secondary"
+                            style={{ fontSize: 11, padding: "2px 8px" }}
+                            disabled={pending}
+                            onClick={() => klickSchlossExtra(e)}
+                          >
+                            🔓 Entsperren
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            className="btn-secondary"
+                            style={{ fontSize: 11, padding: "2px 8px" }}
+                            disabled={pending}
+                            onClick={() => startTransition(() => fuegeZutatenFuerExtraMahlzeitHinzu(e.id).then(() => ladeWoche(offset)))}
+                          >
+                            🛒 Zutaten
+                          </button>
+                          <button
+                            className="btn-icon btn-icon-danger"
+                            title="Entfernen"
+                            style={{ width: 24, height: 24, fontSize: 12 }}
+                            onClick={() => {
+                              if (!confirm(`„${e.bezeichnung}: ${e.rezeptName}" wirklich entfernen?`)) return;
+                              startTransition(() => entferneExtraMahlzeit(e.id).then(() => ladeWoche(offset)));
+                            }}
+                          >
+                            🗑
+                          </button>
+                        </>
+                      )}
                     </div>
                   ))}
                   {extraFormTag === t.tag ? (
@@ -660,7 +695,7 @@ export default function EssensplanClient({
       {sperrDialog && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 500, padding: 16 }}>
           <div className="card" style={{ maxWidth: 420, width: "100%", display: "flex", flexDirection: "column", gap: 10 }}>
-            <strong>Tag entsperren</strong>
+            <strong>{sperrDialog.typ === "tag" ? "Tag entsperren" : "Zusatzmahlzeit entsperren"}</strong>
             <p style={{ fontSize: 13, color: "var(--text-muted)", margin: 0 }}>
               Für dieses Gericht wurden schon Zutaten auf die Einkaufsliste übernommen. Die folgenden Artikel werden entfernt
               (bzw. um ihren Anteil verringert) — antippen, um einen Artikel stattdessen zu behalten.
@@ -703,7 +738,11 @@ export default function EssensplanClient({
                 onClick={() =>
                   startTransition(async () => {
                     const entscheidungen = Object.entries(sperrEntscheidungen).map(([artikelId, aktion]) => ({ artikelId, aktion }));
-                    await entsperren(sperrDialog.eintragId, entscheidungen);
+                    if (sperrDialog.typ === "tag") {
+                      await entsperren(sperrDialog.id, entscheidungen);
+                    } else {
+                      await entsperreExtraMahlzeit(sperrDialog.id, entscheidungen);
+                    }
                     setSperrDialog(null);
                     await ladeWoche(offset);
                   })

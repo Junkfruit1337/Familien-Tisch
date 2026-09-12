@@ -83,14 +83,41 @@ export async function findeOffenenUnbestaetigtenArtikel(name: string) {
 const GEWICHT_EINHEITEN: Record<string, number> = { g: 1, gramm: 1, kg: 1000, kilo: 1000, kilogramm: 1000 };
 const VOLUMEN_EINHEITEN: Record<string, number> = { ml: 1, l: 1000, liter: 1000 };
 
-function parseMenge(text: string): { basiswert: number; family: "gewicht" | "volumen" } | null {
-  const m = text.trim().match(/^([\d]+(?:[.,]\d+)?)\s*([a-zA-Zäöü]+)\.?$/);
+// Fix-Batch 84 (Florians Bug-Meldung): "1 Stück" + "2 Stück" (oder "1 TL" + "1 TL" usw.)
+// wurden bisher nicht zusammengezählt, weil nur Gewicht/Volumen als "echte" Einheiten
+// galten — alles andere landete nur lesbar aneinandergehängt. Zwischen diesen Zähl-/
+// Portions-Einheiten wird zwar (anders als bei Gewicht/Volumen) NICHT umgerechnet
+// (1 TL ist keine feste Menge in EL), aber INNERHALB derselben Einheit wird jetzt addiert.
+// Mehrere Schreibweisen je Einheit werden auf eine kanonische Anzeigeform normalisiert.
+const ZAEHL_EINHEITEN: Record<string, string> = {
+  stück: "Stück", stücke: "Stück", stk: "Stück", st: "Stück",
+  zehe: "Zehe", zehen: "Zehe",
+  tl: "TL", teelöffel: "TL",
+  el: "EL", esslöffel: "EL",
+  bund: "Bund", bunde: "Bund", bünde: "Bund",
+  prise: "Prise", prisen: "Prise",
+  dose: "Dose", dosen: "Dose",
+  glas: "Glas", gläser: "Glas",
+  packung: "Packung", packungen: "Packung",
+  päckchen: "Päckchen",
+  scheibe: "Scheibe", scheiben: "Scheibe",
+  zweig: "Zweig", zweige: "Zweig",
+  knolle: "Knolle", knollen: "Knolle",
+  blatt: "Blatt", blätter: "Blatt",
+  würfel: "Würfel",
+};
+
+type Mengenfamilie = { kind: "gewicht" } | { kind: "volumen" } | { kind: "zaehl"; einheit: string };
+
+function parseMenge(text: string): { basiswert: number; familie: Mengenfamilie } | null {
+  const m = text.trim().match(/^([\d]+(?:[.,]\d+)?)\s*([a-zA-Zäöüß]+)\.?$/);
   if (!m) return null;
   const zahl = parseFloat(m[1].replace(",", "."));
   if (Number.isNaN(zahl)) return null;
   const einheit = m[2].toLowerCase();
-  if (einheit in GEWICHT_EINHEITEN) return { basiswert: zahl * GEWICHT_EINHEITEN[einheit], family: "gewicht" };
-  if (einheit in VOLUMEN_EINHEITEN) return { basiswert: zahl * VOLUMEN_EINHEITEN[einheit], family: "volumen" };
+  if (einheit in GEWICHT_EINHEITEN) return { basiswert: zahl * GEWICHT_EINHEITEN[einheit], familie: { kind: "gewicht" } };
+  if (einheit in VOLUMEN_EINHEITEN) return { basiswert: zahl * VOLUMEN_EINHEITEN[einheit], familie: { kind: "volumen" } };
+  if (einheit in ZAEHL_EINHEITEN) return { basiswert: zahl, familie: { kind: "zaehl", einheit: ZAEHL_EINHEITEN[einheit] } };
   return null;
 }
 
@@ -98,16 +125,26 @@ function formatZahl(n: number): string {
   return Number(n.toFixed(2)).toString().replace(".", ",");
 }
 
-function formatMenge(basiswert: number, family: "gewicht" | "volumen"): string {
-  if (family === "gewicht") {
+function formatMenge(basiswert: number, familie: Mengenfamilie): string {
+  if (familie.kind === "gewicht") {
     return basiswert >= 1000 ? `${formatZahl(basiswert / 1000)} kg` : `${formatZahl(basiswert)} g`;
   }
-  return basiswert >= 1000 ? `${formatZahl(basiswert / 1000)} l` : `${formatZahl(basiswert)} ml`;
+  if (familie.kind === "volumen") {
+    return basiswert >= 1000 ? `${formatZahl(basiswert / 1000)} l` : `${formatZahl(basiswert)} ml`;
+  }
+  return `${formatZahl(basiswert)} ${familie.einheit}`;
+}
+
+function gleicheFamilie(a: Mengenfamilie, b: Mengenfamilie): boolean {
+  if (a.kind !== b.kind) return false;
+  if (a.kind === "zaehl" && b.kind === "zaehl") return a.einheit === b.einheit;
+  return true;
 }
 
 // Führt zwei Mengenangaben zusammen. Bei erkennbar gleicher Einheiten-Familie
-// (g/kg oder ml/l) wird echt umgerechnet und addiert; sonst bleibt es beim
-// lesbaren Aneinanderhängen (z. B. bei "1 Packung").
+// (g/kg, ml/l oder derselben Zähl-Einheit wie Stück/Zehe/TL/Bund) wird echt
+// zusammengerechnet; sonst bleibt es beim lesbaren Aneinanderhängen (z. B. bei
+// unterschiedlichen oder unbekannten Einheiten wie "1 Packung").
 // Muss "async" sein, obwohl intern nichts asynchrones passiert: Next.js verlangt,
 // dass jeder Export aus einer "use server"-Datei eine async-Funktion ist — ein
 // synchroner Export hier lässt "next build" fehlschlagen (Ursache des Deploy-Fehlers
@@ -122,8 +159,8 @@ export async function mergeMenge(bestehend: string | null, neu?: string | null):
 
   const a = parseMenge(bestehend);
   const b = parseMenge(neu);
-  if (a && b && a.family === b.family) {
-    return formatMenge(a.basiswert + b.basiswert, a.family);
+  if (a && b && gleicheFamilie(a.familie, b.familie)) {
+    return formatMenge(a.basiswert + b.basiswert, a.familie);
   }
   return `${bestehend} + ${neu}`;
 }
@@ -427,15 +464,25 @@ export async function entscheideWunsch(id: string, genehmigt: boolean, kategorie
 
 export async function listArtikelQuellen(artikelId: string) {
   await requireParent();
-  const [quellen, essensplanHerkuenfte] = await Promise.all([
+  const [quellen, essensplanHerkuenfte, extraMahlzeitHerkuenfte] = await Promise.all([
     prisma.artikelQuelle.findMany({ where: { artikelId } }),
     prisma.essensplanHerkunft.findMany({ where: { artikelId }, include: { eintrag: { include: { rezept: true } } } }),
+    prisma.extraMahlzeitHerkunft.findMany({ where: { artikelId }, include: { extraMahlzeit: { include: { rezept: true } } } }),
   ]);
   const kombiniert = [
     ...quellen.map((q) => ({ id: q.id, beschreibung: q.beschreibung, menge: q.menge, zeitpunkt: q.createdAt.toISOString() })),
     ...essensplanHerkuenfte.map((h) => ({
       id: h.id,
       beschreibung: `Essensplan: ${h.eintrag.rezept.name} (${h.eintrag.tag.toLocaleDateString("de-DE")})`,
+      menge: h.menge,
+      zeitpunkt: h.createdAt.toISOString(),
+    })),
+    // Fix-Batch 84: Zusatzmahlzeiten (Frühstück, Snack, …) laufen jetzt über dieselbe
+    // Herkunfts-Logik wie das Hauptgericht, damit sich ihre Menge beim Entsperren
+    // wieder sauber herausrechnen lässt — hier trotzdem in derselben Liste angezeigt.
+    ...extraMahlzeitHerkuenfte.map((h) => ({
+      id: h.id,
+      beschreibung: `Extra: ${h.extraMahlzeit.bezeichnung} — ${h.extraMahlzeit.rezept.name}`,
       menge: h.menge,
       zeitpunkt: h.createdAt.toISOString(),
     })),

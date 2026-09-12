@@ -19,50 +19,50 @@ enum Rolle {
 }
 
 model Person {
-  id          String   @id @default(cuid())
-  name        String
-  rolle       Rolle
-  farbe       String   @default("#8a7a63")
-  pinHash     String? // nur gesetzt, wenn rolle Login erlaubt
-  aktiv       Boolean  @default(true)
-  reihenfolge Int      @default(0)
+  id                       String    @id @default(cuid())
+  name                     String
+  rolle                    Rolle
+  farbe                    String    @default("#8a7a63")
+  pinHash                  String? // nur gesetzt, wenn rolle Login erlaubt
+  aktiv                    Boolean   @default(true)
+  reihenfolge              Int       @default(0)
   // Portionsgröße für den Essensplan-Skalierungsrechner (Fix-Batch 23) — vorher fest im
   // Code hinterlegt (Flo 1.5, Ayla 0.5, Rest 1), jetzt in den Einstellungen editierbar.
-  portionsGewicht Float @default(1)
+  portionsGewicht          Float     @default(1)
   // Für den Ferien-Countdown und die Schuljahr-Zuordnung (Fix-Batch 27) — nur für Kinder
   // relevant, in den Einstellungen von jedem Kind selbst wählbar.
-  bundesland    String?
-  klassenstufe  Int?
-  klasse        String? // z.B. "5a"
+  bundesland               String?
+  klassenstufe             Int?
+  klasse                   String? // z.B. "5a"
   // Geburtstag (Fix-Batch 30) — erscheint dann automatisch im Kalender ALLER Familienmitglieder.
-  geburtsdatum  DateTime?
+  geburtsdatum             DateTime?
   // Fix-Batch 62: verhindert, dass die 7-Tage-vorher-Push-Erinnerung im selben Jahr mehrfach
   // rausgeht — geprüft/gesetzt bei jedem Dashboard-Aufruf (siehe dashboard/actions.ts).
   geburtstagErinnerungJahr Int?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
 
-  sessions           Session[]
-  termineErstellt    Termin[]           @relation("TerminErsteller")
-  termine            Termin[]           @relation("TerminPerson")
-  terminHistorie     AenderungsLog[]    @relation("AenderungVon")
-  aufgaben           Aufgabe[]          @relation("AufgabePerson")
-  aufgabenErstellt   Aufgabe[]          @relation("AufgabeErsteller")
-  einkaufsWuensche   EinkaufsWunsch[]
-  faecher            Fach[]
-  noten              Note[]
-  notenGewichtungen  NotenGewichtung[]
-  taschengeld        TaschengeldTransaktion[]
-  sparziel           Sparziel?
-  dienstZuweisungen  DienstZuweisung[]
-  dienstTauscheVon   DienstTausch[]     @relation("DienstTauschVon")
-  dienstTauscheMit   DienstTausch[]     @relation("DienstTauschMit")
-  badZuweisungen     BadZuweisung[]
-  pushSubscriptions  PushSubscription[]
-  schulEintraege     SchulEintrag[]     @relation("SchulEintragPerson")
-  tickets            Ticket[]
+  sessions              Session[]
+  termineErstellt       Termin[]                 @relation("TerminErsteller")
+  termine               Termin[]                 @relation("TerminPerson")
+  terminHistorie        AenderungsLog[]          @relation("AenderungVon")
+  aufgaben              Aufgabe[]                @relation("AufgabePerson")
+  aufgabenErstellt      Aufgabe[]                @relation("AufgabeErsteller")
+  einkaufsWuensche      EinkaufsWunsch[]
+  faecher               Fach[]
+  noten                 Note[]
+  notenGewichtungen     NotenGewichtung[]
+  taschengeld           TaschengeldTransaktion[]
+  sparziel              Sparziel?
+  dienstZuweisungen     DienstZuweisung[]
+  dienstTauscheVon      DienstTausch[]           @relation("DienstTauschVon")
+  dienstTauscheMit      DienstTausch[]           @relation("DienstTauschMit")
+  badZuweisungen        BadZuweisung[]
+  pushSubscriptions     PushSubscription[]
+  schulEintraege        SchulEintrag[]           @relation("SchulEintragPerson")
+  tickets               Ticket[]
   dauerhafteZuordnungen DauerhafteZuordnung[]
-  hausprobleme       Hausproblem[]
+  hausprobleme          Hausproblem[]
 }
 
 model Session {
@@ -87,16 +87,16 @@ enum EntityTyp {
 }
 
 model AenderungsLog {
-  id          String    @id @default(cuid())
-  entityTyp   EntityTyp
-  entityId    String
-  aktion      String // z.B. "erstellt", "geaendert", "geloescht", "genehmigt", "abgelehnt"
-  feld        String? // bei "geaendert": welches Feld
-  alterWert   String?
-  neuerWert   String?
+  id             String    @id @default(cuid())
+  entityTyp      EntityTyp
+  entityId       String
+  aktion         String // z.B. "erstellt", "geaendert", "geloescht", "genehmigt", "abgelehnt"
+  feld           String? // bei "geaendert": welches Feld
+  alterWert      String?
+  neuerWert      String?
   geaendertVonId String
-  geaendertVon   Person @relation("AenderungVon", fields: [geaendertVonId], references: [id])
-  zeitpunkt   DateTime  @default(now())
+  geaendertVon   Person    @relation("AenderungVon", fields: [geaendertVonId], references: [id])
+  zeitpunkt      DateTime  @default(now())
 
   @@index([entityTyp, entityId])
 }
@@ -123,27 +123,27 @@ enum Wiederholung {
 }
 
 model Termin {
-  id                  String          @id @default(cuid())
-  titel               String
-  beschreibung        String?
-  start               DateTime
-  ende                DateTime?
-  ganztaegig          Boolean         @default(false)
-  kategorie           TerminKategorie @default(TERMIN)
-  personId            String? // null = familienweit
-  person              Person?         @relation("TerminPerson", fields: [personId], references: [id])
-  seriesId            String?
+  id                 String          @id @default(cuid())
+  titel              String
+  beschreibung       String?
+  start              DateTime
+  ende               DateTime?
+  ganztaegig         Boolean         @default(false)
+  kategorie          TerminKategorie @default(TERMIN)
+  personId           String? // null = familienweit
+  person             Person?         @relation("TerminPerson", fields: [personId], references: [id])
+  seriesId           String?
   // Gemeinsame ID über alle Personen-Zeilen EINES Anlege-Vorgangs (Fix-Batch 30) — damit
   // ein Termin für mehrere Personen im Eltern-Kalender als EIN Eintrag mit allen Personen
   // angezeigt werden kann statt einmal pro Person dupliziert.
-  gruppeId            String?
-  wiederholung        Wiederholung    @default(KEINE)
-  wiederholungBis     DateTime?
-  erinnerungGesendet  Boolean         @default(false)
-  erstelltVonId       String
-  erstelltVon         Person          @relation("TerminErsteller", fields: [erstelltVonId], references: [id])
-  createdAt           DateTime        @default(now())
-  updatedAt           DateTime        @updatedAt
+  gruppeId           String?
+  wiederholung       Wiederholung    @default(KEINE)
+  wiederholungBis    DateTime?
+  erinnerungGesendet Boolean         @default(false)
+  erstelltVonId      String
+  erstelltVon        Person          @relation("TerminErsteller", fields: [erstelltVonId], references: [id])
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
 }
 
 // ---------- Aufgaben ----------
@@ -192,8 +192,9 @@ model EinkaufsArtikel {
   createdAt    DateTime           @default(now())
   updatedAt    DateTime           @updatedAt
 
-  essensplanHerkuenfte EssensplanHerkunft[]
-  quellen              ArtikelQuelle[]
+  essensplanHerkuenfte    EssensplanHerkunft[]
+  extraMahlzeitHerkuenfte ExtraMahlzeitHerkunft[]
+  quellen                 ArtikelQuelle[]
 }
 
 // Quellen-Aufschlüsselung je Artikel (Fahrplan §3, Batch 2) — für manuelle
@@ -257,26 +258,26 @@ enum WunschStatus {
 }
 
 model EinkaufsWunsch {
-  id             String       @id @default(cuid())
-  artikelName    String
-  menge          String?
-  kindId         String
-  kind           Person       @relation(fields: [kindId], references: [id])
-  status         WunschStatus @default(OFFEN)
-  entschiedenAm  DateTime?
-  notiz          String?
-  createdAt      DateTime     @default(now())
+  id            String       @id @default(cuid())
+  artikelName   String
+  menge         String?
+  kindId        String
+  kind          Person       @relation(fields: [kindId], references: [id])
+  status        WunschStatus @default(OFFEN)
+  entschiedenAm DateTime?
+  notiz         String?
+  createdAt     DateTime     @default(now())
 }
 
 // ---------- Schule & Noten & Taschengeld ----------
 
 model Fach {
-  id           String            @id @default(cuid())
-  name         String
-  kindId       String
-  kind         Person            @relation(fields: [kindId], references: [id])
-  noten        Note[]
-  gewichtungen NotenGewichtung[]
+  id             String            @id @default(cuid())
+  name           String
+  kindId         String
+  kind           Person            @relation(fields: [kindId], references: [id])
+  noten          Note[]
+  gewichtungen   NotenGewichtung[]
   schulEintraege SchulEintrag[]
 
   @@unique([kindId, name])
@@ -310,23 +311,23 @@ model NotenGewichtung {
 }
 
 model Note {
-  id            String     @id @default(cuid())
-  kindId        String
-  kind          Person     @relation(fields: [kindId], references: [id])
-  fachId        String
-  fach          Fach       @relation(fields: [fachId], references: [id])
-  art           NoteArt
-  note          Int
-  datum         DateTime
-  notiz         String?
-  gewichtung    Float      @default(1)
-  fotoBase64    String?    @db.Text
-  status        NoteStatus @default(OFFEN)
-  eingetragenVonId String  // Kind selbst oder Elternteil
-  createdAt     DateTime   @default(now())
-  updatedAt     DateTime   @updatedAt
+  id               String     @id @default(cuid())
+  kindId           String
+  kind             Person     @relation(fields: [kindId], references: [id])
+  fachId           String
+  fach             Fach       @relation(fields: [fachId], references: [id])
+  art              NoteArt
+  note             Int
+  datum            DateTime
+  notiz            String?
+  gewichtung       Float      @default(1)
+  fotoBase64       String?    @db.Text
+  status           NoteStatus @default(OFFEN)
+  eingetragenVonId String // Kind selbst oder Elternteil
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
 
-  taschengeld   TaschengeldTransaktion[]
+  taschengeld TaschengeldTransaktion[]
 }
 
 enum TransaktionsTyp {
@@ -356,25 +357,25 @@ model Sparziel {
 }
 
 model SchulEintrag {
-  id           String   @id @default(cuid())
-  titel        String // Fix-Batch 30: enthält jetzt das "Thema" (was früher fälschlich als Titel bezeichnet wurde)
-  fachName     String? // veraltet seit Fix-Batch 30 (nur noch für alte Einträge ohne fachId) — neue Einträge nutzen fachId
-  fachId       String?
-  fach         Fach?    @relation(fields: [fachId], references: [id])
-  art          NoteArt
-  datum        DateTime
-  personId     String
-  person       Person   @relation("SchulEintragPerson", fields: [personId], references: [id])
-  createdAt    DateTime @default(now())
+  id               String   @id @default(cuid())
+  titel            String // Fix-Batch 30: enthält jetzt das "Thema" (was früher fälschlich als Titel bezeichnet wurde)
+  fachName         String? // veraltet seit Fix-Batch 30 (nur noch für alte Einträge ohne fachId) — neue Einträge nutzen fachId
+  fachId           String?
+  fach             Fach?    @relation(fields: [fachId], references: [id])
+  art              NoteArt
+  datum            DateTime
+  personId         String
+  person           Person   @relation("SchulEintragPerson", fields: [personId], references: [id])
+  createdAt        DateTime @default(now())
   // Fix-Batch 62: verhindert mehrfache Lerntipp-Push-Erinnerungen für denselben Eintrag —
   // geprüft/gesetzt bei jedem Dashboard-Aufruf (siehe dashboard/actions.ts).
-  lerntippGesendet Boolean @default(false)
+  lerntippGesendet Boolean  @default(false)
 }
 
 // ---------- Dienstplan ----------
 
 model DienstDefinition {
-  id            String @id @default(cuid())
+  id            String  @id @default(cuid())
   schichtNummer Int // 1, 2 oder 3
   reihenfolge   Int
   bezeichnung   String
@@ -463,55 +464,62 @@ model Koerperpflegetag {
 // ---------- Rezepte & Essensplan ----------
 
 model Rezept {
-  id        String   @id @default(cuid())
-  name      String
-  zutaten   String // eine Zutat pro Zeile, "Menge Einheit Name"
-  zubereitung String?
+  id             String   @id @default(cuid())
+  name           String
+  zutaten        String // eine Zutat pro Zeile, "Menge Einheit Name"
+  zubereitung    String?
   // Für wie viele Portionen die Mengenangaben in "zutaten" geschrieben sind (Kochbücher/
   // Internet-Rezepte geben oft z.B. "für 1 Portion" oder "für 4 Personen" an, nicht für
   // die ganze Familie) — Grundlage für die automatische Skalierung auf die Esser-Anzahl
   // (Fix-Batch 22). Default 6 entspricht dem bisherigen impliziten Verhalten (alle Rezepte
   // gelten als für die ganze 6-köpfige Familie geschrieben).
-  portionenBasis Int @default(6)
+  portionenBasis Int      @default(6)
   // Fix-Batch 75 (Florians Wunsch): Rezeptkategorie (Hauptgang/Vorspeise/Suppe/Dessert/
   // Sauce-Dip/Beilage/Sonstiges, siehe REZEPT_KATEGORIEN in src/lib/rezeptKategorien.ts) —
   // der Tages-Auswahl im Essensplan zeigt standardmäßig nur "Hauptgang", mit Suche über alle.
-  kategorie String @default("Hauptgang")
-  createdAt DateTime @default(now())
+  kategorie      String   @default("Hauptgang")
+  createdAt      DateTime @default(now())
 
-  planEintraege  EssensplanEintrag[]
-  ausblendungen  RezeptAusblendung[]
+  planEintraege   EssensplanEintrag[]
+  ausblendungen   RezeptAusblendung[]
   extraMahlzeiten ExtraMahlzeit[]
 }
 
 model EssensplanEintrag {
-  id          String   @id @default(cuid())
-  wocheStart  DateTime // Samstag der jeweiligen Woche
-  tag         DateTime
-  rezeptId    String
-  rezept      Rezept   @relation(fields: [rezeptId], references: [id])
-  esserIds    String[] @default([])
-  esserFaktor Float    @default(1)
-  extraPortionen Float @default(0) // z.B. Gäste an dem Tag, zusätzlich zu den ausgewählten Essern
-  gelockt     Boolean  @default(false)
+  id             String   @id @default(cuid())
+  wocheStart     DateTime // Samstag der jeweiligen Woche
+  tag            DateTime
+  rezeptId       String
+  rezept         Rezept   @relation(fields: [rezeptId], references: [id])
+  esserIds       String[] @default([])
+  esserFaktor    Float    @default(1)
+  extraPortionen Float    @default(0) // z.B. Gäste an dem Tag, zusätzlich zu den ausgewählten Essern
+  gelockt        Boolean  @default(false)
 
-  herkuenfte  EssensplanHerkunft[]
+  herkuenfte EssensplanHerkunft[]
 }
 
 // Fix-Batch 80 (Florians Wunsch): zusätzliche, geplante Mahlzeiten an einem Tag NEBEN dem
 // normalen Hauptgericht — z.B. Frühstück, ein zusätzliches warmes Essen oder ein Mittags-
 // Snack. Bewusst ein eigenes, einfacheres Modell statt EssensplanEintrag zu verallgemeinern
-// (kein Sperren/Entsperren, keine Wer-isst-mit-Auswahl, kein Slot-Limit pro Tag) — die
-// bestehende Tages-Logik (ein Hauptgericht, Lock/Herkunft) bleibt dadurch unangetastet.
+// (keine Wer-isst-mit-Auswahl, kein Slot-Limit pro Tag) — die bestehende Tages-Logik (ein
+// Hauptgericht) bleibt dadurch unangetastet.
+// Fix-Batch 84 (Florians Bug-Meldung): Sperren/Herkunft NACHGERÜSTET, weil ohne das ein
+// erneuter Klick auf "🛒 Zutaten" dieselbe Menge beliebig oft auf die Einkaufsliste
+// draufaddiert hätte — jetzt exakt dieselbe Logik wie beim Hauptgericht (gelockt, erst nach
+// Entsperren mit Entfernen/Behalten-Abfrage wieder änderbar/löschbar).
 model ExtraMahlzeit {
   id          String   @id @default(cuid())
   wocheStart  DateTime // Samstag der jeweiligen Woche, wie bei EssensplanEintrag
   tag         DateTime
-  bezeichnung String   // frei, z.B. "Frühstück", "Mittags-Snack", "Zusätzliches warmes Essen"
+  bezeichnung String // frei, z.B. "Frühstück", "Mittags-Snack", "Zusätzliches warmes Essen"
   rezeptId    String
   rezept      Rezept   @relation(fields: [rezeptId], references: [id])
   faktor      Float    @default(1) // bezieht sich direkt auf die im Rezept geschriebene Menge
+  gelockt     Boolean  @default(false)
   createdAt   DateTime @default(now())
+
+  herkuenfte ExtraMahlzeitHerkunft[]
 }
 
 // Blendet ein Rezept aus den Vorschlägen für eine einzelne Woche aus (Fahrplan §3,
@@ -542,6 +550,20 @@ model EssensplanHerkunft {
   createdAt DateTime          @default(now())
 
   @@unique([artikelId, eintragId])
+}
+
+// Fix-Batch 84: dasselbe Herkunfts-Prinzip wie EssensplanHerkunft, nur für ExtraMahlzeit —
+// Grundlage für den Entfernen/Behalten-Dialog beim Entsperren einer Zusatzmahlzeit.
+model ExtraMahlzeitHerkunft {
+  id              String          @id @default(cuid())
+  artikelId       String
+  artikel         EinkaufsArtikel @relation(fields: [artikelId], references: [id], onDelete: Cascade)
+  extraMahlzeitId String
+  extraMahlzeit   ExtraMahlzeit   @relation(fields: [extraMahlzeitId], references: [id], onDelete: Cascade)
+  menge           String?
+  createdAt       DateTime        @default(now())
+
+  @@unique([artikelId, extraMahlzeitId])
 }
 
 // ---------- Push-Benachrichtigungen (Fragenkatalog Frage 33, Batch 8) ----------
@@ -579,7 +601,7 @@ model Ticket {
   beschreibung  String
   status        TicketStatus @default(EINGEREICHT)
   begruendung   String? // optionale Begründung der Eltern (v.a. bei Ablehnung)
-  fotos         String[] @default([]) // optionale Fotos/Screenshots zum Ticket (Fix-Batch 35, mehrere möglich)
+  fotos         String[]     @default([]) // optionale Fotos/Screenshots zum Ticket (Fix-Batch 35, mehrere möglich)
   erstelltVonId String
   erstelltVon   Person       @relation(fields: [erstelltVonId], references: [id])
   createdAt     DateTime     @default(now())

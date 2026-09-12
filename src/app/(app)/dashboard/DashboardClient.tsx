@@ -17,9 +17,11 @@ const TICKET_STATUS_LABEL: Record<string, string> = {
   IN_UMSETZUNG: "Genehmigt und in Umsetzung",
 };
 
+type HeutigesGericht = { bezeichnung: string; rezeptName: string; zutaten: string[]; zubereitung: string | null };
+
 type Daten = {
   person: { name: string; rolle: string };
-  heutigesEssen: string | null;
+  heutigeGerichte: HeutigesGericht[];
   schulEintraege: { id: string; titel: string; fachName: string | null; datum: string; personName: string; tageBis: number; lerntipp: string | null }[];
   termineHeute: { id: string; titel: string; start: string; personName: string }[];
   offeneAufgaben: number;
@@ -31,6 +33,9 @@ type Daten = {
 
 export default function DashboardClient({ daten, istEltern }: { daten: Daten; istEltern: boolean }) {
   const [grossesBild, setGrossesBild] = useState<string | null>(null);
+  // Fix-Batch 84 (Florians Wunsch): Rezept mit den tatsächlich geplanten Mengen direkt aus
+  // "Heute" heraus öffnen können, ohne erst in den Essensplan wechseln zu müssen.
+  const [offenesGericht, setOffenesGericht] = useState<HeutigesGericht | null>(null);
   const anfragenGesamt = daten.offeneNoten.length + daten.offeneWuensche.length;
 
   return (
@@ -122,8 +127,77 @@ export default function DashboardClient({ daten, istEltern }: { daten: Daten; is
 
       <div className="card">
         <strong>🍽️ Heute gibt's</strong>
-        <p style={{ margin: "4px 0 0" }}>{daten.heutigesEssen ?? "Noch nicht geplant"}</p>
+        {daten.heutigeGerichte.length === 0 && <p style={{ margin: "4px 0 0", color: "var(--text-muted)" }}>Noch nicht geplant</p>}
+        {daten.heutigeGerichte.length > 0 && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 6 }}>
+            {daten.heutigeGerichte.map((g, i) => (
+              <button
+                key={i}
+                type="button"
+                onClick={() => setOffenesGericht(g)}
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  gap: 8,
+                  background: "none",
+                  border: "1px solid var(--border)",
+                  borderRadius: "var(--radius)",
+                  padding: "6px 10px",
+                  cursor: "pointer",
+                  fontFamily: "inherit",
+                  color: "inherit",
+                  textAlign: "left",
+                }}
+              >
+                <span>
+                  <strong style={{ fontSize: 13 }}>{g.bezeichnung}:</strong> {g.rezeptName}
+                </span>
+                <span style={{ color: "var(--accent)", fontSize: 16, flexShrink: 0 }}>→</span>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
+
+      {offenesGericht && (
+        <div
+          onClick={() => setOffenesGericht(null)}
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
+        >
+          <div
+            className="card"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: 480, width: "100%", maxHeight: "80vh", overflowY: "auto", display: "flex", flexDirection: "column", gap: 10 }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+              <div>
+                <div style={{ fontSize: 12, color: "var(--text-muted)" }}>{offenesGericht.bezeichnung}</div>
+                <strong style={{ fontSize: "var(--font-md)" }}>{offenesGericht.rezeptName}</strong>
+              </div>
+              <button className="btn-icon" onClick={() => setOffenesGericht(null)} aria-label="Schließen">
+                ✕
+              </button>
+            </div>
+            <div>
+              <strong style={{ fontSize: 13 }}>Zutaten (wie geplant)</strong>
+              <ul style={{ margin: "4px 0 0", paddingLeft: 20 }}>
+                {offenesGericht.zutaten.map((z, i) => (
+                  <li key={i} style={{ fontSize: 14 }}>
+                    {z}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            {offenesGericht.zubereitung && (
+              <div>
+                <strong style={{ fontSize: 13 }}>Zubereitung</strong>
+                <p style={{ margin: "4px 0 0", fontSize: 14, whiteSpace: "pre-wrap" }}>{offenesGericht.zubereitung}</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="card">
         <strong>📅 Heute</strong>
@@ -151,7 +225,9 @@ export default function DashboardClient({ daten, istEltern }: { daten: Daten; is
               {new Date(s.datum).toLocaleDateString("de-DE", { weekday: "long", day: "2-digit", month: "2-digit" })}
             </div>
             <div style={{ fontWeight: 600, marginTop: 2 }}>
-              {s.titel} {istEltern && <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>· {s.personName}</span>}
+              {s.titel}
+              {s.fachName && <span style={{ color: "var(--text-muted)", fontWeight: 400 }}> · {s.fachName}</span>}
+              {istEltern && <span style={{ color: "var(--text-muted)", fontWeight: 400 }}> · {s.personName}</span>}
             </div>
             <div style={{ fontSize: "var(--font-sm)", color: "var(--text-muted)" }}>noch {s.tageBis} Tag(e)</div>
             {s.lerntipp && <div style={{ fontSize: "var(--font-sm)", marginTop: 4 }}>💡 {s.lerntipp}</div>}
