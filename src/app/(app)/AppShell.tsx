@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { logout } from "./actions";
 import { BEREICH_FARBEN } from "@/lib/bereichFarben";
+import PersonChip from "@/components/PersonChip";
 
 type Person = { id: string; name: string; farbe: string; rolle: string };
 type Theme = "hell" | "dunkel";
@@ -58,44 +59,27 @@ export default function AppShell({ person, children }: { person: Person; childre
           alignItems: "center",
           justifyContent: "space-between",
           padding: "12px 16px",
-          borderBottom: "1px solid var(--border)",
           background: "var(--surface)",
+          boxShadow: "var(--shadow-sm)",
           position: "sticky",
           top: 0,
           zIndex: 10,
         }}
       >
-        <strong>Familientisch</strong>
+        <strong style={{ fontSize: "var(--font-md)" }}>Familientisch</strong>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <button
-            className="btn-secondary"
-            style={{ padding: "6px 10px", fontSize: 15, lineHeight: 1 }}
+            className="btn-icon"
             onClick={themeUmschalten}
             title="Hell/Dunkel umschalten"
             aria-label="Hell/Dunkel umschalten"
           >
             {theme === "dunkel" ? "🌙" : "☀️"}
           </button>
-          <span
-            style={{
-              width: 28,
-              height: 28,
-              borderRadius: 8,
-              background: person.farbe,
-              color: "#fff",
-              fontSize: 12,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontWeight: 700,
-            }}
-            title={person.name}
-          >
-            {person.name.slice(0, 2)}
-          </span>
+          <PersonChip name={person.name} farbe={person.farbe} size={30} />
           <button
             className="btn-secondary"
-            style={{ padding: "6px 10px", fontSize: 13 }}
+            style={{ padding: "8px 12px", fontSize: "var(--font-sm)" }}
             onClick={async () => {
               await logout();
               router.push("/login");
@@ -119,8 +103,9 @@ export default function AppShell({ person, children }: { person: Person; childre
           display: "flex",
           overflowX: "auto",
           background: "var(--surface)",
-          borderTop: "1px solid var(--border)",
+          boxShadow: "0 -2px 10px rgba(58, 51, 42, 0.06)",
           paddingBottom: "env(safe-area-inset-bottom)",
+          zIndex: 10,
         }}
       >
         {NAV.map((item) => {
@@ -134,16 +119,30 @@ export default function AppShell({ person, children }: { person: Person; childre
                 display: "flex",
                 flexDirection: "column",
                 alignItems: "center",
-                gap: 2,
-                padding: "8px 4px",
+                gap: 3,
+                padding: "8px 4px 6px",
                 color: active ? item.farbe : "var(--text-muted)",
-                fontSize: 11,
+                fontSize: "var(--font-xs)",
                 textDecoration: "none",
                 fontWeight: active ? 700 : 500,
-                borderTop: active ? `2px solid ${item.farbe}` : "2px solid transparent",
               }}
             >
-              <span style={{ fontSize: 18 }}>{item.icon}</span>
+              <span
+                style={{
+                  fontSize: 17,
+                  lineHeight: 1,
+                  width: 34,
+                  height: 26,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  borderRadius: "var(--radius-pill)",
+                  background: active ? `${item.farbe}22` : "transparent",
+                  transition: "background 0.15s ease",
+                }}
+              >
+                {item.icon}
+              </span>
               {item.label}
             </Link>
           );

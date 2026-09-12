@@ -1,26 +1,70 @@
 :root {
+  /* Farbpalette bewusst unverändert (Florians Wunsch, Redesign Fix-Batch 56/57/58) — nur
+     Struktur/Abstufungen ergänzt, kein neues Farbschema. */
   --bg: #f6f1e7;
   --surface: #fffdf8;
+  --surface-alt: #efe6d5; /* dezent abgesetzte Fläche, z.B. geöffnete Disclosure-Kopfzeile */
   --border: #e5dcc8;
   --text: #3a332a;
   --text-muted: #8a7f6c;
   --accent: #a97155;
+  --accent-soft: #f1e2d6; /* helle Fläche in Akzentfarbe, für Hover/aktive Zustände */
   --accent-contrast: #fffdf8;
   --success: #6b8f5a;
+  --success-soft: #e3ead9;
   --danger: #b5573f;
+  --danger-soft: #f5ded7;
   --warning: #c99a3f;
+  --warning-soft: #f5ecd3;
+  --info: #5b7fa6;
+  --info-soft: #dde8f0;
+
+  /* Ecken-Skala */
+  --radius-sm: 8px;
   --radius: 14px;
+  --radius-lg: 20px;
+  --radius-pill: 999px;
+
+  /* Abstands-Skala (Redesign: vorher überall einzeln hart codierte Pixelwerte) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+
+  /* Schriftgrößen-Skala */
+  --font-xs: 12px;
+  --font-sm: 13px;
+  --font-base: 15px;
+  --font-md: 16px;
+  --font-lg: 18px;
+  --font-xl: 22px;
+
+  /* Erhebung/Elevation über weiche Schatten statt harter Rahmen — Karten "schweben" leicht
+     statt nur umrandet zu sein (näher an gängigen modernen App-Designs). */
+  --shadow-sm: 0 1px 2px rgba(58, 51, 42, 0.07), 0 1px 1px rgba(58, 51, 42, 0.04);
+  --shadow-md: 0 6px 16px rgba(58, 51, 42, 0.1), 0 2px 5px rgba(58, 51, 42, 0.06);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
     --bg: #221d17;
     --surface: #2c2620;
+    --surface-alt: #383029;
     --border: #453c30;
     --text: #f1e9db;
     --text-muted: #b3a794;
     --accent: #c98a68;
+    --accent-soft: #3a2f24;
     --accent-contrast: #221d17;
+    --success-soft: #263323;
+    --danger-soft: #3a2721;
+    --warning-soft: #362e1c;
+    --info: #7ea3c4;
+    --info-soft: #223140;
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35), 0 1px 1px rgba(0, 0, 0, 0.25);
+    --shadow-md: 0 8px 20px rgba(0, 0, 0, 0.4), 0 2px 6px rgba(0, 0, 0, 0.3);
   }
 }
 
@@ -29,21 +73,39 @@
 :root[data-theme="light"] {
   --bg: #f6f1e7;
   --surface: #fffdf8;
+  --surface-alt: #efe6d5;
   --border: #e5dcc8;
   --text: #3a332a;
   --text-muted: #8a7f6c;
   --accent: #a97155;
+  --accent-soft: #f1e2d6;
   --accent-contrast: #fffdf8;
+  --success-soft: #e3ead9;
+  --danger-soft: #f5ded7;
+  --warning-soft: #f5ecd3;
+  --info: #5b7fa6;
+  --info-soft: #dde8f0;
+  --shadow-sm: 0 1px 2px rgba(58, 51, 42, 0.07), 0 1px 1px rgba(58, 51, 42, 0.04);
+  --shadow-md: 0 6px 16px rgba(58, 51, 42, 0.1), 0 2px 5px rgba(58, 51, 42, 0.06);
 }
 
 :root[data-theme="dark"] {
   --bg: #221d17;
   --surface: #2c2620;
+  --surface-alt: #383029;
   --border: #453c30;
   --text: #f1e9db;
   --text-muted: #b3a794;
   --accent: #c98a68;
+  --accent-soft: #3a2f24;
   --accent-contrast: #221d17;
+  --success-soft: #263323;
+  --danger-soft: #3a2721;
+  --warning-soft: #362e1c;
+  --info: #7ea3c4;
+  --info-soft: #223140;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35), 0 1px 1px rgba(0, 0, 0, 0.25);
+  --shadow-md: 0 8px 20px rgba(0, 0, 0, 0.4), 0 2px 6px rgba(0, 0, 0, 0.3);
 }
 
 * {
@@ -57,6 +119,7 @@ body {
   background: var(--bg);
   color: var(--text);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  -webkit-tap-highlight-color: transparent;
 }
 
 a {
@@ -67,78 +130,138 @@ button {
   font-family: inherit;
 }
 
-.card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 16px;
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
-/* Aufklappbare Bereiche app-weit als "richtige Kästchen" statt nackter
-   Browser-Default-<details> (Gap-Analyse 10.09.2026, Batch 6). */
+/* ---------- Karten (statischer Inhalt, "schwebt" per Schatten) ---------- */
+
+.card {
+  background: var(--surface);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  padding: var(--space-4);
+}
+
+/* ---------- Aufklappbare Bereiche (Disclosure) — bewusst ANDERS gestylt als .card,
+   damit auf einen Blick klar ist, was aufklappbar ist und was statischer Inhalt ist
+   (Redesign-Grund: vorher sahen <details> und .card exakt gleich aus). Eckiger Rahmen
+   statt Schatten, Pfeil-Chevron rechts (dreht sich beim Öffnen), Kopfzeile hebt sich beim
+   Öffnen leicht ab. ---------- */
 details {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 0;
   overflow: hidden;
+  transition: box-shadow 0.15s ease;
 }
 
 details > summary {
-  padding: 12px 16px;
+  position: relative;
+  padding: var(--space-3) 40px var(--space-3) var(--space-4);
   cursor: pointer;
   font-weight: 600;
+  font-size: var(--font-base);
   list-style: none;
+  user-select: none;
 }
 
 details > summary::-webkit-details-marker {
   display: none;
 }
 
-details > summary::before {
-  content: "▸";
-  display: inline-block;
-  margin-right: 8px;
-  color: var(--text-muted);
-  transition: transform 0.15s ease;
+details > summary::after {
+  content: "";
+  position: absolute;
+  right: var(--space-4);
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  border-right: 2px solid var(--text-muted);
+  border-bottom: 2px solid var(--text-muted);
+  transform: translateY(-65%) rotate(-45deg);
+  transition: transform 0.18s ease;
 }
 
-details[open] > summary::before {
-  transform: rotate(90deg);
+details[open] > summary::after {
+  transform: translateY(-35%) rotate(45deg);
+}
+
+details[open] > summary {
+  background: var(--surface-alt);
+  border-bottom: 1px solid var(--border);
 }
 
 details > summary ~ * {
-  padding: 0 16px 16px;
+  padding: var(--space-4);
 }
 
 details + details {
-  margin-top: 10px;
+  margin-top: var(--space-2);
+}
+
+/* Verschachtelte Disclosures (z.B. eine einzelne Note innerhalb "Noten je Fach" innerhalb
+   der Schule-Seite) werden zunehmend flacher dargestellt, damit keine "Kasten-in-Kasten-in-
+   Kasten"-Wand entsteht, selbst wenn eine Seite mal mehr als eine Ebene braucht. */
+details details {
+  box-shadow: none;
+  border-radius: var(--radius-sm);
+}
+
+details details > summary {
+  padding: var(--space-2) 34px var(--space-2) var(--space-3);
+  font-weight: 500;
+  font-size: var(--font-sm);
+}
+
+details details > summary ~ * {
+  padding: var(--space-3);
+}
+
+details details[open] > summary {
+  background: transparent;
+}
+
+details details details {
+  border: none;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
+  background: transparent;
+}
+
+details details details > summary {
+  padding: var(--space-2) 30px var(--space-2) 0;
+}
+
+details details details > summary ~ * {
+  padding: var(--space-2) 0 var(--space-3);
+}
+
+/* ---------- Buttons ---------- */
+
+.btn,
+.btn-secondary,
+.btn-danger {
+  border-radius: var(--radius-sm);
+  padding: 10px var(--space-4);
+  font-size: var(--font-base);
+  font-weight: 600;
+  cursor: pointer;
+  transition: filter 0.12s ease, transform 0.05s ease;
+  border: none;
 }
 
 .btn {
   background: var(--accent);
   color: var(--accent-contrast);
-  border: none;
-  border-radius: 10px;
-  padding: 10px 16px;
-  font-size: 15px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.btn:disabled {
-  opacity: 0.5;
-  cursor: default;
 }
 
 .btn-secondary {
-  background: transparent;
+  background: var(--surface);
   color: var(--text);
   border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 10px 16px;
-  font-size: 15px;
-  cursor: pointer;
+  font-weight: 500;
 }
 
 .btn-danger {
@@ -146,16 +269,84 @@ details + details {
   color: #fff;
 }
 
+.btn:active,
+.btn-secondary:active,
+.btn-danger:active {
+  transform: scale(0.97);
+}
+
+.btn:hover:not(:disabled),
+.btn-danger:hover:not(:disabled) {
+  filter: brightness(1.06);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: var(--surface-alt);
+}
+
+.btn:disabled,
+.btn-secondary:disabled,
+.btn-danger:disabled {
+  opacity: 0.5;
+  cursor: default;
+  transform: none;
+}
+
+/* Kompakter Icon-Button (Redesign, ersetzt die vielen einzeln inline gestylten
+   🗑/✎/⋯-Buttons app-weit durch eine einheitliche Größe/Form) — bewusst mit spürbarer
+   Klickfläche (36px), aber visuell zurückhaltend, damit destruktive Symbole nicht dominieren. */
+.btn-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--font-md);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.12s ease, color 0.12s ease, transform 0.05s ease;
+}
+
+.btn-icon:hover:not(:disabled) {
+  background: var(--surface-alt);
+}
+
+.btn-icon:active {
+  transform: scale(0.94);
+}
+
+.btn-icon-danger {
+  color: var(--danger);
+  border-color: var(--danger-soft);
+}
+
+.btn-icon-danger:hover:not(:disabled) {
+  background: var(--danger-soft);
+}
+
+/* ---------- Formularelemente ---------- */
+
 input:not([type="checkbox"]):not([type="radio"]),
 select,
 textarea {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  padding: 10px var(--space-3);
   color: var(--text);
-  font-size: 15px;
+  font-size: var(--font-base);
   width: 100%;
+  transition: border-color 0.12s ease;
+}
+
+input:not([type="checkbox"]):not([type="radio"]):focus,
+select:focus,
+textarea:focus {
+  border-color: var(--accent);
 }
 
 /* Checkboxen/Radios dürfen NICHT die width:100%-Regel oben erben — sonst werden sie in
@@ -164,33 +355,82 @@ textarea {
    Essensplan-Zutatenliste, Fix-Batch 22). */
 input[type="checkbox"],
 input[type="radio"] {
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
   flex-shrink: 0;
   accent-color: var(--accent);
 }
 
+/* ---------- Pills/Badges ---------- */
+
 .pill {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
   padding: 3px 10px;
-  border-radius: 999px;
-  font-size: 12px;
+  border-radius: var(--radius-pill);
+  font-size: var(--font-xs);
   font-weight: 600;
+  white-space: nowrap;
 }
 
 .pill-offen {
-  background: #f0dfa8;
+  background: var(--warning-soft);
   color: #6b5117;
 }
 
 .pill-genehmigt {
-  background: #d7e6cc;
+  background: var(--success-soft);
   color: #3e5b2c;
 }
 
 .pill-abgelehnt {
-  background: #edd0c8;
+  background: var(--danger-soft);
   color: #7a3221;
+}
+
+/* Neutrale/informative Kennzeichnung (z.B. Dienst-Tausch-Status, "Erfasst" bei
+   Hausproblemen) — vorher wurde dafür oft pill-offen zweckentfremdet, obwohl inhaltlich
+   nichts "Offenes/Wartendes" gemeint war. */
+.pill-info {
+  background: var(--info-soft);
+  color: var(--info);
+}
+
+.pill-neutral {
+  background: var(--border);
+  color: var(--text-muted);
+}
+
+/* ---------- Personen-Chip (Redesign: vereinheitlicht 4 verschiedene Ad-hoc-Darstellungen
+   von "das hier gehört zu Person X" — farbiger Punkt, farbige Umrandung, farbige Füllung,
+   reiner Farbtext — auf eine einzige, konsistente runde Initialen-Kachel). ---------- */
+.person-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-pill);
+  color: #fff;
+  font-weight: 700;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+/* ---------- Leerer-Zustand-Hinweis (Redesign: einheitliche, freundlichere Darstellung
+   für "Nichts Anstehendes"/"Noch keine Einträge" statt reinem grauen Fließtext). ---------- */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-5) var(--space-3);
+  color: var(--text-muted);
+  font-size: var(--font-sm);
+  text-align: center;
+}
+
+.empty-state-icon {
+  font-size: 28px;
+  opacity: 0.6;
 }
 
 /* Feier-Effekte bei Note 1/2 (nur bei Kind-Einreichung, Fragenkatalog Frage 18) */
@@ -254,9 +494,9 @@ input[type="radio"] {
   background: var(--accent);
   color: var(--accent-contrast);
   padding: 10px 20px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   font-weight: 700;
-  font-size: 16px;
+  font-size: var(--font-md);
   z-index: 1001;
   animation: weiter-so-pop 2.4s ease-out forwards;
   pointer-events: none;
