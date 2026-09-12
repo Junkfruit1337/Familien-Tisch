@@ -825,7 +825,6 @@ export default function EinstellungenClient({
         <SeitenTitel icon="⚙️" farbe={BEREICH_FARBEN.einstellungen}>Einstellungen</SeitenTitel>
         {fehlerMeldenSektion}
         {geburtstagSektion}
-        {hausreparaturenSektion}
         {kinder.length > 0 && (
           <details>
             <summary style={{ cursor: "pointer", fontWeight: 600 }}>🎓 Meine Schule</summary>

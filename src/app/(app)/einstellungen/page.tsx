@@ -12,7 +12,7 @@ export default async function EinstellungenPage() {
   const personen = await listPersonen();
   const meineTickets = await listMeineTickets();
   const alleTickets = istEltern ? await listAlleTickets() : [];
-  const hausprobleme = await listHausprobleme();
+  const hausprobleme = istEltern ? await listHausprobleme() : [];
 
   const kategorien = istEltern ? await listKategorien() : [];
   const dienstkatalog = istEltern ? await listDienstkatalog() : [];

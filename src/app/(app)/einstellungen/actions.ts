@@ -113,12 +113,11 @@ export async function setzeTicketStatus(id: string, status: string, begruendung?
 }
 
 // ---------- Hausreparaturen/Vermieterkommunikation (Fix-Batch 35 Nachtrag) ----------
-// Jede Person darf melden/mitlesen (nicht nur Eltern) — wer ein Problem im Haus entdeckt,
-// soll es unkompliziert eintragen können. Status/Zuständigkeit ändern und die Umwandlung
-// in eine Aufgabe bleibt Eltern vorbehalten (analog anderen Verwaltungsaktionen).
+// Fix-Batch 50 Korrektur: ausschließlich Eltern-Sache — Kinder sollen nur Fehler/Verbesserungs-
+// vorschläge zur App melden (Tickets), nicht Hausmängel/Vermieterkommunikation.
 
 export async function listHausprobleme() {
-  await requirePerson();
+  await requireParent();
   return prisma.hausproblem.findMany({ include: { erstelltVon: true }, orderBy: { createdAt: "desc" } });
 }
 
@@ -128,7 +127,7 @@ export async function erstelleHausproblem(data: {
   zustaendigkeit: "VERMIETER" | "FAMILIE";
   fotos?: string[];
 }) {
-  const person = await requirePerson();
+  const person = await requireParent();
   if (!data.titel.trim() || !data.beschreibung.trim()) throw new Error("Titel und Beschreibung dürfen nicht leer sein.");
   await prisma.hausproblem.create({
     data: {
@@ -145,7 +144,7 @@ export async function erstelleHausproblem(data: {
 // Spracheingabe fürs Hausreparatur-Formular — nutzt bewusst dieselbe Erkennungsfunktion wie
 // Tickets (identisches {titel, beschreibung}-Format), keine eigene Funktion nötig.
 export async function erkenneHausproblemAusText(text: string): Promise<{ ok: true; titel: string; beschreibung: string } | { ok: false; fehler: string }> {
-  await requirePerson();
+  await requireParent();
   try {
     const ergebnis = await erkenneTicketAusSprache(text);
     return { ok: true, titel: ergebnis.titel, beschreibung: ergebnis.beschreibung };
