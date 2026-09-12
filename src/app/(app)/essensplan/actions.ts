@@ -10,6 +10,7 @@ import {
   schreibeRezeptUm,
   schlageSaisonalesRezeptVor,
   verdichteZubereitung,
+  findeRezeptImInternet,
   type ErkanntesRezept,
 } from "@/lib/rezeptErkennung";
 
@@ -157,6 +158,26 @@ export async function schlageSaisonaleIdeeVor(): Promise<{ ok: true; rezept: Erk
   } catch (err) {
     console.error("Saisonaler Rezeptvorschlag fehlgeschlagen:", err);
     const fehler = err instanceof Error ? err.message : "Unbekannter Fehler beim Erstellen des Vorschlags.";
+    return { ok: false, fehler };
+  }
+}
+
+// Fix-Batch 73 (Florians Wunsch: Rezept-Finder per Beschreibung, z.B. "eine Suppe", "was
+// mit Hähnchen", "ich hab Zucchini und Reis da") — liefert nur eine Vorschau, gespeichert
+// wird erst nach Prüfung durch die Eltern (analog Foto-/Sprach-Erkennung).
+export async function findeRezeptImInternetVorschau(
+  beschreibung: string
+): Promise<{ ok: true; rezept: ErkanntesRezept } | { ok: false; fehler: string }> {
+  await requireParent();
+  try {
+    const rezept = await findeRezeptImInternet(beschreibung);
+    if (!rezept.name) {
+      return { ok: false, fehler: "Konnte kein passendes, gut bewertetes Rezept dazu finden. Bitte anders beschreiben." };
+    }
+    return { ok: true, rezept };
+  } catch (err) {
+    console.error("Rezept-Finder fehlgeschlagen:", err);
+    const fehler = err instanceof Error ? err.message : "Unbekannter Fehler bei der Rezeptsuche.";
     return { ok: false, fehler };
   }
 }

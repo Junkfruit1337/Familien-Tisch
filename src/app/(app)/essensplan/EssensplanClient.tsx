@@ -25,6 +25,7 @@ import {
   verdichteZubereitungVorschau,
   schreibeRezeptUmVorschau,
   pruefeAusgewogenheitDerWoche,
+  findeRezeptImInternetVorschau,
 } from "./actions";
 import SeitenTitel from "@/components/SeitenTitel";
 import Spracheingabe from "@/components/Spracheingabe";
@@ -118,6 +119,10 @@ export default function EssensplanClient({
   const [umschreibenLaeuft, setUmschreibenLaeuft] = useState(false);
   const [verdichtenLaeuft, setVerdichtenLaeuft] = useState(false);
   const [saisonLaeuft, setSaisonLaeuft] = useState(false);
+
+  const [rezeptFinderText, setRezeptFinderText] = useState("");
+  const [rezeptFinderLaeuft, setRezeptFinderLaeuft] = useState(false);
+  const [rezeptFinderQuelle, setRezeptFinderQuelle] = useState<string | null>(null);
 
   const [portionenEntwuerfe, setPortionenEntwuerfe] = useState<Record<string, string>>({});
   const [bearbeiteRezeptId, setBearbeiteRezeptId] = useState<string | null>(null);
@@ -832,6 +837,66 @@ export default function EssensplanClient({
             >
               {saisonLaeuft ? "Idee wird gesucht …" : "🍂 Saisonale Idee vorschlagen"}
             </button>
+
+            {/* Fix-Batch 73 (Florians Wunsch): Rezept-Finder per freier Beschreibung (Typ,
+                z.B. "Suppe", oder was gerade zuhause ist) — sucht per Web-Suche ein echtes,
+                gut bewertetes Rezept statt eines von der KI erfundenen. */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 6, borderTop: "1px solid var(--border)", paddingTop: 8 }}>
+              <span style={{ fontSize: 13, color: "var(--text-muted)" }}>
+                🔍 Rezept im Internet finden (gut bewertet) — Art des Gerichts oder was gerade da ist beschreiben:
+              </span>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                {["Suppe", "Mit Fleisch", "Vegetarisch", "Nudeln", "Auflauf"].map((vorschlag) => (
+                  <button
+                    key={vorschlag}
+                    type="button"
+                    className="btn-secondary"
+                    style={{ fontSize: 12, padding: "4px 10px" }}
+                    onClick={() => setRezeptFinderText((prev) => (prev ? `${prev}, ${vorschlag}` : vorschlag))}
+                  >
+                    {vorschlag}
+                  </button>
+                ))}
+              </div>
+              <Spracheingabe disabled={rezeptFinderLaeuft} onErgebnis={setRezeptFinderText} />
+              <textarea
+                placeholder='z. B. "eine Suppe", "was mit Hähnchen" oder "ich hab Zucchini und Reis da"'
+                rows={2}
+                value={rezeptFinderText}
+                onChange={(e) => setRezeptFinderText(e.target.value)}
+              />
+              <button
+                className="btn-secondary"
+                style={{ fontSize: 13, alignSelf: "flex-start" }}
+                disabled={rezeptFinderLaeuft || !rezeptFinderText.trim()}
+                onClick={() =>
+                  startTransition(async () => {
+                    setRezeptFinderLaeuft(true);
+                    setRezeptFinderQuelle(null);
+                    try {
+                      const ergebnis = await findeRezeptImInternetVorschau(rezeptFinderText);
+                      if (!ergebnis.ok) {
+                        alert(ergebnis.fehler);
+                        return;
+                      }
+                      setNeuName(ergebnis.rezept.name);
+                      setNeuZutaten(ergebnis.rezept.zutaten);
+                      setNeuZubereitung(ergebnis.rezept.zubereitung);
+                      if (ergebnis.rezept.portionen) setNeuPortionenBasis(String(ergebnis.rezept.portionen));
+                      setRezeptFinderQuelle(ergebnis.rezept.quelle ?? null);
+                    } finally {
+                      setRezeptFinderLaeuft(false);
+                    }
+                  })
+                }
+              >
+                {rezeptFinderLaeuft ? "Suche läuft …" : "Rezept suchen"}
+              </button>
+              {rezeptFinderQuelle && (
+                <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>Gefunden auf: {rezeptFinderQuelle}</p>
+              )}
+            </div>
+
             <p style={{ fontSize: 12, color: "var(--text-muted)", margin: 0 }}>
               Ergebnis bitte immer prüfen und bei Bedarf korrigieren, bevor du speicherst.
             </p>

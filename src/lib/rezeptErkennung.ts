@@ -1,7 +1,7 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 
-export type ErkanntesRezept = { name: string; zutaten: string; zubereitung: string; portionen: number | null };
+export type ErkanntesRezept = { name: string; zutaten: string; zubereitung: string; portionen: number | null; quelle?: string | null };
 
 function holeApiKey(): string {
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -29,6 +29,7 @@ function parseRezeptAntwort(raw: string, fehlermeldung: string): ErkanntesRezept
     zutaten: typeof d.zutaten === "string" ? d.zutaten : "",
     zubereitung: typeof d.zubereitung === "string" ? d.zubereitung : "",
     portionen: typeof d.portionen === "number" && d.portionen > 0 ? Math.round(d.portionen) : null,
+    quelle: typeof d.quelle === "string" && d.quelle.trim() ? d.quelle.trim() : null,
   };
 }
 
@@ -95,6 +96,43 @@ export async function erkenneRezeptAusSprache(text: string): Promise<ErkanntesRe
   return parseRezeptAntwort(
     textBlock?.text ?? "",
     "Konnte die Antwort der Spracherkennung nicht lesen. Bitte erneut versuchen oder die Felder manuell ausfüllen."
+  );
+}
+
+// Fix-Batch 73 (Florians Wunsch): Rezept-Finder per freier Beschreibung ("eine Suppe",
+// "was mit Hähnchen", "ich hab Zucchini und Reis da") — nutzt Claudes serverseitiges
+// Web-Such-Werkzeug, damit ein ECHTES, im Internet auffindbares und gut bewertetes Rezept
+// vorgeschlagen wird, statt eines von der KI frei erfundenen (Florian ausdrücklich: "muss
+// immer gut bewertet sein, das ist sehr wichtig"). Läuft über denselben ANTHROPIC_API_KEY,
+// verursacht aber zusätzliche Kosten pro Suche (Anthropics Web-Suche wird separat abgerechnet).
+// Da die Antwort neben reinem Text auch Such-Werkzeug-Blöcke enthalten kann, werden alle
+// "text"-Blöcke aneinandergehängt statt nur den ersten zu nehmen.
+export async function findeRezeptImInternet(beschreibung: string): Promise<ErkanntesRezept> {
+  const apiKey = holeApiKey();
+  const client = new Anthropic({ apiKey });
+  const prompt =
+    `Ein Familienmitglied sucht ein Rezept und beschreibt es so: "${beschreibung}"\n\n` +
+    "Suche im Internet nach einem ECHTEN, existierenden Rezept, das dazu passt — bevorzugt von bekannten Rezeptportalen " +
+    "(z. B. Chefkoch, Küchengötter, EAT SMARTER, Allrecipes) und ausdrücklich nur eines, das dort GUT BEWERTET ist " +
+    "(viele positive Bewertungen/Kommentare). Erfinde KEIN Rezept selbst — wenn du kein passendes, gut bewertetes " +
+    "Rezept findest, sag das im \"name\"-Feld statt eines Rezepts.\n" +
+    "Antworte GANZ ZUM SCHLUSS AUSSCHLIESSLICH mit einem JSON-Objekt, ohne Markdown-Codeblock, ohne weiteren Text, in genau diesem Format:\n" +
+    '{"name": "Gerichtname", "zutaten": "eine Zutat pro Zeile, Format \'Menge Einheit Name\', z.B. 500 g Spaghetti", ' +
+    '"zubereitung": "Zubereitungsschritte als Fließtext oder nummerierte Liste", "portionen": Zahl oder null, ' +
+    '"quelle": "Name der Seite, auf der das Rezept gefunden wurde, z.B. \'Chefkoch.de\'"}';
+  const response = await client.messages.create({
+    model: "claude-sonnet-5",
+    max_tokens: 2000,
+    tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 3 } satisfies Anthropic.WebSearchTool20250305],
+    messages: [{ role: "user", content: prompt }],
+  });
+  const text = response.content
+    .filter((b): b is Anthropic.TextBlock => b.type === "text")
+    .map((b) => b.text)
+    .join("\n");
+  return parseRezeptAntwort(
+    text,
+    "Konnte kein passendes Rezept im Internet finden. Bitte anders beschreiben oder die Felder manuell ausfüllen."
   );
 }
 
