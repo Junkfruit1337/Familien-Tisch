@@ -25,7 +25,7 @@ export default async function EssensplanPage() {
     <EssensplanClient
       istEltern={!!istEltern}
       plan={plan}
-      rezepteAlle={rezepteAlle.map((r) => ({ id: r.id, name: r.name, zutaten: r.zutaten, zubereitung: r.zubereitung, portionenBasis: r.portionenBasis }))}
+      rezepteAlle={rezepteAlle.map((r) => ({ id: r.id, name: r.name, zutaten: r.zutaten, zubereitung: r.zubereitung, portionenBasis: r.portionenBasis, kategorie: r.kategorie }))}
       rezepteVorschlaege={rezepteVorschlaege}
       ausgeblendete={ausgeblendete}
       familie={familie.map((f) => ({ id: f.id, name: f.name, farbe: f.farbe, portionsGewicht: f.portionsGewicht }))}

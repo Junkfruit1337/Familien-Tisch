@@ -473,6 +473,10 @@ model Rezept {
   // (Fix-Batch 22). Default 6 entspricht dem bisherigen impliziten Verhalten (alle Rezepte
   // gelten als für die ganze 6-köpfige Familie geschrieben).
   portionenBasis Int @default(6)
+  // Fix-Batch 75 (Florians Wunsch): Rezeptkategorie (Hauptgang/Vorspeise/Suppe/Dessert/
+  // Sauce-Dip/Beilage/Sonstiges, siehe REZEPT_KATEGORIEN in src/lib/rezeptKategorien.ts) —
+  // der Tages-Auswahl im Essensplan zeigt standardmäßig nur "Hauptgang", mit Suche über alle.
+  kategorie String @default("Hauptgang")
   createdAt DateTime @default(now())
 
   planEintraege  EssensplanEintrag[]

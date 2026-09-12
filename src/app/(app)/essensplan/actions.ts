@@ -6,7 +6,6 @@ import { revalidatePath } from "next/cache";
 import { autoKategorieId, findeOffenenArtikel, findeOffenenUnbestaetigtenArtikel, mergeMenge } from "../einkaufsliste/actions";
 import {
   erkenneRezeptAusBild,
-  erkenneRezeptAusSprache,
   schreibeRezeptUm,
   schlageSaisonalesRezeptVor,
   verdichteZubereitung,
@@ -14,6 +13,7 @@ import {
   schlageRezeptZuBeschreibungVor,
   type ErkanntesRezept,
 } from "@/lib/rezeptErkennung";
+import { istGueltigeKategorie } from "@/lib/rezeptKategorien";
 
 function getSamstagWocheStart(date: Date): Date {
   // Essensplan-Woche läuft Samstag–Samstag.
@@ -58,10 +58,16 @@ export async function listRezepteDetail() {
   return prisma.rezept.findMany({ orderBy: { name: "asc" } });
 }
 
-export async function addRezept(name: string, zutaten: string, zubereitung?: string, portionenBasis?: number) {
+export async function addRezept(name: string, zutaten: string, zubereitung?: string, portionenBasis?: number, kategorie?: string) {
   await requireParent();
   await prisma.rezept.create({
-    data: { name, zutaten, zubereitung: zubereitung || undefined, portionenBasis: portionenBasis && portionenBasis > 0 ? portionenBasis : 6 },
+    data: {
+      name,
+      zutaten,
+      zubereitung: zubereitung || undefined,
+      portionenBasis: portionenBasis && portionenBasis > 0 ? portionenBasis : 6,
+      kategorie: istGueltigeKategorie(kategorie) ? kategorie : "Hauptgang",
+    },
   });
   revalidatePath("/essensplan");
 }
@@ -79,7 +85,7 @@ export async function updateRezeptPortionenBasis(rezeptId: string, portionenBasi
 // Volle Rezept-Bearbeitung (Fix-Batch 35 Nachtrag, Ticket "Rezept-Bearbeitung erweitern") —
 // vorher war nur die Portionsgrundlage nachträglich änderbar, nicht die Zutatenmengen oder
 // die Zubereitung selbst.
-export async function updateRezept(rezeptId: string, data: { name?: string; zutaten?: string; zubereitung?: string }) {
+export async function updateRezept(rezeptId: string, data: { name?: string; zutaten?: string; zubereitung?: string; kategorie?: string }) {
   await requireParent();
   await prisma.rezept.update({
     where: { id: rezeptId },
@@ -87,6 +93,7 @@ export async function updateRezept(rezeptId: string, data: { name?: string; zuta
       name: data.name?.trim() || undefined,
       zutaten: data.zutaten !== undefined ? data.zutaten : undefined,
       zubereitung: data.zubereitung !== undefined ? data.zubereitung || null : undefined,
+      kategorie: data.kategorie && istGueltigeKategorie(data.kategorie) ? data.kategorie : undefined,
     },
   });
   revalidatePath("/essensplan");
@@ -107,22 +114,6 @@ export async function erkenneRezeptAusFoto(
   } catch (err) {
     console.error("Rezept-Foto-Erkennung fehlgeschlagen:", err);
     const fehler = err instanceof Error ? err.message : "Unbekannter Fehler bei der Bilderkennung.";
-    return { ok: false, fehler };
-  }
-}
-
-// Spracheingabe fürs "Neues Rezept"-Formular (Standing-Regel: Formulare mit mehr als zwei
-// Feldern brauchen Spracheingabe UND Bildfunktionen).
-export async function erkenneRezeptAusText(
-  text: string
-): Promise<{ ok: true; rezept: ErkanntesRezept } | { ok: false; fehler: string }> {
-  await requireParent();
-  try {
-    const rezept = await erkenneRezeptAusSprache(text);
-    return { ok: true, rezept };
-  } catch (err) {
-    console.error("Rezept-Sprach-Erkennung fehlgeschlagen:", err);
-    const fehler = err instanceof Error ? err.message : "Unbekannter Fehler bei der Spracherkennung.";
     return { ok: false, fehler };
   }
 }
@@ -257,7 +248,9 @@ export async function schreibeRezeptUmVorschau(
       { name: rezept.name, zutaten: rezept.zutaten, zubereitung: rezept.zubereitung ?? "" },
       anweisung
     );
-    return { ok: true, rezept: ergebnis };
+    // Eine Umschreibung (z.B. "vegetarisch machen") ändert die Gerichtsart in aller Regel
+    // nicht — die ursprüngliche Kategorie bleibt deshalb erhalten statt der KI-Schätzung.
+    return { ok: true, rezept: { ...ergebnis, kategorie: rezept.kategorie } };
   } catch (err) {
     console.error("Rezept-Umschreibung fehlgeschlagen:", err);
     const fehler = err instanceof Error ? err.message : "Unbekannter Fehler beim Umschreiben.";
@@ -290,7 +283,7 @@ export async function listRezepteFuerWoche(wocheStartIso: string) {
   return rezepte
     .filter((r) => !ausgeblendeteIds.has(r.id))
     .sort((a, b) => (a.planEintraege[0]?.tag.getTime() ?? 0) - (b.planEintraege[0]?.tag.getTime() ?? 0))
-    .map((r) => ({ id: r.id, name: r.name, zuletztGeplant: r.planEintraege[0]?.tag.toISOString() ?? null }));
+    .map((r) => ({ id: r.id, name: r.name, kategorie: r.kategorie, zuletztGeplant: r.planEintraege[0]?.tag.toISOString() ?? null }));
 }
 
 export async function listAusgeblendeteFuerWoche(wocheStartIso: string) {

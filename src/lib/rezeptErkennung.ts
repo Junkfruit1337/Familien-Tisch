@@ -1,7 +1,17 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
+import { REZEPT_KATEGORIEN, istGueltigeKategorie } from "./rezeptKategorien";
 
-export type ErkanntesRezept = { name: string; zutaten: string; zubereitung: string; portionen: number | null; quelle?: string | null };
+export type ErkanntesRezept = {
+  name: string;
+  zutaten: string;
+  zubereitung: string;
+  portionen: number | null;
+  kategorie: string;
+  quelle?: string | null;
+};
+
+const KATEGORIE_FORMAT_HINWEIS = `"kategorie": "eine dieser Kategorien: ${REZEPT_KATEGORIEN.join(", ")}"`;
 
 function holeApiKey(): string {
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -29,6 +39,7 @@ function parseRezeptAntwort(raw: string, fehlermeldung: string): ErkanntesRezept
     zutaten: typeof d.zutaten === "string" ? d.zutaten : "",
     zubereitung: typeof d.zubereitung === "string" ? d.zubereitung : "",
     portionen: typeof d.portionen === "number" && d.portionen > 0 ? Math.round(d.portionen) : null,
+    kategorie: istGueltigeKategorie(d.kategorie) ? d.kategorie : "Hauptgang",
     quelle: typeof d.quelle === "string" && d.quelle.trim() ? d.quelle.trim() : null,
   };
 }
@@ -37,7 +48,7 @@ const PROMPT =
   "Auf diesem Foto ist ein Rezept (aus einem Kochbuch, einer Zeitschrift oder handschriftlich notiert). " +
   "Lies den Namen des Gerichts, die Zutatenliste, die Zubereitung sowie — falls angegeben — für wie viele Portionen/Personen das Rezept geschrieben ist heraus (z. B. \"Für 1 Portion\", \"für 4 Personen\").\n" +
   "Antworte AUSSCHLIESSLICH mit einem JSON-Objekt, ohne Markdown-Codeblock, ohne weiteren Text, in genau diesem Format:\n" +
-  '{"name": "Gerichtname", "zutaten": "eine Zutat pro Zeile, Format \'Menge Einheit Name\', z.B. 500 g Spaghetti", "zubereitung": "Zubereitungsschritte als Fließtext oder nummerierte Liste", "portionen": Zahl oder null, falls keine Portionsangabe erkennbar ist}\n' +
+  `{"name": "Gerichtname", "zutaten": "eine Zutat pro Zeile, Format 'Menge Einheit Name', z.B. 500 g Spaghetti", "zubereitung": "Zubereitungsschritte als Fließtext oder nummerierte Liste", "portionen": Zahl oder null, falls keine Portionsangabe erkennbar ist, ${KATEGORIE_FORMAT_HINWEIS}}\n` +
   "Wenn du eine Zutatenmenge nicht sicher lesen kannst, schätze plausibel oder lass die Mengenangabe weg und schreibe nur den Namen der Zutat. " +
   'Wenn keine Zubereitung erkennbar ist, lass das Feld als leeren String ("").';
 
@@ -73,45 +84,24 @@ export async function erkenneRezeptAusBild(fotoDataUrl: string): Promise<Erkannt
   );
 }
 
-const SPRACHE_PROMPT =
-  "Das ist eine gesprochene Beschreibung eines Rezepts, die per Spracherkennung in Text umgewandelt wurde. " +
-  "Extrahiere daraus den Namen des Gerichts, die Zutatenliste, die Zubereitung sowie — falls genannt — für wie viele Portionen/Personen.\n" +
-  "Antworte AUSSCHLIESSLICH mit einem JSON-Objekt, ohne Markdown-Codeblock, ohne weiteren Text, in genau diesem Format:\n" +
-  '{"name": "Gerichtname", "zutaten": "eine Zutat pro Zeile, Format \'Menge Einheit Name\', z.B. 500 g Spaghetti", "zubereitung": "Zubereitungsschritte als Fließtext oder nummerierte Liste", "portionen": Zahl oder null}\n' +
-  "Wenn Mengen nicht genannt wurden, schätze plausibel oder lass die Mengenangabe weg. Wenn keine Zubereitung erkennbar ist, lass das Feld leer (\"\").\n\n" +
-  "Gesprochener Text: ";
-
-// Spracheingabe fürs "Neues Rezept"-Formular (Fix-Batch 35 Nachtrag, Standing-Regel:
-// Formulare mit mehr als zwei Feldern brauchen Spracheingabe UND Bildfunktionen) — nutzt
-// denselben Antwort-Typ wie die Foto-Erkennung.
-export async function erkenneRezeptAusSprache(text: string): Promise<ErkanntesRezept> {
-  const apiKey = holeApiKey();
-  const client = new Anthropic({ apiKey });
-  const response = await client.messages.create({
-    model: "claude-sonnet-5",
-    max_tokens: 1500,
-    messages: [{ role: "user", content: SPRACHE_PROMPT + text }],
-  });
-  const textBlock = response.content.find((b): b is Anthropic.TextBlock => b.type === "text");
-  return parseRezeptAntwort(
-    textBlock?.text ?? "",
-    "Konnte die Antwort der Spracherkennung nicht lesen. Bitte erneut versuchen oder die Felder manuell ausfüllen."
-  );
-}
-
-// Fix-Batch 74 (Florian, nachdem er die Kosten der Web-Suche erfahren hat: "vorerst ein
-// KI-Rezept"): günstige Variante OHNE Web-Suche — reine Modell-Generierung anhand der freien
-// Beschreibung, wie schon bei der saisonalen Idee. Kostet nur normale Token-Kosten (ca. ein
-// Zehntel bis Zwanzigstel der Web-Suche-Variante), da kein Such-Werkzeug involviert ist.
+// Fix-Batch 74/75 (Florian: "vorerst ein KI-Rezept", dann: Formular vereinfachen — nur noch
+// EIN Text-/Sprachfeld statt getrennter Wege für "eigenes Rezept diktieren" und "Idee
+// vorschlagen lassen"). Deckt deshalb bewusst BEIDE Fälle in einem Aufruf ab: wenn die
+// Beschreibung schon ein vollständiges, selbst diktiertes/getipptes Rezept mit Mengen ist,
+// wird es nur sauber strukturiert (nicht neu erfunden); wenn es nur eine grobe Idee/ein
+// Wunsch ist (Gerichtsart oder vorhandene Zutaten), wird ein passendes Rezept vorgeschlagen.
+// Günstig: reine Modell-Generierung ohne Web-Suche (ca. 1/10 bis 1/20 der Websuche-Kosten).
 export async function schlageRezeptZuBeschreibungVor(beschreibung: string): Promise<ErkanntesRezept> {
   const apiKey = holeApiKey();
   const client = new Anthropic({ apiKey });
   const prompt =
-    `Ein Familienmitglied möchte ein Rezept, das zu folgender Beschreibung passt: "${beschreibung}"\n` +
-    "(das kann eine Gerichtsart sein, z. B. \"eine Suppe\", oder was gerade an Zutaten zuhause ist, z. B. \"ich hab Zucchini und Reis da\").\n" +
-    "Schlage ein einfaches, alltagstaugliches Familien-Rezept vor, das dazu passt.\n" +
+    `Ein Familienmitglied hat Folgendes eingegeben (getippt oder per Sprache diktiert), um ein Rezept anzulegen:\n"${beschreibung}"\n\n` +
+    "Zwei Fälle sind möglich:\n" +
+    "1. Es ist bereits ein vollständiges, eigenes Rezept mit Zutaten/Mengen (ggf. auch Zubereitung) — dann strukturiere es NUR sauber, ohne es zu verändern oder zu erfinden.\n" +
+    "2. Es ist nur eine grobe Idee/ein Wunsch (z. B. eine Gerichtsart wie \"eine Suppe\", oder was gerade an Zutaten zuhause ist, z. B. \"ich hab Zucchini und Reis da\") — dann schlage " +
+    "ein einfaches, alltagstaugliches Familien-Rezept vor, das dazu passt.\n" +
     "Antworte AUSSCHLIESSLICH mit einem JSON-Objekt, ohne Markdown-Codeblock, ohne weiteren Text, in genau diesem Format:\n" +
-    '{"name": "Gerichtname", "zutaten": "eine Zutat pro Zeile, Format \'Menge Einheit Name\'", "zubereitung": "Zubereitungsschritte als Fließtext oder nummerierte Liste", "portionen": Zahl oder null}';
+    `{"name": "Gerichtname", "zutaten": "eine Zutat pro Zeile, Format 'Menge Einheit Name'", "zubereitung": "Zubereitungsschritte als Fließtext oder nummerierte Liste", "portionen": Zahl oder null, ${KATEGORIE_FORMAT_HINWEIS}}`;
   const response = await client.messages.create({
     model: "claude-sonnet-5",
     max_tokens: 1500,
@@ -145,9 +135,9 @@ export async function findeRezeptImInternet(beschreibung: string): Promise<Erkan
     "(viele positive Bewertungen/Kommentare). Erfinde KEIN Rezept selbst — wenn du kein passendes, gut bewertetes " +
     "Rezept findest, sag das im \"name\"-Feld statt eines Rezepts.\n" +
     "Antworte GANZ ZUM SCHLUSS AUSSCHLIESSLICH mit einem JSON-Objekt, ohne Markdown-Codeblock, ohne weiteren Text, in genau diesem Format:\n" +
-    '{"name": "Gerichtname", "zutaten": "eine Zutat pro Zeile, Format \'Menge Einheit Name\', z.B. 500 g Spaghetti", ' +
-    '"zubereitung": "Zubereitungsschritte als Fließtext oder nummerierte Liste", "portionen": Zahl oder null, ' +
-    '"quelle": "Name der Seite, auf der das Rezept gefunden wurde, z.B. \'Chefkoch.de\'"}';
+    `{"name": "Gerichtname", "zutaten": "eine Zutat pro Zeile, Format 'Menge Einheit Name', z.B. 500 g Spaghetti", ` +
+    `"zubereitung": "Zubereitungsschritte als Fließtext oder nummerierte Liste", "portionen": Zahl oder null, ${KATEGORIE_FORMAT_HINWEIS}, ` +
+    `"quelle": "Name der Seite, auf der das Rezept gefunden wurde, z.B. 'Chefkoch.de'"}`;
   const response = await client.messages.create({
     model: "claude-sonnet-5",
     max_tokens: 2000,
@@ -179,7 +169,7 @@ export async function schlageSaisonalesRezeptVor(saison: string, bisherigeVorsch
     `Schlage ein einfaches, alltagstaugliches Familien-Rezept passend zur Jahreszeit "${saison}" vor, mit Zutaten, die in dieser Saison typisch/frisch verfügbar sind.` +
     vermeidenHinweis +
     "\nAntworte AUSSCHLIESSLICH mit einem JSON-Objekt, ohne Markdown-Codeblock, ohne weiteren Text, in genau diesem Format:\n" +
-    '{"name": "Gerichtname", "zutaten": "eine Zutat pro Zeile, Format \'Menge Einheit Name\'", "zubereitung": "Zubereitungsschritte als Fließtext oder nummerierte Liste", "portionen": Zahl oder null}';
+    `{"name": "Gerichtname", "zutaten": "eine Zutat pro Zeile, Format 'Menge Einheit Name'", "zubereitung": "Zubereitungsschritte als Fließtext oder nummerierte Liste", "portionen": Zahl oder null, ${KATEGORIE_FORMAT_HINWEIS}}`;
   const response = await client.messages.create({
     model: "claude-sonnet-5",
     max_tokens: 1500,
