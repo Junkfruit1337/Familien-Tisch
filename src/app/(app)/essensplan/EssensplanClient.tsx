@@ -383,7 +383,9 @@ export default function EssensplanClient({
               {new Date(t.tag).toLocaleDateString("de-DE", { weekday: "long", day: "2-digit", month: "2-digit" })}
               {t.vergangen && " · ✓ erledigt"}
             </div>
-            {istEltern ? (
+            {/* Fix-Batch 82 (Florians Wunsch): ein bereits vergangener Tag darf nicht mehr
+                bearbeitet werden — dieselbe schreibgeschützte Ansicht wie für Kinder. */}
+            {istEltern && !t.vergangen ? (
               <>
                 <RezeptTagAuswahl
                   aktuellName={t.eintrag?.rezeptName ?? null}
@@ -402,7 +404,7 @@ export default function EssensplanClient({
             ) : (
               <div>{t.eintrag?.rezeptName ?? "– kein Gericht –"}</div>
             )}
-            {istEltern && t.eintrag && (
+            {istEltern && t.eintrag && !t.vergangen && (
               <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", borderTop: "1px solid var(--border)", paddingTop: 8 }}>
                 <button className="btn-secondary" style={{ fontSize: "var(--font-xs)" }} onClick={() => klickSchloss(t)}>
                   {t.eintrag.gelockt ? "🔓 Entsperren" : "🔒 Sperren"}
@@ -416,7 +418,7 @@ export default function EssensplanClient({
               </div>
             )}
 
-            {istEltern && t.eintrag && (
+            {istEltern && t.eintrag && !t.vergangen && (
               <div style={{ borderTop: "1px solid var(--border)", paddingTop: 8 }}>
                 {(() => {
                   const aktiveIds = t.eintrag!.esserIds.length === 0 ? familie.map((f) => f.id) : t.eintrag!.esserIds;
@@ -489,7 +491,7 @@ export default function EssensplanClient({
                 neben dem Hauptgericht — z.B. Frühstück, ein zusätzliches warmes Essen oder ein
                 Mittags-Snack. Bewusst unabhängig davon, ob überhaupt ein Hauptgericht für den
                 Tag gesetzt ist (kann auch nur ein Frühstück geplant sein). */}
-            {istEltern && (() => {
+            {istEltern && !t.vergangen && (() => {
               const extraFuerTag = extraMahlzeiten.filter((e) => e.tag === t.tag);
               return (
                 <div style={{ borderTop: "1px solid var(--border)", paddingTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>

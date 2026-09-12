@@ -1525,10 +1525,13 @@ export default function EinstellungenClient({
         </div>
       </details>
 
+      {/* Fix-Batch 82 (Florians Bug-Meldung): Design-Vorlage passte inhaltlich nicht zu
+          "Benachrichtigungen & Verlauf" — jetzt eigener, eigenständiger Bereich. */}
+      <DesignAuswahl />
+
       <details>
         <summary style={{ cursor: "pointer", fontWeight: 600 }}>🔔 Benachrichtigungen &amp; Verlauf</summary>
         <div style={{ display: "flex", flexDirection: "column", gap: 16, marginTop: 10 }}>
-      <DesignAuswahl />
       <PushBenachrichtigungen />
 
       <details className="card">

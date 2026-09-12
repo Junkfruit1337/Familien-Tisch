@@ -50,6 +50,14 @@ export default function AppShell({ person, children }: { person: Person; childre
   const router = useRouter();
   const [theme, setTheme] = useState<Theme | null>(null);
   const NAV = navFuerRolle(person.rolle === "ELTERN");
+  // Fix-Batch 82 (Florians Wunsch): heutiges Datum soll immer oben in der Übersicht stehen.
+  // Erst nach dem Mount gesetzt (wie beim Theme) statt direkt beim Rendern berechnet, damit
+  // Server- und Client-Render nicht auseinanderlaufen können (Hydration).
+  const [heute, setHeute] = useState<string | null>(null);
+
+  useEffect(() => {
+    setHeute(new Date().toLocaleDateString("de-DE", { weekday: "long", day: "2-digit", month: "2-digit", year: "numeric" }));
+  }, []);
 
   useEffect(() => {
     let gespeichert: Theme | null = null;
@@ -131,7 +139,10 @@ export default function AppShell({ person, children }: { person: Person; childre
           zIndex: 10,
         }}
       >
-        <strong style={{ fontSize: "var(--font-md)" }}>Familientisch</strong>
+        <div>
+          <strong style={{ fontSize: "var(--font-md)" }}>Familientisch</strong>
+          {heute && <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{heute}</div>}
+        </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <button
             className="btn-icon"
