@@ -5,7 +5,8 @@ import { requireParent } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import { autoKategorieId, findeOffenenArtikel, findeOffenenUnbestaetigtenArtikel, mergeMenge } from "../einkaufsliste/actions";
 import {
-  erkenneRezeptAusBild,
+  erkenneRezeptAusDatei,
+  erkenneRezeptAusSprache,
   schreibeRezeptUm,
   schlageSaisonalesRezeptVor,
   verdichteZubereitung,
@@ -99,21 +100,38 @@ export async function updateRezept(rezeptId: string, data: { name?: string; zuta
   revalidatePath("/essensplan");
 }
 
-// Rezept-Erfassung per Foto (Fragenkatalog Frage 25, Batch 8) — füllt nur das
-// "Neues Rezept"-Formular vor, gespeichert wird erst nach Prüfung/Korrektur durch die Eltern.
-// Fehler werden hier abgefangen und als Ergebnis-Objekt zurückgegeben statt geworfen,
-// weil Next.js Fehlermeldungen aus Server Actions im Produktions-Build sonst durch eine
-// generische Meldung ersetzt ("...error occurred in the Server Components render...").
+// Rezept-Erfassung per Foto ODER PDF-Datei (Fragenkatalog Frage 25, Batch 8; PDF Fix-Batch 76)
+// — füllt nur das "Neues Rezept"-Formular vor, gespeichert wird erst nach Prüfung/Korrektur
+// durch die Eltern. Fehler werden hier abgefangen und als Ergebnis-Objekt zurückgegeben statt
+// geworfen, weil Next.js Fehlermeldungen aus Server Actions im Produktions-Build sonst durch
+// eine generische Meldung ersetzt ("...error occurred in the Server Components render...").
 export async function erkenneRezeptAusFoto(
-  fotoDataUrl: string
+  datenUrl: string
 ): Promise<{ ok: true; rezept: ErkanntesRezept } | { ok: false; fehler: string }> {
   await requireParent();
   try {
-    const rezept = await erkenneRezeptAusBild(fotoDataUrl);
+    const rezept = await erkenneRezeptAusDatei(datenUrl);
     return { ok: true, rezept };
   } catch (err) {
-    console.error("Rezept-Foto-Erkennung fehlgeschlagen:", err);
-    const fehler = err instanceof Error ? err.message : "Unbekannter Fehler bei der Bilderkennung.";
+    console.error("Rezept-Erkennung (Foto/Datei) fehlgeschlagen:", err);
+    const fehler = err instanceof Error ? err.message : "Unbekannter Fehler bei der Erkennung.";
+    return { ok: false, fehler };
+  }
+}
+
+// Fix-Batch 76 (Florians Korrektur an Fix-Batch 75): Diktieren eines bekannten Rezepts ist
+// kein "Erfinden" — braucht wieder eine eigene, treue Transkriptions-Aktion im Bereich
+// "Vorhandenes Rezept hinzufügen", getrennt von der KI-Vorschlags-Funktion weiter unten.
+export async function erkenneRezeptAusText(
+  text: string
+): Promise<{ ok: true; rezept: ErkanntesRezept } | { ok: false; fehler: string }> {
+  await requireParent();
+  try {
+    const rezept = await erkenneRezeptAusSprache(text);
+    return { ok: true, rezept };
+  } catch (err) {
+    console.error("Rezept-Sprach-Erkennung fehlgeschlagen:", err);
+    const fehler = err instanceof Error ? err.message : "Unbekannter Fehler bei der Spracherkennung.";
     return { ok: false, fehler };
   }
 }

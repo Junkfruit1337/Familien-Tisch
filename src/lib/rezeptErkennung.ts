@@ -52,27 +52,29 @@ const PROMPT =
   "Wenn du eine Zutatenmenge nicht sicher lesen kannst, schätze plausibel oder lass die Mengenangabe weg und schreibe nur den Namen der Zutat. " +
   'Wenn keine Zubereitung erkennbar ist, lass das Feld als leeren String ("").';
 
-// Rezept-Erfassung per Foto (Fragenkatalog Frage 25, Batch 8) — Cloud-KI-Bilderkennung
-// statt einfacher Texterkennung, wie von Florian entschieden (10.09.2026). Braucht
-// ANTHROPIC_API_KEY als Umgebungsvariable in Coolify.
-export async function erkenneRezeptAusBild(fotoDataUrl: string): Promise<ErkanntesRezept> {
+// Rezept-Erfassung per Foto ODER PDF-Datei (Fragenkatalog Frage 25, Batch 8; PDF-Unterstützung
+// Fix-Batch 76, Florians Wunsch: "auch Dateien hochladen können, wie eine PDF-Datei") —
+// Cloud-KI-Bilderkennung statt einfacher Texterkennung. Braucht ANTHROPIC_API_KEY als
+// Umgebungsvariable in Coolify. Claude liest ein PDF nativ als Dokument-Block (Text+Layout),
+// kein Umweg über eine Bildkonvertierung nötig.
+export async function erkenneRezeptAusDatei(datenUrl: string): Promise<ErkanntesRezept> {
   const apiKey = holeApiKey();
-  const match = fotoDataUrl.match(/^data:(image\/[a-zA-Z+]+);base64,(.+)$/);
-  if (!match) throw new Error("Ungültiges Bildformat.");
-  const mediaType = match[1];
-  const base64Data = match[2];
+  const bildMatch = datenUrl.match(/^data:(image\/[a-zA-Z+]+);base64,(.+)$/);
+  const pdfMatch = datenUrl.match(/^data:application\/pdf;base64,(.+)$/);
+  if (!bildMatch && !pdfMatch) throw new Error("Ungültiges Datei-Format (nur Bilder oder PDF werden unterstützt).");
 
   const client = new Anthropic({ apiKey });
+  const inhaltsBlock = bildMatch
+    ? { type: "image" as const, source: { type: "base64" as const, media_type: bildMatch[1] as any, data: bildMatch[2] } }
+    : { type: "document" as const, source: { type: "base64" as const, media_type: "application/pdf" as const, data: pdfMatch![1] } };
+
   const response = await client.messages.create({
     model: "claude-sonnet-5",
     max_tokens: 1500,
     messages: [
       {
         role: "user",
-        content: [
-          { type: "image", source: { type: "base64", media_type: mediaType as any, data: base64Data } },
-          { type: "text", text: PROMPT },
-        ],
+        content: [inhaltsBlock, { type: "text", text: PROMPT }],
       },
     ],
   });
@@ -80,7 +82,36 @@ export async function erkenneRezeptAusBild(fotoDataUrl: string): Promise<Erkannt
   const textBlock = response.content.find((b): b is Anthropic.TextBlock => b.type === "text");
   return parseRezeptAntwort(
     textBlock?.text ?? "",
-    "Konnte die Antwort der Bilderkennung nicht lesen. Bitte erneut versuchen oder die Felder manuell ausfüllen."
+    "Konnte die Antwort der Erkennung nicht lesen. Bitte erneut versuchen oder die Felder manuell ausfüllen."
+  );
+}
+
+const SPRACHE_PROMPT =
+  "Das ist eine gesprochene Beschreibung eines Rezepts, die per Spracherkennung in Text umgewandelt wurde — jemand diktiert ein " +
+  "Rezept, das er/sie schon kennt (z. B. auswendig, ohne es aufgeschrieben zu haben). " +
+  "Extrahiere daraus den Namen des Gerichts, die Zutatenliste, die Zubereitung sowie — falls genannt — für wie viele Portionen/Personen. " +
+  "Übernimm die Angaben so, wie diktiert — erfinde nichts hinzu.\n" +
+  "Antworte AUSSCHLIESSLICH mit einem JSON-Objekt, ohne Markdown-Codeblock, ohne weiteren Text, in genau diesem Format:\n" +
+  `{"name": "Gerichtname", "zutaten": "eine Zutat pro Zeile, Format 'Menge Einheit Name', z.B. 500 g Spaghetti", "zubereitung": "Zubereitungsschritte als Fließtext oder nummerierte Liste", "portionen": Zahl oder null, ${KATEGORIE_FORMAT_HINWEIS}}\n` +
+  "Wenn Mengen nicht genannt wurden, schätze plausibel oder lass die Mengenangabe weg. Wenn keine Zubereitung erkennbar ist, lass das Feld leer (\"\").\n\n" +
+  "Gesprochener Text: ";
+
+// Fix-Batch 76 (Florians Korrektur an Fix-Batch 75): "Vorhandenes Rezept hinzufügen" (Foto/
+// Datei/Diktieren) und "KI erstellt ein Rezept" sollen wieder zwei klar getrennte Bereiche
+// sein — Diktieren eines bekannten Rezepts ist kein "Erfinden" und braucht eine eigene,
+// treue Transkriptions-Funktion statt der Vorschlag-Funktion weiter unten.
+export async function erkenneRezeptAusSprache(text: string): Promise<ErkanntesRezept> {
+  const apiKey = holeApiKey();
+  const client = new Anthropic({ apiKey });
+  const response = await client.messages.create({
+    model: "claude-sonnet-5",
+    max_tokens: 1500,
+    messages: [{ role: "user", content: SPRACHE_PROMPT + text }],
+  });
+  const textBlock = response.content.find((b): b is Anthropic.TextBlock => b.type === "text");
+  return parseRezeptAntwort(
+    textBlock?.text ?? "",
+    "Konnte die Antwort der Spracherkennung nicht lesen. Bitte erneut versuchen oder die Felder manuell ausfüllen."
   );
 }
 

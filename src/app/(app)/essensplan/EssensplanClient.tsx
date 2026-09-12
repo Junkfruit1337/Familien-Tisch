@@ -19,6 +19,7 @@ import {
   pruefeGelocktenTagWechsel,
   entferneTag,
   erkenneRezeptAusFoto,
+  erkenneRezeptAusText,
   updateRezeptPortionenBasis,
   updateRezept,
   schlageSaisonaleIdeeVor,
@@ -59,6 +60,21 @@ function rezeptfotoAufBase64(file: File): Promise<string> {
     };
     reader.readAsDataURL(file);
   });
+}
+
+// Fix-Batch 76 (Florians Wunsch: "auch Dateien hochladen können, wie eine PDF-Datei") — PDFs
+// werden anders als Fotos NICHT über eine Bild-Verkleinerung geschickt (kein <img>/Canvas
+// möglich), sondern unverändert als Base64 gelesen; Claude liest PDFs direkt als Dokument.
+function rezeptDateiAufBase64(file: File): Promise<string> {
+  if (file.type === "application/pdf") {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = reject;
+      reader.onload = () => resolve(reader.result as string);
+      reader.readAsDataURL(file);
+    });
+  }
+  return rezeptfotoAufBase64(file);
 }
 
 type TagEintrag = {
@@ -852,49 +868,16 @@ export default function EssensplanClient({
         <details>
           <summary style={{ cursor: "pointer", color: "var(--text-muted)" }}>➕ Neues Rezept hinzufügen (Elternbereich)</summary>
           <div className="card" style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
-            {/* Fix-Batch 75 (Florians Wunsch: "übersichtlich und minimiert"): EIN Feld für alle
-                KI-Wege — eigenes Rezept diktieren/eintippen ODER nur eine Idee/einen Wunsch
-                beschreiben, die KI erkennt selbst, was zutrifft (siehe
-                schlageRezeptZuBeschreibungVor). Foto/Saisonal/Websuche als kleine Zusatz-
-                Buttons darunter, damit der Bereich nicht durch viele gleichrangige Blöcke
-                unübersichtlich wirkt. */}
-            <label style={{ fontSize: 13, fontWeight: 600 }}>Rezept-Idee</label>
-            <textarea
-              placeholder='Beschreibe kurz, was du suchst (z. B. "eine Suppe", "was mit Hähnchen", "ich hab Zucchini und Reis da") — oder diktiere/tippe direkt ein eigenes Rezept mit Zutaten'
-              rows={3}
-              value={rezeptFinderText}
-              onChange={(e) => setRezeptFinderText(e.target.value)}
-            />
-            <Spracheingabe disabled={neuLaeuft} onErgebnis={setRezeptFinderText} />
-            <button
-              className="btn"
-              disabled={neuLaeuft || !rezeptFinderText.trim()}
-              onClick={() =>
-                startTransition(async () => {
-                  setNeuLaeuft(true);
-                  setNeuQuelle(null);
-                  try {
-                    const ergebnis = await schlageRezeptZuBeschreibungVorschau(rezeptFinderText);
-                    if (!ergebnis.ok) {
-                      alert(ergebnis.fehler);
-                      return;
-                    }
-                    setNeuName(ergebnis.rezept.name);
-                    setNeuZutaten(ergebnis.rezept.zutaten);
-                    setNeuZubereitung(ergebnis.rezept.zubereitung);
-                    setNeuKategorie(ergebnis.rezept.kategorie);
-                    if (ergebnis.rezept.portionen) setNeuPortionenBasis(String(ergebnis.rezept.portionen));
-                  } finally {
-                    setNeuLaeuft(false);
-                  }
-                })
-              }
-            >
-              {neuLaeuft ? "Wird erstellt …" : "✨ Rezept vorschlagen"}
-            </button>
-
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", borderTop: "1px solid var(--border)", paddingTop: 8 }}>
-              <label className="btn-secondary" style={{ fontSize: 12, padding: "6px 10px", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>
+            {/* Fix-Batch 76 (Florians Korrektur an Fix-Batch 75): "Vorhandenes Rezept
+                hinzufügen" (Foto/Datei/Diktieren — der Normalfall für bewährte Rezepte) und
+                "KI erstellt ein Rezept" (kostet Geld, seltener) müssen zwei klar getrennte,
+                unterschiedlich gewichtete Bereiche sein, nicht ein gemeinsames Feld. */}
+            <strong style={{ fontSize: 14 }}>📖 Vorhandenes Rezept hinzufügen</strong>
+            <p style={{ fontSize: 12, color: "var(--text-muted)", margin: 0 }}>
+              Für Rezepte, die ihr schon habt — abfotografieren, als Datei hochladen oder einsprechen.
+            </p>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              <label className="btn-secondary" style={{ fontSize: 13, padding: "8px 12px", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>
                 📷 Foto
                 <input
                   type="file"
@@ -909,7 +892,7 @@ export default function EssensplanClient({
                     setNeuLaeuft(true);
                     setNeuQuelle(null);
                     try {
-                      const base64 = await rezeptfotoAufBase64(file);
+                      const base64 = await rezeptDateiAufBase64(file);
                       const ergebnis = await erkenneRezeptAusFoto(base64);
                       if (!ergebnis.ok) {
                         alert(ergebnis.fehler);
@@ -928,11 +911,11 @@ export default function EssensplanClient({
                   }}
                 />
               </label>
-              <label className="btn-secondary" style={{ fontSize: 12, padding: "6px 10px", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>
-                📁 Galerie
+              <label className="btn-secondary" style={{ fontSize: 13, padding: "8px 12px", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>
+                📁 Datei (Bild oder PDF)
                 <input
                   type="file"
-                  accept="image/*"
+                  accept="image/*,application/pdf"
                   disabled={neuLaeuft}
                   style={{ display: "none" }}
                   onChange={async (e) => {
@@ -942,7 +925,7 @@ export default function EssensplanClient({
                     setNeuLaeuft(true);
                     setNeuQuelle(null);
                     try {
-                      const base64 = await rezeptfotoAufBase64(file);
+                      const base64 = await rezeptDateiAufBase64(file);
                       const ergebnis = await erkenneRezeptAusFoto(base64);
                       if (!ergebnis.ok) {
                         alert(ergebnis.fehler);
@@ -954,146 +937,228 @@ export default function EssensplanClient({
                       setNeuKategorie(ergebnis.rezept.kategorie);
                       if (ergebnis.rezept.portionen) setNeuPortionenBasis(String(ergebnis.rezept.portionen));
                     } catch (err: any) {
-                      alert(err.message ?? "Foto konnte nicht erkannt werden.");
+                      alert(err.message ?? "Datei konnte nicht erkannt werden.");
                     } finally {
                       setNeuLaeuft(false);
                     }
                   }}
                 />
               </label>
-              <button
-                className="btn-secondary"
-                style={{ fontSize: 12, padding: "6px 10px" }}
-                disabled={neuLaeuft}
-                onClick={() =>
-                  startTransition(async () => {
-                    setNeuLaeuft(true);
-                    setNeuQuelle(null);
-                    try {
-                      const ergebnis = await schlageSaisonaleIdeeVor();
-                      if (!ergebnis.ok) {
-                        alert(ergebnis.fehler);
-                        return;
-                      }
-                      setNeuName(ergebnis.rezept.name);
-                      setNeuZutaten(ergebnis.rezept.zutaten);
-                      setNeuZubereitung(ergebnis.rezept.zubereitung);
-                      setNeuKategorie(ergebnis.rezept.kategorie);
-                      if (ergebnis.rezept.portionen) setNeuPortionenBasis(String(ergebnis.rezept.portionen));
-                    } finally {
-                      setNeuLaeuft(false);
+            </div>
+            <Spracheingabe
+              disabled={neuLaeuft}
+              onErgebnis={(text) =>
+                startTransition(async () => {
+                  setNeuLaeuft(true);
+                  setNeuQuelle(null);
+                  try {
+                    const ergebnis = await erkenneRezeptAusText(text);
+                    if (!ergebnis.ok) {
+                      alert(ergebnis.fehler);
+                      return;
                     }
-                  })
-                }
-              >
-                🍂 Saisonale Idee
-              </button>
+                    setNeuName(ergebnis.rezept.name);
+                    setNeuZutaten(ergebnis.rezept.zutaten);
+                    setNeuZubereitung(ergebnis.rezept.zubereitung);
+                    setNeuKategorie(ergebnis.rezept.kategorie);
+                    if (ergebnis.rezept.portionen) setNeuPortionenBasis(String(ergebnis.rezept.portionen));
+                  } finally {
+                    setNeuLaeuft(false);
+                  }
+                })
+              }
+            />
+            <p style={{ fontSize: 11, color: "var(--text-muted)", margin: 0 }}>
+              Sprich das komplette Rezept mit Zutaten ein — z. B. wenn ihr es nur im Kopf habt und nicht aufgeschrieben.
+            </p>
+            {neuLaeuft && <p style={{ fontSize: 13, color: "var(--text-muted)", margin: 0 }}>Einen Moment …</p>}
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, borderTop: "1px solid var(--border)", paddingTop: 8 }}>
+              <p style={{ fontSize: 12, color: "var(--text-muted)", margin: 0 }}>
+                Ergebnis bitte immer prüfen und bei Bedarf korrigieren, bevor du speicherst.
+              </p>
+              <input placeholder="Name" value={neuName} onChange={(e) => setNeuName(e.target.value)} />
+              <label style={{ fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}>
+                Kategorie
+                <select value={neuKategorie} onChange={(e) => setNeuKategorie(e.target.value)}>
+                  {REZEPT_KATEGORIEN.map((k) => (
+                    <option key={k} value={k}>
+                      {k}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <textarea
+                placeholder={"Zutaten, eine pro Zeile, z.B.\n500 g Spaghetti\n2 Zwiebeln"}
+                rows={5}
+                value={neuZutaten}
+                onChange={(e) => {
+                  setNeuZutaten(e.target.value);
+                  setZeigeZutatenWarnungNeu(false);
+                }}
+              />
+              {/* Fix-Batch 71 (Florians Wunsch): jede Zutatenzeile braucht eine Menge (außer
+                  "Prise") — egal ob manuell getippt, per Sprache/Foto/Datei erkannt oder von
+                  der KI vorgeschlagen. */}
+              {zeigeZutatenWarnungNeu && neuZutatenPruefung.some((z) => !z.vollstaendig) && (
+                <p style={{ margin: 0, fontSize: 13, color: "var(--danger)" }}>
+                  ⚠️ Bitte bei diesen Zutaten eine Menge angeben (außer bei „Prise"):{" "}
+                  <strong>{neuZutatenPruefung.filter((z) => !z.vollstaendig).map((z) => z.zeile).join(" · ")}</strong>
+                </p>
+              )}
+              <textarea placeholder="Zubereitung (optional)" rows={4} value={neuZubereitung} onChange={(e) => setNeuZubereitung(e.target.value)} />
+              <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
+                Rezept ist geschrieben für
+                <input
+                  type="number"
+                  min={1}
+                  value={neuPortionenBasis}
+                  onChange={(e) => setNeuPortionenBasis(e.target.value)}
+                  style={{ width: 60 }}
+                />
+                Portion(en)
+              </label>
+              <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>
+                Steht z. B. im Rezept als „Für 1 Portion" oder „für 4 Personen" — Grundlage für die
+                automatische Mengen-Anpassung, wenn ihr als Familie alle 6 esst.
+              </p>
+              {neuQuelle && <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>Gefunden auf: {neuQuelle}</p>}
               <button
-                className="btn-secondary"
-                style={{ fontSize: 12, padding: "6px 10px", color: "var(--text-muted)" }}
-                disabled={neuLaeuft || !rezeptFinderText.trim()}
-                title="Nutzt eine echte Websuche statt der KI-Erfindung — zusätzliche Kosten, ca. 2–5 Cent pro Suche"
-                onClick={() =>
+                className="btn"
+                disabled={pending || neuLaeuft}
+                onClick={() => {
+                  if (!neuName) return;
+                  if (neuZutatenPruefung.some((z) => !z.vollstaendig)) {
+                    setZeigeZutatenWarnungNeu(true);
+                    return;
+                  }
                   startTransition(async () => {
-                    setNeuLaeuft(true);
+                    const portionenBasis = parseInt(neuPortionenBasis, 10) || 6;
+                    await addRezept(neuName, neuZutaten, neuZubereitung || undefined, portionenBasis, neuKategorie);
+                    setNeuName("");
+                    setNeuZutaten("");
+                    setNeuZubereitung("");
+                    setNeuPortionenBasis("6");
+                    setNeuKategorie("Hauptgang");
+                    setRezeptFinderText("");
                     setNeuQuelle(null);
-                    try {
-                      const ergebnis = await findeRezeptImInternetVorschau(rezeptFinderText);
-                      if (!ergebnis.ok) {
-                        alert(ergebnis.fehler);
-                        return;
-                      }
-                      setNeuName(ergebnis.rezept.name);
-                      setNeuZutaten(ergebnis.rezept.zutaten);
-                      setNeuZubereitung(ergebnis.rezept.zubereitung);
-                      setNeuKategorie(ergebnis.rezept.kategorie);
-                      if (ergebnis.rezept.portionen) setNeuPortionenBasis(String(ergebnis.rezept.portionen));
-                      setNeuQuelle(ergebnis.rezept.quelle ?? null);
-                    } finally {
-                      setNeuLaeuft(false);
-                    }
-                  })
-                }
+                    setZeigeZutatenWarnungNeu(false);
+                  });
+                }}
               >
-                🌐 Aus dem Internet (ca. 2–5 Cent)
+                Rezept speichern
               </button>
             </div>
-            {neuLaeuft && <p style={{ fontSize: 13, color: "var(--text-muted)", margin: 0 }}>Einen Moment …</p>}
-            {neuQuelle && <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>Gefunden auf: {neuQuelle}</p>}
 
-            <p style={{ fontSize: 12, color: "var(--text-muted)", margin: 0 }}>
-              Ergebnis bitte immer prüfen und bei Bedarf korrigieren, bevor du speicherst.
-            </p>
-            <input placeholder="Name" value={neuName} onChange={(e) => setNeuName(e.target.value)} />
-            <label style={{ fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}>
-              Kategorie
-              <select value={neuKategorie} onChange={(e) => setNeuKategorie(e.target.value)}>
-                {REZEPT_KATEGORIEN.map((k) => (
-                  <option key={k} value={k}>
-                    {k}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <textarea
-              placeholder={"Zutaten, eine pro Zeile, z.B.\n500 g Spaghetti\n2 Zwiebeln"}
-              rows={5}
-              value={neuZutaten}
-              onChange={(e) => {
-                setNeuZutaten(e.target.value);
-                setZeigeZutatenWarnungNeu(false);
-              }}
-            />
-            {/* Fix-Batch 71 (Florians Wunsch): jede Zutatenzeile braucht eine Menge (außer
-                "Prise") — egal ob manuell getippt, per Sprache/Foto erkannt oder von der
-                saisonalen KI-Idee vorbefüllt. */}
-            {zeigeZutatenWarnungNeu && neuZutatenPruefung.some((z) => !z.vollstaendig) && (
-              <p style={{ margin: 0, fontSize: 13, color: "var(--danger)" }}>
-                ⚠️ Bitte bei diesen Zutaten eine Menge angeben (außer bei „Prise"):{" "}
-                <strong>{neuZutatenPruefung.filter((z) => !z.vollstaendig).map((z) => z.zeile).join(" · ")}</strong>
-              </p>
-            )}
-            <textarea placeholder="Zubereitung (optional)" rows={4} value={neuZubereitung} onChange={(e) => setNeuZubereitung(e.target.value)} />
-            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
-              Rezept ist geschrieben für
-              <input
-                type="number"
-                min={1}
-                value={neuPortionenBasis}
-                onChange={(e) => setNeuPortionenBasis(e.target.value)}
-                style={{ width: 60 }}
-              />
-              Portion(en)
-            </label>
-            <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>
-              Steht z. B. im Rezept als „Für 1 Portion" oder „für 4 Personen" — Grundlage für die
-              automatische Mengen-Anpassung, wenn ihr als Familie alle 6 esst.
-            </p>
-            <button
-              className="btn"
-              disabled={pending || neuLaeuft}
-              onClick={() => {
-                if (!neuName) return;
-                if (neuZutatenPruefung.some((z) => !z.vollstaendig)) {
-                  setZeigeZutatenWarnungNeu(true);
-                  return;
-                }
-                startTransition(async () => {
-                  const portionenBasis = parseInt(neuPortionenBasis, 10) || 6;
-                  await addRezept(neuName, neuZutaten, neuZubereitung || undefined, portionenBasis, neuKategorie);
-                  setNeuName("");
-                  setNeuZutaten("");
-                  setNeuZubereitung("");
-                  setNeuPortionenBasis("6");
-                  setNeuKategorie("Hauptgang");
-                  setRezeptFinderText("");
-                  setNeuQuelle(null);
-                  setZeigeZutatenWarnungNeu(false);
-                });
-              }}
-            >
-              Rezept speichern
-            </button>
+            {/* Fix-Batch 76: bewusst als eigener, eingeklappter Bereich — nicht direkt
+                anklickbar, damit klar wird, dass das etwas anderes ist als oben (Hochladen)
+                und dass es Geld kostet (Florian: "man soll sehen, dass es zwei
+                unterschiedliche Bereiche sind: das Hochladen und das Erfinden"). */}
+            <details style={{ marginTop: 4 }}>
+              <summary style={{ cursor: "pointer", color: "var(--text-muted)", fontSize: 13 }}>
+                ✨ Stattdessen ein Rezept von der KI erstellen lassen
+              </summary>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
+                <p style={{ fontSize: 12, color: "var(--text-muted)", margin: 0 }}>
+                  Für neue Ideen, statt eines bereits bewährten Rezepts — verursacht Kosten (siehe Buttons unten).
+                </p>
+                <textarea
+                  placeholder='z. B. "eine Suppe", "was mit Hähnchen" oder "ich hab Zucchini und Reis da"'
+                  rows={2}
+                  value={rezeptFinderText}
+                  onChange={(e) => setRezeptFinderText(e.target.value)}
+                />
+                <Spracheingabe disabled={neuLaeuft} onErgebnis={setRezeptFinderText} />
+                <button
+                  className="btn-secondary"
+                  style={{ fontSize: 13, alignSelf: "flex-start" }}
+                  disabled={neuLaeuft || !rezeptFinderText.trim()}
+                  onClick={() =>
+                    startTransition(async () => {
+                      setNeuLaeuft(true);
+                      setNeuQuelle(null);
+                      try {
+                        const ergebnis = await schlageRezeptZuBeschreibungVorschau(rezeptFinderText);
+                        if (!ergebnis.ok) {
+                          alert(ergebnis.fehler);
+                          return;
+                        }
+                        setNeuName(ergebnis.rezept.name);
+                        setNeuZutaten(ergebnis.rezept.zutaten);
+                        setNeuZubereitung(ergebnis.rezept.zubereitung);
+                        setNeuKategorie(ergebnis.rezept.kategorie);
+                        if (ergebnis.rezept.portionen) setNeuPortionenBasis(String(ergebnis.rezept.portionen));
+                      } finally {
+                        setNeuLaeuft(false);
+                      }
+                    })
+                  }
+                >
+                  {neuLaeuft ? "Wird erstellt …" : "✨ Rezept vorschlagen (günstig)"}
+                </button>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  <button
+                    className="btn-secondary"
+                    style={{ fontSize: 12, padding: "6px 10px" }}
+                    disabled={neuLaeuft}
+                    onClick={() =>
+                      startTransition(async () => {
+                        setNeuLaeuft(true);
+                        setNeuQuelle(null);
+                        try {
+                          const ergebnis = await schlageSaisonaleIdeeVor();
+                          if (!ergebnis.ok) {
+                            alert(ergebnis.fehler);
+                            return;
+                          }
+                          setNeuName(ergebnis.rezept.name);
+                          setNeuZutaten(ergebnis.rezept.zutaten);
+                          setNeuZubereitung(ergebnis.rezept.zubereitung);
+                          setNeuKategorie(ergebnis.rezept.kategorie);
+                          if (ergebnis.rezept.portionen) setNeuPortionenBasis(String(ergebnis.rezept.portionen));
+                        } finally {
+                          setNeuLaeuft(false);
+                        }
+                      })
+                    }
+                  >
+                    🍂 Saisonale Idee
+                  </button>
+                  <button
+                    className="btn-secondary"
+                    style={{ fontSize: 12, padding: "6px 10px", color: "var(--text-muted)" }}
+                    disabled={neuLaeuft || !rezeptFinderText.trim()}
+                    title="Nutzt eine echte Websuche statt der KI-Erfindung — zusätzliche Kosten, ca. 2–5 Cent pro Suche"
+                    onClick={() =>
+                      startTransition(async () => {
+                        setNeuLaeuft(true);
+                        setNeuQuelle(null);
+                        try {
+                          const ergebnis = await findeRezeptImInternetVorschau(rezeptFinderText);
+                          if (!ergebnis.ok) {
+                            alert(ergebnis.fehler);
+                            return;
+                          }
+                          setNeuName(ergebnis.rezept.name);
+                          setNeuZutaten(ergebnis.rezept.zutaten);
+                          setNeuZubereitung(ergebnis.rezept.zubereitung);
+                          setNeuKategorie(ergebnis.rezept.kategorie);
+                          if (ergebnis.rezept.portionen) setNeuPortionenBasis(String(ergebnis.rezept.portionen));
+                          setNeuQuelle(ergebnis.rezept.quelle ?? null);
+                        } finally {
+                          setNeuLaeuft(false);
+                        }
+                      })
+                    }
+                  >
+                    🌐 Aus dem Internet (ca. 2–5 Cent)
+                  </button>
+                </div>
+                <p style={{ fontSize: 11, color: "var(--text-muted)", margin: 0 }}>
+                  Ergebnis erscheint oben im Formular zur Prüfung — nichts wird automatisch gespeichert.
+                </p>
+              </div>
+            </details>
           </div>
         </details>
       )}
