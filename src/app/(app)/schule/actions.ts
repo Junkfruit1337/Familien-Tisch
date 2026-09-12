@@ -192,6 +192,7 @@ export async function einreichenNote(data: {
 }) {
   const person = await requirePerson();
   if (!data.notiz?.trim()) throw new Error("Bitte das Thema der Arbeit/Kontrolle angeben.");
+  if (!data.fotoBase64) throw new Error("Bitte ein Foto vom Notenzettel mit der Kamera aufnehmen.");
   const istEltern = person.rolle === "ELTERN";
   const fach = await prisma.fach.findUnique({ where: { id: data.fachId } });
   if (!fach) throw new Error("Fach nicht gefunden.");

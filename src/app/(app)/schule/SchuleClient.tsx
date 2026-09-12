@@ -496,6 +496,10 @@ export default function SchuleClient({
       alert("Bitte das Thema der Arbeit/Kontrolle angeben.");
       return;
     }
+    if (!foto) {
+      alert("Bitte ein Foto vom Notenzettel mit der Kamera aufnehmen.");
+      return;
+    }
     const istDuplikat = await pruefeNotenDuplikat({ fachId, art, datum });
     if (istDuplikat && !confirm("Für dieses Fach/diese Art gibt es an diesem Tag schon eine Note. Trotzdem speichern?")) {
       return;
@@ -808,10 +812,11 @@ export default function SchuleClient({
           <input type="date" value={datum} onChange={(e) => setDatum(e.target.value)} />
           <input placeholder="Thema (Pflichtfeld, z. B. Bruchrechnung)" value={notiz} onChange={(e) => setNotiz(e.target.value)} />
           <label style={{ fontSize: 13, display: "flex", flexDirection: "column", gap: 4 }}>
-            Foto vom Notenzettel (optional)
+            📷 Foto vom Notenzettel (Pflicht — muss mit der Kamera aufgenommen werden, kein Galerie-Bild)
             <input
               type="file"
               accept="image/*"
+              capture="environment"
               onChange={async (e) => {
                 const file = e.target.files?.[0];
                 if (!file) return;
