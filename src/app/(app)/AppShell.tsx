@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { logout } from "./actions";
 import { BEREICH_FARBEN } from "@/lib/bereichFarben";
 import PersonChip from "@/components/PersonChip";
@@ -21,13 +21,17 @@ function anwendenTheme(theme: Theme) {
 // in localStorage gemerkt und beim App-Start hier einmal angewendet — die eigentliche Auswahl
 // passiert in den Einstellungen (dort wird dieselbe Funktion beim Antippen erneut aufgerufen).
 
+// Fix-Batch 77 (Florians Wunsch): Reihenfolge umsortiert — Kalender+Aufgaben bleiben
+// nebeneinander (war schon so), Schule+Dienste stehen jetzt nebeneinander (gemeinsam
+// "Kinder-Verantwortlichkeiten"), Einkauf+Essen stehen jetzt nebeneinander (gehören inhaltlich
+// eng zusammen). Heute bleibt vorne, Mehr bleibt hinten.
 const NAV = [
   { href: "/dashboard", label: "Heute", icon: "🏠", farbe: BEREICH_FARBEN.dashboard },
   { href: "/kalender", label: "Kalender", icon: "📅", farbe: BEREICH_FARBEN.kalender },
   { href: "/aufgaben", label: "Aufgaben", icon: "✅", farbe: BEREICH_FARBEN.aufgaben },
-  { href: "/einkaufsliste", label: "Einkauf", icon: "🛒", farbe: BEREICH_FARBEN.einkaufsliste },
   { href: "/schule", label: "Schule", icon: "🎓", farbe: BEREICH_FARBEN.schule },
   { href: "/dienstplan", label: "Dienste", icon: "🧹", farbe: BEREICH_FARBEN.dienstplan },
+  { href: "/einkaufsliste", label: "Einkauf", icon: "🛒", farbe: BEREICH_FARBEN.einkaufsliste },
   { href: "/essensplan", label: "Essen", icon: "🍽️", farbe: BEREICH_FARBEN.essensplan },
   { href: "/einstellungen", label: "Mehr", icon: "⚙️", farbe: BEREICH_FARBEN.einstellungen },
 ];
@@ -61,8 +65,40 @@ export default function AppShell({ person, children }: { person: Person; childre
     } catch {}
   }
 
+  // Fix-Batch 77 (Florians Wunsch): irgendwo auf dem Bildschirm nach links/rechts wischen
+  // wechselt zum nächsten/vorherigen Tab in NAV — nicht nur über die Leiste unten antippbar.
+  // Schwelle bewusst recht hoch (80px, deutlich mehr horizontal als vertikal, unter 600ms),
+  // damit normales Scrollen/Antippen nicht versehentlich als Wisch gewertet wird.
+  const wischStartRef = useRef<{ x: number; y: number; t: number } | null>(null);
+
+  function onTouchStart(e: React.TouchEvent) {
+    const t = e.touches[0];
+    wischStartRef.current = { x: t.clientX, y: t.clientY, t: Date.now() };
+  }
+
+  function onTouchEnd(e: React.TouchEvent) {
+    const start = wischStartRef.current;
+    wischStartRef.current = null;
+    if (!start) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - start.x;
+    const dy = t.clientY - start.y;
+    const dt = Date.now() - start.t;
+    if (dt > 600) return;
+    if (Math.abs(dx) < 80 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+    const aktuellerIndex = NAV.findIndex((item) => pathname?.startsWith(item.href));
+    if (aktuellerIndex === -1) return;
+    const neuerIndex = aktuellerIndex + (dx < 0 ? 1 : -1);
+    if (neuerIndex < 0 || neuerIndex >= NAV.length) return;
+    router.push(NAV[neuerIndex].href);
+  }
+
   return (
-    <div style={{ minHeight: "100dvh", display: "flex", flexDirection: "column" }}>
+    <div
+      style={{ minHeight: "100dvh", display: "flex", flexDirection: "column" }}
+      onTouchStart={onTouchStart}
+      onTouchEnd={onTouchEnd}
+    >
       <header
         style={{
           display: "flex",

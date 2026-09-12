@@ -36,6 +36,7 @@ import DesignAuswahl from "@/components/DesignAuswahl";
 import Spracheingabe from "@/components/Spracheingabe";
 import SeitenTitel from "@/components/SeitenTitel";
 import { BEREICH_FARBEN } from "@/lib/bereichFarben";
+import { formatiereDatumUhrzeit } from "@/lib/datumFormat";
 
 // Für Ticket-Fotos (z.B. Screenshot eines Fehlers) — analog dem Notenfoto-Resize in
 // SchuleClient.tsx.
@@ -565,7 +566,7 @@ export default function EinstellungenClient({
                   </div>
                 )}
                 <span style={{ color: "var(--text-muted)", fontSize: 12 }}>
-                  Eingereicht am {new Date(t.createdAt).toLocaleDateString("de-DE")}
+                  🕐 Eingereicht: {formatiereDatumUhrzeit(t.createdAt)}
                 </span>
                 {t.begruendung && <span style={{ color: "var(--text-muted)", fontSize: 12 }}>Begründung: „{t.begruendung}"</span>}
               </div>
@@ -829,10 +830,11 @@ export default function EinstellungenClient({
                 ))}
               </div>
             )}
-            <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>
-              {h.zustaendigkeit === "VERMIETER" ? "🏢 Vermieter zuständig" : "🔧 Familie erledigt selbst"} · Gemeldet von {h.erstellerName} am{" "}
-              {new Date(h.createdAt).toLocaleDateString("de-DE")}
-            </p>
+            <div style={{ display: "flex", flexDirection: "column", gap: 2, fontSize: 12, color: "var(--text-muted)" }}>
+              <span>{h.zustaendigkeit === "VERMIETER" ? "🏢 Vermieter zuständig" : "🔧 Familie erledigt selbst"}</span>
+              <span>👤 Gemeldet von {h.erstellerName}</span>
+              <span>🕐 {formatiereDatumUhrzeit(h.createdAt)}</span>
+            </div>
             {istEltern ? (
               <>
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
@@ -1000,10 +1002,14 @@ export default function EinstellungenClient({
                 ))}
               </div>
             )}
-            <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>
-              Von {t.erstellerName} · Eingereicht am {new Date(t.createdAt).toLocaleDateString("de-DE")}
-              {t.status !== "EINGEREICHT" && <> · Entschieden am {new Date(t.updatedAt).toLocaleDateString("de-DE")}</>}
-            </p>
+            {/* Fix-Batch 77 (Florians Wunsch): "wer/wann"-Angaben übersichtlicher + mit
+                Uhrzeit — jede Angabe in einer eigenen Zeile statt einer langen, dicht
+                zusammengeschriebenen Zeile. */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 2, fontSize: 12, color: "var(--text-muted)" }}>
+              <span>👤 Von {t.erstellerName}</span>
+              <span>🕐 Eingereicht: {formatiereDatumUhrzeit(t.createdAt)}</span>
+              {t.status !== "EINGEREICHT" && <span>✅ Entschieden: {formatiereDatumUhrzeit(t.updatedAt)}</span>}
+            </div>
             {t.begruendung && <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>Begründung: „{t.begruendung}"</p>}
             <input
               placeholder="Begründung (optional)"

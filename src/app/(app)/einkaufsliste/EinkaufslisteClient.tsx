@@ -29,6 +29,7 @@ import FaktorLeiste from "@/components/FaktorLeiste";
 import Spracheingabe from "@/components/Spracheingabe";
 import SeitenTitel from "@/components/SeitenTitel";
 import { BEREICH_FARBEN } from "@/lib/bereichFarben";
+import { formatiereDatumUhrzeit } from "@/lib/datumFormat";
 
 const WUNSCH_STATUS_LABEL: Record<string, string> = {
   OFFEN: "Offen",
@@ -933,7 +934,7 @@ export default function EinkaufslisteClient({
                 <span style={{ fontSize: 14 }}>
                   {w.artikelName} {w.menge ? `(${w.menge})` : ""}
                   {istEltern && <span style={{ color: "var(--text-muted)" }}> — {w.kindName}</span>}
-                  {w.entschiedenAm && <span style={{ color: "var(--text-muted)" }}> · {new Date(w.entschiedenAm).toLocaleDateString("de-DE")}</span>}
+                  {w.entschiedenAm && <span style={{ color: "var(--text-muted)" }}> · {formatiereDatumUhrzeit(w.entschiedenAm)}</span>}
                 </span>
                 <span className={`pill pill-${w.status.toLowerCase()}`}>{WUNSCH_STATUS_LABEL[w.status] ?? w.status}</span>
               </div>
