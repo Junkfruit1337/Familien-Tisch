@@ -914,7 +914,14 @@ export default function EinstellungenClient({
       <SeitenTitel icon="⚙️" farbe={BEREICH_FARBEN.einstellungen}>Einstellungen</SeitenTitel>
 
       <details>
-        <summary style={{ cursor: "pointer", fontWeight: 600 }}>📋 Feedback &amp; Meldungen</summary>
+        <summary style={{ cursor: "pointer", fontWeight: 600 }}>
+          📋 Feedback &amp; Meldungen
+          {alleTickets.filter((t) => t.status === "EINGEREICHT").length + hausprobleme.filter((h) => h.status !== "ERLEDIGT").length > 0 && (
+            <span className="pill pill-offen" style={{ marginLeft: 8 }}>
+              {alleTickets.filter((t) => t.status === "EINGEREICHT").length + hausprobleme.filter((h) => h.status !== "ERLEDIGT").length} offen
+            </span>
+          )}
+        </summary>
         <div style={{ display: "flex", flexDirection: "column", gap: 16, marginTop: 10 }}>
       {fehlerMeldenSektion}
 

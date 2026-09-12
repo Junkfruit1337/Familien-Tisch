@@ -29,6 +29,25 @@ import Spracheingabe from "@/components/Spracheingabe";
 import SeitenTitel from "@/components/SeitenTitel";
 import { BEREICH_FARBEN } from "@/lib/bereichFarben";
 
+const WUNSCH_STATUS_LABEL: Record<string, string> = {
+  OFFEN: "Offen",
+  GENEHMIGT: "Genehmigt",
+  ABGELEHNT: "Abgelehnt",
+};
+
+// Gemeinsamer Stil für die kleinen runden Ecken-Buttons auf einer Artikel-Kachel (Bearbeiten/
+// Seltener-vorschlagen) — vorher an zwei Stellen inline dupliziert.
+const KACHEL_ECKE_BUTTON_STYLE = {
+  background: "rgba(0,0,0,0.25)",
+  color: "#fff",
+  border: "none",
+  borderRadius: 999,
+  width: 22,
+  height: 22,
+  fontSize: 12,
+  cursor: "pointer",
+} as const;
+
 type Artikel = {
   id: string;
   name: string;
@@ -129,8 +148,8 @@ function ArtikelKachel({
       )}
       <span style={{ fontSize: 17, lineHeight: 1 }}>{iconOverride || erkenneArtikelIcon(name)}</span>
       <span style={{ fontWeight: 600, fontSize: 10, textDecoration: durchgestrichen ? "line-through" : "none", lineHeight: 1.15 }}>{name}</span>
-      {menge && <span style={{ fontSize: 8, opacity: 0.85 }}>{menge}</span>}
-      {notiz && <span style={{ fontSize: 8, opacity: 0.75, fontStyle: "italic" }}>{notiz}</span>}
+      {menge && <span style={{ fontSize: 9, opacity: 0.85 }}>{menge}</span>}
+      {notiz && <span style={{ fontSize: 9, opacity: 0.75, fontStyle: "italic" }}>{notiz}</span>}
     </div>
   );
 }
@@ -362,7 +381,7 @@ export default function EinkaufslisteClient({
               <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>
                 Foto einer handgeschriebenen Liste oder Screenshot einer anderen App — die erkannten Artikel kannst du danach noch prüfen, bevor sie wirklich hinzugefügt werden.
               </p>
-              <div style={{ display: "flex", gap: 8 }}>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 <label className="btn-secondary" style={{ fontSize: 13, padding: "8px 12px", cursor: listenImportLaeuft ? "default" : "pointer", display: "flex", alignItems: "center", gap: 4, opacity: listenImportLaeuft ? 0.5 : 1 }}>
                   📷 Foto
                   <input
@@ -778,7 +797,7 @@ export default function EinkaufslisteClient({
                     <button
                       title="Seltener vorschlagen"
                       onClick={() => startTransition(() => verwirfVorschlag(v.name))}
-                      style={{ background: "rgba(0,0,0,0.25)", color: "#fff", border: "none", borderRadius: 999, width: 22, height: 22, fontSize: 12, cursor: "pointer" }}
+                      style={KACHEL_ECKE_BUTTON_STYLE}
                     >
                       ✕
                     </button>
@@ -805,7 +824,7 @@ export default function EinkaufslisteClient({
                 key={w.id}
                 id={`wunsch-${w.id}`}
                 className={w.id === highlightWunschId ? "highlight-blink" : undefined}
-                style={{ display: "flex", flexDirection: "column", gap: 6, paddingBottom: 8, borderBottom: "1px solid var(--border, rgba(255,255,255,0.08))" }}
+                style={{ display: "flex", flexDirection: "column", gap: 6, paddingBottom: 8, borderBottom: "1px solid var(--border)" }}
               >
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
                   <div style={{ display: "flex", flexDirection: "column", gap: 4, flex: 1 }}>
@@ -875,11 +894,18 @@ export default function EinkaufslisteClient({
                   {istEltern && <span style={{ color: "var(--text-muted)" }}> — {w.kindName}</span>}
                   {w.entschiedenAm && <span style={{ color: "var(--text-muted)" }}> · {new Date(w.entschiedenAm).toLocaleDateString("de-DE")}</span>}
                 </span>
-                <span className={`pill pill-${w.status.toLowerCase()}`}>{w.status}</span>
+                <span className={`pill pill-${w.status.toLowerCase()}`}>{WUNSCH_STATUS_LABEL[w.status] ?? w.status}</span>
               </div>
             ))}
           </div>
         </details>
+      )}
+
+      {Object.keys(nachKategorie).length === 0 && (
+        <div className="empty-state">
+          <span className="empty-state-icon">🛒</span>
+          <span>Die Einkaufsliste ist leer.</span>
+        </div>
       )}
 
       {Object.entries(nachKategorie).map(([kat, items]) => (
@@ -909,7 +935,7 @@ export default function EinkaufslisteClient({
                     <button
                       title="Bearbeiten"
                       onClick={() => beginneBearbeiten(a)}
-                      style={{ background: "rgba(0,0,0,0.25)", color: "#fff", border: "none", borderRadius: 999, width: 22, height: 22, fontSize: 12, cursor: "pointer" }}
+                      style={KACHEL_ECKE_BUTTON_STYLE}
                     >
                       ⋯
                     </button>
@@ -982,7 +1008,7 @@ export default function EinkaufslisteClient({
                   ))}
                 </select>
                 <ArtikelHerkunft artikelId={a.id} />
-                <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
                   <button className="btn" disabled={pending} onClick={speichereBearbeiten}>
                     Speichern
                   </button>

@@ -30,8 +30,8 @@ export default function NotengewichtungSektion({
   });
 
   return (
-    <details>
-      <summary style={{ cursor: "pointer" }}>Notengewichtung ({kindName})</summary>
+    <details className="card">
+      <summary style={{ cursor: "pointer", fontWeight: 600 }}>⚖️ Notengewichtung ({kindName})</summary>
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         <p style={{ fontSize: 13, color: "var(--text-muted)", margin: 0 }}>
           Legt fest, wie stark eine Note dieser Art in den Fach-Durchschnitt einfließt (z. B. Arbeit = 2, HÜ = 1).

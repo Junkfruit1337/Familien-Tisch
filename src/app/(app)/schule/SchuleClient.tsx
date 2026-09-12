@@ -318,7 +318,12 @@ function SchulEintraegeSektion({
       )}
 
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        {sichtbareEintraege.length === 0 && <p style={{ margin: 0, color: "var(--text-muted)" }}>Nichts Anstehendes.</p>}
+        {sichtbareEintraege.length === 0 && (
+          <div className="empty-state">
+            <span className="empty-state-icon">📚</span>
+            <span>Nichts Anstehendes.</span>
+          </div>
+        )}
         {sichtbareEintraege.map((e) => {
           const { text } = tageBisText(e.datum);
           const darfBearbeiten = istEltern || e.personId === eigeneId;
@@ -378,14 +383,16 @@ function SchulEintraegeSektion({
                             setBearbeitenDatum(e.datum.slice(0, 10));
                           }}
                         >
-                          ✎
+                          ✎ Bearbeiten
                         </button>
                         <button
                           className="btn-secondary"
                           style={{ fontSize: 12, padding: "4px 8px" }}
-                          onClick={() => startTransition(() => deleteSchulEintrag(e.id))}
+                          onClick={() => {
+                            if (confirm(`"${e.titel}" wirklich löschen?`)) startTransition(() => deleteSchulEintrag(e.id));
+                          }}
                         >
-                          🗑
+                          🗑 Löschen
                         </button>
                       </div>
                     )}
@@ -421,6 +428,7 @@ export default function SchuleClient({
   const [datum, setDatum] = useState(new Date().toISOString().slice(0, 10));
   const [notiz, setNotiz] = useState("");
   const [foto, setFoto] = useState<string | null>(null);
+  const [zeigeFotoWarnung, setZeigeFotoWarnung] = useState(false);
   const [auszahlBetrag, setAuszahlBetrag] = useState("");
   const [gutschriftBetrag, setGutschriftBetrag] = useState("");
   const [gutschriftGrund, setGutschriftGrund] = useState("");
@@ -475,12 +483,13 @@ export default function SchuleClient({
 
   async function jetztEinreichen() {
     if (!fachId) return;
-    if (!notiz.trim()) {
-      alert("Bitte das Thema der Arbeit/Kontrolle angeben.");
+    if (!foto) {
+      setZeigeFotoWarnung(true);
       return;
     }
-    if (!foto) {
-      alert("Bitte ein Foto vom Notenzettel mit der Kamera aufnehmen.");
+    setZeigeFotoWarnung(false);
+    if (!notiz.trim()) {
+      alert("Bitte das Thema der Arbeit/Kontrolle angeben.");
       return;
     }
     const istDuplikat = await pruefeNotenDuplikat({ fachId, art, datum });
@@ -824,7 +833,8 @@ export default function SchuleClient({
           <input placeholder="Thema (Pflichtfeld, z. B. Bruchrechnung)" value={notiz} onChange={(e) => setNotiz(e.target.value)} />
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             <span style={{ fontSize: 13, color: "var(--text-muted)" }}>
-              Foto vom Notenzettel (Pflicht — muss mit der Kamera aufgenommen werden, kein Galerie-Bild)
+              Foto vom Notenzettel (muss mit der Kamera aufgenommen werden, kein Galerie-Bild) —{" "}
+              <strong style={{ color: "var(--danger)" }}>Pflicht</strong>
             </span>
             <label className="btn-secondary" style={{ fontSize: 13, padding: "8px 12px", cursor: "pointer", display: "flex", alignItems: "center", gap: 4, alignSelf: "flex-start" }}>
               📷 Foto aufnehmen
@@ -838,6 +848,7 @@ export default function SchuleClient({
                   if (!file) return;
                   const base64 = await resizeBildAufBase64(file);
                   setFoto(base64);
+                  setZeigeFotoWarnung(false);
                 }}
               />
             </label>
@@ -851,7 +862,12 @@ export default function SchuleClient({
               </button>
             </div>
           )}
-          <button className="btn" disabled={pending || !foto} title={!foto ? "Erst ein Foto vom Notenzettel aufnehmen" : undefined} onClick={() => startTransition(jetztEinreichen)}>
+          {zeigeFotoWarnung && !foto && (
+            <p style={{ margin: 0, fontSize: 13, color: "var(--danger)", fontWeight: 600 }}>
+              ⚠️ Bitte erst ein Foto vom Notenzettel machen. Foto ist verpflichtend.
+            </p>
+          )}
+          <button className="btn" disabled={pending} onClick={() => startTransition(jetztEinreichen)}>
             Eintragen
           </button>
           </div>
@@ -1038,7 +1054,12 @@ export default function SchuleClient({
             </details>
           );
         })}
-        {kind.noten.length === 0 && <p style={{ color: "var(--text-muted)" }}>Noch keine Noten.</p>}
+        {kind.noten.length === 0 && (
+          <div className="empty-state">
+            <span className="empty-state-icon">📝</span>
+            <span>Noch keine Noten.</span>
+          </div>
+        )}
       </div>
 
       {/* Redesign Fix-Batch 58: von den Einstellungen hierher verschoben — Florians Wunsch,
