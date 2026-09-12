@@ -545,6 +545,84 @@ export async function uebernehmeZusaetzlicheZutaten(rezeptId: string, zeilen: { 
   revalidatePath("/einkaufsliste");
 }
 
+// Fix-Batch 80 (Florians Wunsch): zusätzliche geplante Mahlzeiten an einem Tag NEBEN dem
+// Hauptgericht (z.B. Frühstück, ein zusätzliches warmes Essen, ein Mittags-Snack) — bewusst
+// beliebig viele pro Tag, ganz ohne die Sperr-/Herkunfts-Logik des Hauptgerichts zu berühren.
+export async function listExtraMahlzeitenFuerWoche(wocheStartIso: string) {
+  const wocheStart = new Date(wocheStartIso);
+  const eintraege = await prisma.extraMahlzeit.findMany({
+    where: { wocheStart },
+    include: { rezept: true },
+    orderBy: { createdAt: "asc" },
+  });
+  return eintraege.map((e) => ({
+    id: e.id,
+    tag: e.tag.toISOString(),
+    bezeichnung: e.bezeichnung,
+    rezeptId: e.rezeptId,
+    rezeptName: e.rezept.name,
+    faktor: e.faktor,
+  }));
+}
+
+export async function fuegeExtraMahlzeitHinzu(wocheStartIso: string, tagIso: string, bezeichnung: string, rezeptId: string, faktor: number) {
+  await requireParent();
+  if (!bezeichnung.trim() || !rezeptId) return;
+  await prisma.extraMahlzeit.create({
+    data: {
+      wocheStart: new Date(wocheStartIso),
+      tag: new Date(tagIso),
+      bezeichnung: bezeichnung.trim(),
+      rezeptId,
+      faktor: faktor && faktor > 0 ? faktor : 1,
+    },
+  });
+  revalidatePath("/essensplan");
+}
+
+export async function entferneExtraMahlzeit(id: string) {
+  await requireParent();
+  await prisma.extraMahlzeit.delete({ where: { id } }).catch(() => {});
+  revalidatePath("/essensplan");
+}
+
+// Ein Klick reicht (keine Zeilen-Auswahl wie bei der allgemeinen Extra-Rezept-Ergänzung in
+// der Einkaufsliste) — die Entscheidung für dieses Gericht+diese Menge ist mit dem Anlegen
+// der ExtraMahlzeit schon getroffen.
+export async function fuegeZutatenFuerExtraMahlzeitHinzu(id: string) {
+  await requireParent();
+  const eintrag = await prisma.extraMahlzeit.findUnique({ where: { id }, include: { rezept: true } });
+  if (!eintrag) return;
+  const zeilen = eintrag.rezept.zutaten
+    .split("\n")
+    .map((z) => z.trim())
+    .filter(Boolean)
+    .map((z) => skaliereZeile(parseZutatZeile(z), eintrag.faktor || 1));
+
+  for (const zeile of zeilen) {
+    const bestehender = await findeOffenenArtikel(zeile.name);
+    let artikelId: string;
+    if (bestehender) {
+      await prisma.einkaufsArtikel.update({
+        where: { id: bestehender.id },
+        data: { menge: await mergeMenge(bestehender.menge, zeile.menge) },
+      });
+      artikelId = bestehender.id;
+    } else {
+      const kategorieId = await autoKategorieId(zeile.name);
+      const neu = await prisma.einkaufsArtikel.create({
+        data: { name: zeile.name, menge: zeile.menge, kategorieId: kategorieId || null, quelle: "essensplan" },
+      });
+      artikelId = neu.id;
+    }
+    await prisma.artikelQuelle.create({
+      data: { artikelId, beschreibung: `Extra: ${eintrag.bezeichnung} — ${eintrag.rezept.name}`, menge: zeile.menge },
+    });
+  }
+  revalidatePath("/essensplan");
+  revalidatePath("/einkaufsliste");
+}
+
 // Prüft vor einer Änderung/Entsperrung eines gesperrten Tages, ob dafür schon Zutaten auf
 // die Einkaufsliste übertragen wurden — nur dann muss überhaupt gefragt werden.
 export async function pruefeGelocktenTagWechsel(eintragId: string) {

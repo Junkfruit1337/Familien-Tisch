@@ -28,6 +28,10 @@ import {
   pruefeAusgewogenheitDerWoche,
   findeRezeptImInternetVorschau,
   schlageRezeptZuBeschreibungVorschau,
+  listExtraMahlzeitenFuerWoche,
+  fuegeExtraMahlzeitHinzu,
+  entferneExtraMahlzeit,
+  fuegeZutatenFuerExtraMahlzeitHinzu,
 } from "./actions";
 import SeitenTitel from "@/components/SeitenTitel";
 import Spracheingabe from "@/components/Spracheingabe";
@@ -101,6 +105,10 @@ function istLangeNichtGekocht(zuletztGeplant: string | null): boolean {
 }
 type Familienmitglied = { id: string; name: string; farbe: string; portionsGewicht: number };
 type Herkunft = { artikelId: string; artikelName: string; menge: string | null };
+// Fix-Batch 80 (Florians Wunsch): zusätzliche geplante Mahlzeiten an einem Tag neben dem
+// Hauptgericht (Frühstück, zusätzliches warmes Essen, Mittags-Snack, ...).
+type ExtraMahlzeitEintrag = { id: string; tag: string; bezeichnung: string; rezeptId: string; rezeptName: string; faktor: number };
+const EXTRA_MAHLZEIT_VORSCHLAEGE = ["Frühstück", "Mittags-Snack", "Zusätzliches warmes Essen"];
 
 const WOCHEN_LABEL = ["Diese Woche", "Nächste Woche", "Übernächste Woche"];
 
@@ -212,6 +220,7 @@ export default function EssensplanClient({
   ausgeblendete: initialAusgeblendete,
   familie,
   ausgewogenheitInitial,
+  extraMahlzeitenInitial,
 }: {
   istEltern: boolean;
   plan: Plan;
@@ -220,6 +229,7 @@ export default function EssensplanClient({
   ausgeblendete: { rezeptId: string; name: string }[];
   familie: Familienmitglied[];
   ausgewogenheitInitial: Ausgewogenheit | null;
+  extraMahlzeitenInitial: ExtraMahlzeitEintrag[];
 }) {
   const [pending, startTransition] = useTransition();
   const [offset, setOffset] = useState(0);
@@ -227,6 +237,15 @@ export default function EssensplanClient({
   const [vorschlaege, setVorschlaege] = useState(initialVorschlaege);
   const [ausgeblendete, setAusgeblendete] = useState(initialAusgeblendete);
   const [ausgewogenheit, setAusgewogenheit] = useState(ausgewogenheitInitial);
+  const [extraMahlzeiten, setExtraMahlzeiten] = useState(extraMahlzeitenInitial);
+
+  // Fix-Batch 80: pro Tag getrennt steuerbar, ob das "+ Weitere Mahlzeit"-Formular offen ist,
+  // plus dessen Entwurfswerte (mehrere Tage könnten sonst denselben Entwurf teilen).
+  const [extraFormTag, setExtraFormTag] = useState<string | null>(null);
+  const [extraBezeichnung, setExtraBezeichnung] = useState("");
+  const [extraRezeptId, setExtraRezeptId] = useState("");
+  const [extraFaktorEntwurf, setExtraFaktorEntwurf] = useState("1");
+  const [extraLaeuft, setExtraLaeuft] = useState(false);
 
   const [umschreibeRezeptId, setUmschreibeRezeptId] = useState<string | null>(null);
   const [umschreibeAnweisung, setUmschreibeAnweisung] = useState("");
@@ -277,15 +296,17 @@ export default function EssensplanClient({
 
   async function ladeWoche(neuerOffset: number) {
     const neuerPlan = await getWochenplan(neuerOffset);
-    const [neueVorschlaege, neueAusgeblendete, neueAusgewogenheit] = await Promise.all([
+    const [neueVorschlaege, neueAusgeblendete, neueAusgewogenheit, neueExtraMahlzeiten] = await Promise.all([
       listRezepteFuerWoche(neuerPlan.wocheStart),
       istEltern ? listAusgeblendeteFuerWoche(neuerPlan.wocheStart) : Promise.resolve([]),
       istEltern ? pruefeAusgewogenheitDerWoche(neuerPlan.wocheStart) : Promise.resolve(null),
+      listExtraMahlzeitenFuerWoche(neuerPlan.wocheStart),
     ]);
     setPlan(neuerPlan);
     setVorschlaege(neueVorschlaege);
     setAusgeblendete(neueAusgeblendete);
     setAusgewogenheit(neueAusgewogenheit);
+    setExtraMahlzeiten(neueExtraMahlzeiten);
   }
 
   function wechsleWoche(neuerOffset: number) {
@@ -464,6 +485,129 @@ export default function EssensplanClient({
                 </div>
               </div>
             )}
+
+            {/* Fix-Batch 80 (Florians Wunsch): zusätzliche geplante Mahlzeiten an einem Tag
+                neben dem Hauptgericht — z.B. Frühstück, ein zusätzliches warmes Essen oder ein
+                Mittags-Snack. Bewusst unabhängig davon, ob überhaupt ein Hauptgericht für den
+                Tag gesetzt ist (kann auch nur ein Frühstück geplant sein). */}
+            {istEltern && (() => {
+              const extraFuerTag = extraMahlzeiten.filter((e) => e.tag === t.tag);
+              return (
+                <div style={{ borderTop: "1px solid var(--border)", paddingTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
+                  {extraFuerTag.map((e) => (
+                    <div key={e.id} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "var(--font-xs)", flexWrap: "wrap" }}>
+                      <span style={{ fontWeight: 600 }}>{e.bezeichnung}:</span>
+                      <span>
+                        {e.rezeptName}
+                        {e.faktor !== 1 ? ` (${e.faktor}×)` : ""}
+                      </span>
+                      <button
+                        className="btn-secondary"
+                        style={{ fontSize: 11, padding: "2px 8px" }}
+                        disabled={pending}
+                        onClick={() => startTransition(() => fuegeZutatenFuerExtraMahlzeitHinzu(e.id).then(() => ladeWoche(offset)))}
+                      >
+                        🛒 Zutaten
+                      </button>
+                      <button
+                        className="btn-icon btn-icon-danger"
+                        title="Entfernen"
+                        style={{ width: 24, height: 24, fontSize: 12 }}
+                        onClick={() => {
+                          if (!confirm(`„${e.bezeichnung}: ${e.rezeptName}" wirklich entfernen?`)) return;
+                          startTransition(() => entferneExtraMahlzeit(e.id).then(() => ladeWoche(offset)));
+                        }}
+                      >
+                        🗑
+                      </button>
+                    </div>
+                  ))}
+                  {extraFormTag === t.tag ? (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                      <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                        {EXTRA_MAHLZEIT_VORSCHLAEGE.map((v) => (
+                          <button
+                            key={v}
+                            type="button"
+                            className="btn-secondary"
+                            style={{ fontSize: 11, padding: "2px 8px" }}
+                            onClick={() => setExtraBezeichnung(v)}
+                          >
+                            {v}
+                          </button>
+                        ))}
+                      </div>
+                      <input
+                        placeholder="Bezeichnung, z. B. Frühstück"
+                        value={extraBezeichnung}
+                        onChange={(e) => setExtraBezeichnung(e.target.value)}
+                        style={{ fontSize: 13 }}
+                      />
+                      <select value={extraRezeptId} onChange={(e) => setExtraRezeptId(e.target.value)} style={{ fontSize: 13 }}>
+                        <option value="">– Rezept wählen –</option>
+                        {rezepteAlle.map((r) => (
+                          <option key={r.id} value={r.id}>
+                            {r.name}
+                          </option>
+                        ))}
+                      </select>
+                      <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12 }}>
+                        Menge (1 = wie im Rezept)
+                        <input
+                          type="number"
+                          min={0.25}
+                          step={0.25}
+                          value={extraFaktorEntwurf}
+                          onChange={(e) => setExtraFaktorEntwurf(e.target.value)}
+                          style={{ width: 60 }}
+                        />
+                        ×
+                      </label>
+                      <div style={{ display: "flex", gap: 6 }}>
+                        <button
+                          className="btn"
+                          style={{ fontSize: 12, padding: "4px 10px" }}
+                          disabled={extraLaeuft || !extraBezeichnung.trim() || !extraRezeptId}
+                          onClick={() =>
+                            startTransition(async () => {
+                              setExtraLaeuft(true);
+                              try {
+                                await fuegeExtraMahlzeitHinzu(plan.wocheStart, t.tag, extraBezeichnung, extraRezeptId, parseFloat(extraFaktorEntwurf) || 1);
+                                await ladeWoche(offset);
+                                setExtraFormTag(null);
+                                setExtraBezeichnung("");
+                                setExtraRezeptId("");
+                                setExtraFaktorEntwurf("1");
+                              } finally {
+                                setExtraLaeuft(false);
+                              }
+                            })
+                          }
+                        >
+                          {extraLaeuft ? "Wird hinzugefügt …" : "Hinzufügen"}
+                        </button>
+                        <button className="btn-secondary" style={{ fontSize: 12, padding: "4px 10px" }} onClick={() => setExtraFormTag(null)}>
+                          Abbrechen
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      className="btn-secondary"
+                      style={{ fontSize: 12, alignSelf: "flex-start" }}
+                      onClick={() => {
+                        setExtraFormTag(t.tag);
+                        setExtraBezeichnung("");
+                        setExtraRezeptId("");
+                        setExtraFaktorEntwurf("1");
+                      }}
+                    >
+                      + Weitere Mahlzeit (Frühstück, Snack, …)
+                    </button>
+                  )}
+                </div>
+              );
+            })()}
 
           </div>
         ))}

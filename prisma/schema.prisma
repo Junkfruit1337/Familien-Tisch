@@ -481,6 +481,7 @@ model Rezept {
 
   planEintraege  EssensplanEintrag[]
   ausblendungen  RezeptAusblendung[]
+  extraMahlzeiten ExtraMahlzeit[]
 }
 
 model EssensplanEintrag {
@@ -495,6 +496,22 @@ model EssensplanEintrag {
   gelockt     Boolean  @default(false)
 
   herkuenfte  EssensplanHerkunft[]
+}
+
+// Fix-Batch 80 (Florians Wunsch): zusätzliche, geplante Mahlzeiten an einem Tag NEBEN dem
+// normalen Hauptgericht — z.B. Frühstück, ein zusätzliches warmes Essen oder ein Mittags-
+// Snack. Bewusst ein eigenes, einfacheres Modell statt EssensplanEintrag zu verallgemeinern
+// (kein Sperren/Entsperren, keine Wer-isst-mit-Auswahl, kein Slot-Limit pro Tag) — die
+// bestehende Tages-Logik (ein Hauptgericht, Lock/Herkunft) bleibt dadurch unangetastet.
+model ExtraMahlzeit {
+  id          String   @id @default(cuid())
+  wocheStart  DateTime // Samstag der jeweiligen Woche, wie bei EssensplanEintrag
+  tag         DateTime
+  bezeichnung String   // frei, z.B. "Frühstück", "Mittags-Snack", "Zusätzliches warmes Essen"
+  rezeptId    String
+  rezept      Rezept   @relation(fields: [rezeptId], references: [id])
+  faktor      Float    @default(1) // bezieht sich direkt auf die im Rezept geschriebene Menge
+  createdAt   DateTime @default(now())
 }
 
 // Blendet ein Rezept aus den Vorschlägen für eine einzelne Woche aus (Fahrplan §3,

@@ -6,6 +6,7 @@ import {
   listAusgeblendeteFuerWoche,
   listAlleFamilienmitglieder,
   pruefeAusgewogenheitDerWoche,
+  listExtraMahlzeitenFuerWoche,
 } from "./actions";
 import EssensplanClient from "./EssensplanClient";
 
@@ -13,12 +14,13 @@ export default async function EssensplanPage() {
   const person = await getCurrentPerson();
   const istEltern = person?.rolle === "ELTERN";
   const plan = await getWochenplan(0);
-  const [rezepteAlle, rezepteVorschlaege, ausgeblendete, familie, ausgewogenheit] = await Promise.all([
+  const [rezepteAlle, rezepteVorschlaege, ausgeblendete, familie, ausgewogenheit, extraMahlzeiten] = await Promise.all([
     listRezepteDetail(),
     listRezepteFuerWoche(plan.wocheStart),
     istEltern ? listAusgeblendeteFuerWoche(plan.wocheStart) : Promise.resolve([]),
     listAlleFamilienmitglieder(),
     istEltern ? pruefeAusgewogenheitDerWoche(plan.wocheStart) : Promise.resolve(null),
+    listExtraMahlzeitenFuerWoche(plan.wocheStart),
   ]);
 
   return (
@@ -30,6 +32,7 @@ export default async function EssensplanPage() {
       ausgeblendete={ausgeblendete}
       familie={familie.map((f) => ({ id: f.id, name: f.name, farbe: f.farbe, portionsGewicht: f.portionsGewicht }))}
       ausgewogenheitInitial={ausgewogenheit}
+      extraMahlzeitenInitial={extraMahlzeiten}
     />
   );
 }
