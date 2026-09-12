@@ -21,25 +21,35 @@ function anwendenTheme(theme: Theme) {
 // in localStorage gemerkt und beim App-Start hier einmal angewendet — die eigentliche Auswahl
 // passiert in den Einstellungen (dort wird dieselbe Funktion beim Antippen erneut aufgerufen).
 
-// Fix-Batch 77 (Florians Wunsch): Reihenfolge umsortiert — Kalender+Aufgaben bleiben
-// nebeneinander (war schon so), Schule+Dienste stehen jetzt nebeneinander (gemeinsam
-// "Kinder-Verantwortlichkeiten"), Einkauf+Essen stehen jetzt nebeneinander (gehören inhaltlich
-// eng zusammen). Heute bleibt vorne, Mehr bleibt hinten.
-const NAV = [
-  { href: "/dashboard", label: "Heute", icon: "🏠", farbe: BEREICH_FARBEN.dashboard },
-  { href: "/kalender", label: "Kalender", icon: "📅", farbe: BEREICH_FARBEN.kalender },
-  { href: "/aufgaben", label: "Aufgaben", icon: "✅", farbe: BEREICH_FARBEN.aufgaben },
-  { href: "/schule", label: "Schule", icon: "🎓", farbe: BEREICH_FARBEN.schule },
-  { href: "/dienstplan", label: "Dienste", icon: "🧹", farbe: BEREICH_FARBEN.dienstplan },
-  { href: "/einkaufsliste", label: "Einkauf", icon: "🛒", farbe: BEREICH_FARBEN.einkaufsliste },
-  { href: "/essensplan", label: "Essen", icon: "🍽️", farbe: BEREICH_FARBEN.essensplan },
-  { href: "/einstellungen", label: "Mehr", icon: "⚙️", farbe: BEREICH_FARBEN.einstellungen },
-];
+// Fix-Batch 78 (Florians Präzisierung an Fix-Batch 77): die Reihenfolge unterscheidet sich
+// jetzt je nach Rolle — Eltern haben Essen+Einkauf direkt nach Aufgaben (Alltagsorganisation
+// zuerst), Kinder haben stattdessen Schule+Dienste direkt danach (ihr Alltag zuerst), beide
+// bekommen danach die jeweils andere Zweiergruppe. Heute bleibt vorne, Mehr ganz hinten, bei
+// beiden Rollen gleich. Kalender+Aufgaben bleiben für beide direkt nach Heute.
+const NAV_ITEMS = {
+  heute: { href: "/dashboard", label: "Heute", icon: "🏠", farbe: BEREICH_FARBEN.dashboard },
+  kalender: { href: "/kalender", label: "Kalender", icon: "📅", farbe: BEREICH_FARBEN.kalender },
+  aufgaben: { href: "/aufgaben", label: "Aufgaben", icon: "✅", farbe: BEREICH_FARBEN.aufgaben },
+  schule: { href: "/schule", label: "Schule", icon: "🎓", farbe: BEREICH_FARBEN.schule },
+  dienste: { href: "/dienstplan", label: "Dienste", icon: "🧹", farbe: BEREICH_FARBEN.dienstplan },
+  einkauf: { href: "/einkaufsliste", label: "Einkauf", icon: "🛒", farbe: BEREICH_FARBEN.einkaufsliste },
+  essen: { href: "/essensplan", label: "Essen", icon: "🍽️", farbe: BEREICH_FARBEN.essensplan },
+  mehr: { href: "/einstellungen", label: "Mehr", icon: "⚙️", farbe: BEREICH_FARBEN.einstellungen },
+} as const;
+
+const NAV_REIHENFOLGE_ELTERN = ["heute", "kalender", "aufgaben", "essen", "einkauf", "schule", "dienste", "mehr"] as const;
+const NAV_REIHENFOLGE_KIND = ["heute", "kalender", "aufgaben", "schule", "dienste", "essen", "einkauf", "mehr"] as const;
+
+function navFuerRolle(istEltern: boolean) {
+  const reihenfolge = istEltern ? NAV_REIHENFOLGE_ELTERN : NAV_REIHENFOLGE_KIND;
+  return reihenfolge.map((id) => NAV_ITEMS[id]);
+}
 
 export default function AppShell({ person, children }: { person: Person; children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const [theme, setTheme] = useState<Theme | null>(null);
+  const NAV = navFuerRolle(person.rolle === "ELTERN");
 
   useEffect(() => {
     let gespeichert: Theme | null = null;
