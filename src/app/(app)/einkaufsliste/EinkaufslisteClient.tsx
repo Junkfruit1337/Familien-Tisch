@@ -941,12 +941,19 @@ export default function EinkaufslisteClient({
                 deaktiviert={!istEltern}
                 onTap={() => {
                   // Fix-Batch 66 (Ticket "Unterschiedliches Verhalten beim Anklicken je nach
-                  // Modus"): vorher tat ein Antippen in BEIDEN Modi dasselbe (abhaken) — jetzt
-                  // bewusst unterschiedlich, wie von Florian gewünscht. Einkaufsmodus: schnelles
-                  // Antippen entfernt den Artikel sofort komplett (kein Bestätigungsdialog, das
-                  // wäre beim Einkaufen nur im Weg). Normalmodus: öffnet stattdessen das
-                  // Bearbeitungsmenü (mit eigenem Löschen-Button samt Sicherheitsabfrage).
-                  if (einkaufsmodus) startTransition(() => deleteArtikel(a.id));
+                  // Modus"), Fix-Batch 67 (Korrektur, Florians Bug-Meldung): Einkaufsmodus-
+                  // Antippen war zunächst als sofortiges HARTES Löschen umgesetzt — das zerstört
+                  // aber unwiederbringlich zusammengeführte Mengen, wenn ein Artikel z.B. aus
+                  // manuell hinzugefügten UND aus dem Essensplan stammenden Anteilen besteht
+                  // (echter Vorfall: 2 kg manuell + 600 g aus einem Rezept waren zu "2,6 kg"
+                  // zusammengeführt — ein Tipp beim Einkaufen hätte alles auf einmal für immer
+                  // gelöscht, nicht nur den gerade relevanten Anteil). Ein Tap kann eine
+                  // zusammengeführte Menge nicht sauber aufteilen, deshalb bewusst wieder das
+                  // sichere, umkehrbare Abhaken (wandert nach "Bereits eingekauft", jederzeit per
+                  // erneutem Antippen dort rückgängig zu machen) statt eines unwiderruflichen
+                  // Lösch-Tipps. Echtes, endgültiges Löschen bleibt über das Bearbeitungsmenü
+                  // (Normalmodus-Tap) mit eigenem Sicherheits-Dialog möglich.
+                  if (einkaufsmodus) startTransition(() => toggleArtikel(a.id));
                   else beginneBearbeiten(a);
                 }}
               />
