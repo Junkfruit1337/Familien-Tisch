@@ -210,6 +210,21 @@ export default function EinkaufslisteClient({
   const [zeigeListenImport, setZeigeListenImport] = useState(false);
   const [listenImportLaeuft, setListenImportLaeuft] = useState(false);
   const [listenVorschau, setListenVorschau] = useState<ListenVorschauZeile[] | null>(null);
+  // Eltern-Bearbeitung eines Kind-Wunsches vor dem Genehmigen (Fix-Batch 49) — Name/Menge
+  // sind hier direkt korrigierbar, statt nur pauschal genehmigen/ablehnen zu können.
+  const [wunschBearbeitung, setWunschBearbeitung] = useState<Record<string, { name: string; menge: string }>>({});
+  // Deep-Link vom Dashboard aus (Fix-Batch 49): "?highlight=<id>" springt direkt zum
+  // passenden Wunsch und lässt ihn kurz blinken.
+  const [highlightWunschId, setHighlightWunschId] = useState<string | null>(null);
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get("highlight");
+    if (!id) return;
+    setHighlightWunschId(id);
+    const timer = setTimeout(() => {
+      document.getElementById(`wunsch-${id}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 100);
+    return () => clearTimeout(timer);
+  }, []);
 
   // Einkaufsmodus (Fix-Batch 35, Florians Wunsch): hält den Bildschirm wach, solange man mit
   // der Liste im Laden unterwegs ist (Wake Lock API) — verhindert, dass das Display beim
@@ -744,20 +759,43 @@ export default function EinkaufslisteClient({
           {offeneWuensche.map((w) => {
             const erkannt = erkannteKategorieFuer(w.artikelName);
             const gewaehlt = wunschKategorie[w.id] ?? "";
+            const entwurf = wunschBearbeitung[w.id] ?? { name: w.artikelName, menge: w.menge ?? "" };
             return (
-              <div key={w.id} style={{ display: "flex", flexDirection: "column", gap: 6, paddingBottom: 8, borderBottom: "1px solid var(--border, rgba(255,255,255,0.08))" }}>
+              <div
+                key={w.id}
+                id={`wunsch-${w.id}`}
+                className={w.id === highlightWunschId ? "highlight-blink" : undefined}
+                style={{ display: "flex", flexDirection: "column", gap: 6, paddingBottom: 8, borderBottom: "1px solid var(--border, rgba(255,255,255,0.08))" }}
+              >
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-                  <span>
-                    {w.artikelName} {w.menge ? `(${w.menge})` : ""} — <em>{w.kindName}</em>
-                  </span>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 4, flex: 1 }}>
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <input
+                        value={entwurf.name}
+                        onChange={(e) => setWunschBearbeitung((prev) => ({ ...prev, [w.id]: { ...entwurf, name: e.target.value } }))}
+                        style={{ flex: 1, fontSize: 14 }}
+                      />
+                      <input
+                        placeholder="Menge"
+                        value={entwurf.menge}
+                        onChange={(e) => setWunschBearbeitung((prev) => ({ ...prev, [w.id]: { ...entwurf, menge: e.target.value } }))}
+                        style={{ width: 90, fontSize: 14 }}
+                      />
+                    </div>
+                    <em style={{ fontSize: 12, color: "var(--text-muted)" }}>Wunsch von {w.kindName}</em>
+                  </div>
                   <div style={{ display: "flex", gap: 6 }}>
                     <button
                       className="btn"
                       style={{ padding: "6px 10px" }}
                       onClick={() =>
-                        startTransition(() =>
-                          entscheideWunsch(w.id, true, gewaehlt || (erkannt ? kategorieNachName[erkannt] : undefined))
-                        )
+                        startTransition(async () => {
+                          const name = entwurf.name.trim();
+                          if (name && (name !== w.artikelName || entwurf.menge !== (w.menge ?? ""))) {
+                            await updateWunsch(w.id, { artikelName: name, menge: entwurf.menge || undefined });
+                          }
+                          await entscheideWunsch(w.id, true, gewaehlt || (erkannt ? kategorieNachName[erkannt] : undefined));
+                        })
                       }
                     >
                       ✓

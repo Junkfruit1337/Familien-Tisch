@@ -45,6 +45,13 @@ export async function getDashboardDaten() {
       ? await prisma.einkaufsWunsch.findMany({ where: { status: "OFFEN" }, include: { kind: true }, orderBy: { createdAt: "desc" } })
       : [];
 
+  // Fix-Batch 49: eigene noch nicht abgeschlossene Tickets auf dem Dashboard anzeigen
+  // (für alle, nicht nur Eltern) — Klick führt zum Ticket-Bereich in den Einstellungen.
+  const meineOffenenTickets = await prisma.ticket.findMany({
+    where: { erstelltVonId: person.id, status: { in: ["EINGEREICHT", "GENEHMIGT", "IN_UMSETZUNG"] } },
+    orderBy: { createdAt: "desc" },
+  });
+
   return {
     person: { name: person.name, rolle: person.rolle },
     heutigesEssen: heutigesEssen?.eintrag?.rezeptName ?? null,
@@ -79,6 +86,7 @@ export async function getDashboardDaten() {
       menge: w.menge,
       createdAt: w.createdAt.toISOString(),
     })),
+    meineOffenenTickets: meineOffenenTickets.map((t) => ({ id: t.id, titel: t.titel, status: t.status })),
   };
 }
 

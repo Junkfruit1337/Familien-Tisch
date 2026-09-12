@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import {
   createPerson,
   setPin,
@@ -210,6 +210,18 @@ export default function EinstellungenClient({
   const [ticketVerarbeitung, setTicketVerarbeitung] = useState(false);
   const [ticketBegruendungen, setTicketBegruendungen] = useState<Record<string, string>>({});
   const [grossesTicketBild, setGrossesTicketBild] = useState<string | null>(null);
+  // Deep-Link vom Dashboard aus (Fix-Batch 49): "?highlight=<id>" klappt das eigene Ticket
+  // auf, springt dorthin und lässt es kurz blinken.
+  const [highlightTicketId, setHighlightTicketId] = useState<string | null>(null);
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get("highlight");
+    if (!id) return;
+    setHighlightTicketId(id);
+    const timer = setTimeout(() => {
+      document.getElementById(`meinticket-${id}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 100);
+    return () => clearTimeout(timer);
+  }, []);
 
   async function ticketSpracheErkannt(text: string) {
     setTicketVerarbeitung(true);
@@ -471,11 +483,20 @@ export default function EinstellungenClient({
           Einreichen
         </button>
         {meineTickets.length > 0 && (
-          <details style={{ borderTop: "1px solid var(--border)", paddingTop: 8, marginTop: 4 }}>
+          <details
+            style={{ borderTop: "1px solid var(--border)", paddingTop: 8, marginTop: 4 }}
+            open={(highlightTicketId && meineTickets.some((t) => t.id === highlightTicketId)) || undefined}
+          >
             <summary style={{ cursor: "pointer", fontSize: 13, fontWeight: 600 }}>Meine gemeldeten Tickets ({meineTickets.length})</summary>
             <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 6 }}>
             {meineTickets.map((t) => (
-              <details key={t.id} style={{ fontSize: 13 }}>
+              <details
+                key={t.id}
+                id={`meinticket-${t.id}`}
+                className={t.id === highlightTicketId ? "highlight-blink" : undefined}
+                open={t.id === highlightTicketId || undefined}
+                style={{ fontSize: 13 }}
+              >
                 <summary style={{ cursor: "pointer", display: "flex", justifyContent: "space-between", gap: 8, listStyle: "none" }}>
                   <span>{t.titel}</span>
                   <span className={`pill pill-${t.status === "ABGELEHNT" ? "abgelehnt" : t.status === "EINGEREICHT" ? "offen" : "genehmigt"}`}>

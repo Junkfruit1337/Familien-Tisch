@@ -64,3 +64,47 @@ export async function erkenneRezeptAusBild(fotoDataUrl: string): Promise<Erkannt
     portionen: typeof d.portionen === "number" && d.portionen > 0 ? Math.round(d.portionen) : null,
   };
 }
+
+const SPRACHE_PROMPT =
+  "Das ist eine gesprochene Beschreibung eines Rezepts, die per Spracherkennung in Text umgewandelt wurde. " +
+  "Extrahiere daraus den Namen des Gerichts, die Zutatenliste, die Zubereitung sowie — falls genannt — für wie viele Portionen/Personen.\n" +
+  "Antworte AUSSCHLIESSLICH mit einem JSON-Objekt, ohne Markdown-Codeblock, ohne weiteren Text, in genau diesem Format:\n" +
+  '{"name": "Gerichtname", "zutaten": "eine Zutat pro Zeile, Format \'Menge Einheit Name\', z.B. 500 g Spaghetti", "zubereitung": "Zubereitungsschritte als Fließtext oder nummerierte Liste", "portionen": Zahl oder null}\n' +
+  "Wenn Mengen nicht genannt wurden, schätze plausibel oder lass die Mengenangabe weg. Wenn keine Zubereitung erkennbar ist, lass das Feld leer (\"\").\n\n" +
+  "Gesprochener Text: ";
+
+// Spracheingabe fürs "Neues Rezept"-Formular (Fix-Batch 35 Nachtrag, Standing-Regel:
+// Formulare mit mehr als zwei Feldern brauchen Spracheingabe UND Bildfunktionen) — nutzt
+// denselben Antwort-Typ wie die Foto-Erkennung.
+export async function erkenneRezeptAusSprache(text: string): Promise<ErkanntesRezept> {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) {
+    throw new Error("Kein API-Schlüssel hinterlegt (ANTHROPIC_API_KEY fehlt in den Umgebungsvariablen).");
+  }
+  const client = new Anthropic({ apiKey });
+  const response = await client.messages.create({
+    model: "claude-sonnet-5",
+    max_tokens: 1500,
+    messages: [{ role: "user", content: SPRACHE_PROMPT + text }],
+  });
+  const textBlock = response.content.find((b): b is Anthropic.TextBlock => b.type === "text");
+  const raw = textBlock?.text ?? "";
+  const bereinigt = raw
+    .trim()
+    .replace(/^```(json)?/i, "")
+    .replace(/```$/, "")
+    .trim();
+  let daten: unknown;
+  try {
+    daten = JSON.parse(bereinigt);
+  } catch {
+    throw new Error("Konnte die Antwort der Spracherkennung nicht lesen. Bitte erneut versuchen oder die Felder manuell ausfüllen.");
+  }
+  const d = daten as Record<string, unknown>;
+  return {
+    name: typeof d.name === "string" ? d.name : "",
+    zutaten: typeof d.zutaten === "string" ? d.zutaten : "",
+    zubereitung: typeof d.zubereitung === "string" ? d.zubereitung : "",
+    portionen: typeof d.portionen === "number" && d.portionen > 0 ? Math.round(d.portionen) : null,
+  };
+}

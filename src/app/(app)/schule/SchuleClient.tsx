@@ -458,6 +458,18 @@ export default function SchuleClient({
   const [neueinreichungNote, setNeueinreichungNote] = useState(1);
   const [neueinreichungNotiz, setNeueinreichungNotiz] = useState("");
   const [spracheVerarbeitung, setSpracheVerarbeitung] = useState(false);
+  // Deep-Link vom Dashboard aus (Fix-Batch 49): "?highlight=<id>" springt direkt zur
+  // passenden Note und lässt sie kurz blinken, statt die lange Liste durchsuchen zu müssen.
+  const [highlightId, setHighlightId] = useState<string | null>(null);
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get("highlight");
+    if (!id) return;
+    setHighlightId(id);
+    const timer = setTimeout(() => {
+      document.getElementById(`note-${id}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 100);
+    return () => clearTimeout(timer);
+  }, []);
 
   if (!kind) return <p>Noch keine Kinder angelegt.</p>;
 
@@ -541,7 +553,12 @@ export default function SchuleClient({
           <strong>Noten zur Genehmigung</strong>
           <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 8 }}>
             {offeneNoten.map((n) => (
-              <div key={n.id} style={{ borderBottom: "1px solid var(--border)", paddingBottom: 10 }}>
+              <div
+                key={n.id}
+                id={`note-${n.id}`}
+                className={n.id === highlightId ? "highlight-blink" : undefined}
+                style={{ borderBottom: "1px solid var(--border)", paddingBottom: 10 }}
+              >
                 {korrekturId === n.id ? (
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                     <span style={{ fontSize: 13, color: "var(--text-muted)" }}>

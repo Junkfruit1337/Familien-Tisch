@@ -18,10 +18,12 @@ import {
   fuegeZutatenDerWocheHinzu,
   pruefeGelocktenTagWechsel,
   erkenneRezeptAusFoto,
+  erkenneRezeptAusText,
   updateRezeptPortionenBasis,
   updateRezept,
 } from "./actions";
 import SeitenTitel from "@/components/SeitenTitel";
+import Spracheingabe from "@/components/Spracheingabe";
 import { BEREICH_FARBEN } from "@/lib/bereichFarben";
 
 // Für die Foto-Erkennung etwas größer/hochwertiger als bei Notenfotos (Batch 3),
@@ -499,6 +501,27 @@ export default function EssensplanClient({
         <details>
           <summary style={{ cursor: "pointer", color: "var(--text-muted)" }}>➕ Neues Rezept hinzufügen (Elternbereich)</summary>
           <div className="card" style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
+            <Spracheingabe
+              disabled={erkennungLaeuft}
+              onErgebnis={(text) =>
+                startTransition(async () => {
+                  setErkennungLaeuft(true);
+                  try {
+                    const ergebnis = await erkenneRezeptAusText(text);
+                    if (!ergebnis.ok) {
+                      alert(ergebnis.fehler);
+                      return;
+                    }
+                    setNeuName(ergebnis.rezept.name);
+                    setNeuZutaten(ergebnis.rezept.zutaten);
+                    setNeuZubereitung(ergebnis.rezept.zubereitung);
+                    if (ergebnis.rezept.portionen) setNeuPortionenBasis(String(ergebnis.rezept.portionen));
+                  } finally {
+                    setErkennungLaeuft(false);
+                  }
+                })
+              }
+            />
             <label style={{ fontSize: 13, display: "flex", flexDirection: "column", gap: 4 }}>
               📷 Rezept aus Foto erkennen (Kochbuch, Zeitschrift oder handschriftlich)
               <input

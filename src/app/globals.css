@@ -263,6 +263,24 @@ input[type="radio"] {
   white-space: nowrap;
 }
 
+/* Ziel-Markierung für Dashboard-Verlinkungen (Fix-Batch 49) — wenn man z.B. auf eine
+   Anfrage oder ein Ticket im Dashboard klickt, landet man auf der jeweiligen Seite direkt
+   beim passenden Eintrag, der kurz blinkt, damit man ihn in einer langen Liste wiederfindet. */
+.highlight-blink {
+  animation: highlight-blink 0.9s ease-in-out 3;
+  border-radius: var(--radius);
+}
+
+@keyframes highlight-blink {
+  0%,
+  100% {
+    box-shadow: none;
+  }
+  50% {
+    box-shadow: 0 0 0 3px var(--warning);
+  }
+}
+
 @keyframes weiter-so-pop {
   0% {
     transform: translateX(-50%) scale(0.6);

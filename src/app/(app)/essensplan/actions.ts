@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { requireParent } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import { autoKategorieId, findeOffenenArtikel, findeOffenenUnbestaetigtenArtikel, mergeMenge } from "../einkaufsliste/actions";
-import { erkenneRezeptAusBild, type ErkanntesRezept } from "@/lib/rezeptErkennung";
+import { erkenneRezeptAusBild, erkenneRezeptAusSprache, type ErkanntesRezept } from "@/lib/rezeptErkennung";
 
 function getSamstagWocheStart(date: Date): Date {
   // Essensplan-Woche läuft Samstag–Samstag.
@@ -98,6 +98,22 @@ export async function erkenneRezeptAusFoto(
   } catch (err) {
     console.error("Rezept-Foto-Erkennung fehlgeschlagen:", err);
     const fehler = err instanceof Error ? err.message : "Unbekannter Fehler bei der Bilderkennung.";
+    return { ok: false, fehler };
+  }
+}
+
+// Spracheingabe fürs "Neues Rezept"-Formular (Standing-Regel: Formulare mit mehr als zwei
+// Feldern brauchen Spracheingabe UND Bildfunktionen).
+export async function erkenneRezeptAusText(
+  text: string
+): Promise<{ ok: true; rezept: ErkanntesRezept } | { ok: false; fehler: string }> {
+  await requireParent();
+  try {
+    const rezept = await erkenneRezeptAusSprache(text);
+    return { ok: true, rezept };
+  } catch (err) {
+    console.error("Rezept-Sprach-Erkennung fehlgeschlagen:", err);
+    const fehler = err instanceof Error ? err.message : "Unbekannter Fehler bei der Spracherkennung.";
     return { ok: false, fehler };
   }
 }
