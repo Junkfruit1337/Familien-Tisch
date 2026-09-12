@@ -404,9 +404,11 @@ export async function manuelleGutschrift(kindId: string, betrag: number, grund: 
   revalidatePath("/schule");
 }
 
+// Fix-Batch 55 (Florians Korrektur): das Sparziel darf nur noch das Kind selbst setzen,
+// nicht mehr die Eltern — Eltern sehen es weiterhin, aber nur lesend.
 export async function setSparziel(kindId: string, bezeichnung: string, zielbetrag: number) {
   const person = await requirePerson();
-  if (person.rolle !== "ELTERN" && person.id !== kindId) throw new Error("Nicht erlaubt.");
+  if (person.id !== kindId) throw new Error("Nur das Kind selbst darf sein Sparziel bearbeiten.");
   await prisma.sparziel.upsert({
     where: { kindId },
     update: { bezeichnung, zielbetrag },
@@ -455,39 +457,6 @@ export async function setNotenGewichtung(kindId: string, fachId: string, art: st
     create: { kindId, fachId, art: art as any, gewichtung },
   });
   await wendeGewichtungRueckwirkendAn(kindId, fachId, art, gewichtung);
-  revalidatePath("/einstellungen");
-  revalidatePath("/schule");
-}
-
-export async function uebertrageGewichtungAufFaecher(kindId: string, art: string, gewichtung: number, zielFachIds: string[]) {
-  await requireParent();
-  await Promise.all(
-    zielFachIds.map((fachId) =>
-      prisma.notenGewichtung.upsert({
-        where: { kindId_fachId_art: { kindId, fachId, art: art as any } },
-        update: { gewichtung },
-        create: { kindId, fachId, art: art as any, gewichtung },
-      })
-    )
-  );
-  await Promise.all(zielFachIds.map((fachId) => wendeGewichtungRueckwirkendAn(kindId, fachId, art, gewichtung)));
-  revalidatePath("/einstellungen");
-  revalidatePath("/schule");
-}
-
-export async function uebertrageGewichtungAufKinder(fachName: string, art: string, gewichtung: number, zielKindIds: string[]) {
-  await requireParent();
-  const faecher = await prisma.fach.findMany({ where: { kindId: { in: zielKindIds }, name: fachName } });
-  await Promise.all(
-    faecher.map((f) =>
-      prisma.notenGewichtung.upsert({
-        where: { kindId_fachId_art: { kindId: f.kindId, fachId: f.id, art: art as any } },
-        update: { gewichtung },
-        create: { kindId: f.kindId, fachId: f.id, art: art as any, gewichtung },
-      })
-    )
-  );
-  await Promise.all(faecher.map((f) => wendeGewichtungRueckwirkendAn(f.kindId, f.id, art, gewichtung)));
   revalidatePath("/einstellungen");
   revalidatePath("/schule");
 }

@@ -671,7 +671,9 @@ export default function SchuleClient({
             </div>
           </div>
         )}
-        {(istEltern || kind.id === eigeneId) && (
+        {/* Fix-Batch 55 (Florians Korrektur): das Sparziel darf nur noch das Kind selbst
+            bearbeiten — Eltern sehen es weiterhin, aber nur lesend/aufklappbar für Details. */}
+        {kind.id === eigeneId ? (
           <details style={{ marginTop: 10 }}>
             <summary style={{ cursor: "pointer", fontSize: 13 }}>Sparziel bearbeiten</summary>
             <div className="card" style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
@@ -712,6 +714,18 @@ export default function SchuleClient({
               </button>
             </div>
           </details>
+        ) : (
+          istEltern &&
+          kind.sparziel && (
+            <details style={{ marginTop: 10 }}>
+              <summary style={{ cursor: "pointer", fontSize: 13 }}>Sparziel-Details</summary>
+              <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 8, fontSize: 13, color: "var(--text-muted)" }}>
+                <span>Ziel: {kind.sparziel.bezeichnung}</span>
+                <span>Zielbetrag: {kind.sparziel.zielbetrag.toFixed(2)} €</span>
+                <span>Noch benötigt: {Math.max(0, kind.sparziel.zielbetrag - kind.kontostand).toFixed(2)} €</span>
+              </div>
+            </details>
+          )
         )}
         {istEltern && (
           <details style={{ marginTop: 10 }}>

@@ -496,43 +496,90 @@ export default function EinstellungenClient({
           >
             <summary style={{ cursor: "pointer", fontSize: 13, fontWeight: 600 }}>Meine gemeldeten Tickets ({meineTickets.length})</summary>
             <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 6 }}>
-            {meineTickets.map((t) => (
-              <details
-                key={t.id}
-                id={`meinticket-${t.id}`}
-                className={t.id === highlightTicketId ? "highlight-blink" : undefined}
-                open={t.id === highlightTicketId || undefined}
-                style={{ fontSize: 13 }}
-              >
-                <summary style={{ cursor: "pointer", display: "flex", justifyContent: "space-between", gap: 8, listStyle: "none" }}>
-                  <span>{t.titel}</span>
-                  <span className={`pill pill-${t.status === "ABGELEHNT" ? "abgelehnt" : t.status === "EINGEREICHT" ? "offen" : "genehmigt"}`}>
-                    {TICKET_STATUS_LABEL[t.status] ?? t.status}
-                  </span>
+            {meineTickets
+              .filter((t) => t.status !== "UMGESETZT")
+              .map((t) => (
+                <details
+                  key={t.id}
+                  id={`meinticket-${t.id}`}
+                  className={t.id === highlightTicketId ? "highlight-blink" : undefined}
+                  open={t.id === highlightTicketId || undefined}
+                  style={{ fontSize: 13 }}
+                >
+                  <summary style={{ cursor: "pointer", display: "flex", justifyContent: "space-between", gap: 8, listStyle: "none" }}>
+                    <span>{t.titel}</span>
+                    <span className={`pill pill-${t.status === "ABGELEHNT" ? "abgelehnt" : t.status === "EINGEREICHT" ? "offen" : "genehmigt"}`}>
+                      {TICKET_STATUS_LABEL[t.status] ?? t.status}
+                    </span>
+                  </summary>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 6, paddingLeft: 4 }}>
+                    <span>{t.beschreibung}</span>
+                    {t.fotos.length > 0 && (
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                        {t.fotos.map((foto, i) => (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            key={i}
+                            src={foto}
+                            alt="Ticket-Foto"
+                            style={{ width: 60, height: 60, objectFit: "cover", borderRadius: 8, cursor: "pointer" }}
+                            onClick={() => setGrossesTicketBild(foto)}
+                          />
+                        ))}
+                      </div>
+                    )}
+                    <span style={{ color: "var(--text-muted)", fontSize: 12 }}>
+                      Eingereicht am {new Date(t.createdAt).toLocaleDateString("de-DE")}
+                    </span>
+                    {t.begruendung && <span style={{ color: "var(--text-muted)", fontSize: 12 }}>Begründung: „{t.begruendung}"</span>}
+                  </div>
+                </details>
+              ))}
+            {meineTickets.some((t) => t.status === "UMGESETZT") && (
+              <details open={(highlightTicketId && meineTickets.some((t) => t.status === "UMGESETZT" && t.id === highlightTicketId)) || undefined}>
+                <summary style={{ cursor: "pointer", fontSize: 12, color: "var(--text-muted)" }}>
+                  Umgesetzte Tickets ({meineTickets.filter((t) => t.status === "UMGESETZT").length})
                 </summary>
-                <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 6, paddingLeft: 4 }}>
-                  <span>{t.beschreibung}</span>
-                  {t.fotos.length > 0 && (
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                      {t.fotos.map((foto, i) => (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          key={i}
-                          src={foto}
-                          alt="Ticket-Foto"
-                          style={{ width: 60, height: 60, objectFit: "cover", borderRadius: 8, cursor: "pointer" }}
-                          onClick={() => setGrossesTicketBild(foto)}
-                        />
-                      ))}
-                    </div>
-                  )}
-                  <span style={{ color: "var(--text-muted)", fontSize: 12 }}>
-                    Eingereicht am {new Date(t.createdAt).toLocaleDateString("de-DE")}
-                  </span>
-                  {t.begruendung && <span style={{ color: "var(--text-muted)", fontSize: 12 }}>Begründung: „{t.begruendung}"</span>}
+                <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 6 }}>
+                  {meineTickets
+                    .filter((t) => t.status === "UMGESETZT")
+                    .map((t) => (
+                      <details
+                        key={t.id}
+                        id={`meinticket-${t.id}`}
+                        className={t.id === highlightTicketId ? "highlight-blink" : undefined}
+                        open={t.id === highlightTicketId || undefined}
+                        style={{ fontSize: 13 }}
+                      >
+                        <summary style={{ cursor: "pointer", display: "flex", justifyContent: "space-between", gap: 8, listStyle: "none" }}>
+                          <span>{t.titel}</span>
+                          <span className="pill pill-genehmigt">{TICKET_STATUS_LABEL[t.status] ?? t.status}</span>
+                        </summary>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 6, paddingLeft: 4 }}>
+                          <span>{t.beschreibung}</span>
+                          {t.fotos.length > 0 && (
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                              {t.fotos.map((foto, i) => (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img
+                                  key={i}
+                                  src={foto}
+                                  alt="Ticket-Foto"
+                                  style={{ width: 60, height: 60, objectFit: "cover", borderRadius: 8, cursor: "pointer" }}
+                                  onClick={() => setGrossesTicketBild(foto)}
+                                />
+                              ))}
+                            </div>
+                          )}
+                          <span style={{ color: "var(--text-muted)", fontSize: 12 }}>
+                            Eingereicht am {new Date(t.createdAt).toLocaleDateString("de-DE")}
+                          </span>
+                        </div>
+                      </details>
+                    ))}
                 </div>
               </details>
-            ))}
+            )}
             </div>
           </details>
         )}
@@ -875,59 +922,84 @@ export default function EinstellungenClient({
         <details>
           <summary style={{ cursor: "pointer", fontWeight: 600 }}>🎫 Tickets verwalten ({alleTickets.filter((t) => t.status === "EINGEREICHT").length} neu)</summary>
           <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
-            {alleTickets.map((t) => (
-              <div key={t.id} className="card" style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
-                  <strong style={{ fontSize: 14 }}>{t.titel}</strong>
-                  <span className={`pill pill-${t.status === "ABGELEHNT" ? "abgelehnt" : t.status === "EINGEREICHT" ? "offen" : "genehmigt"}`}>
-                    {TICKET_STATUS_LABEL[t.status] ?? t.status}
-                  </span>
-                </div>
-                <p style={{ margin: 0, fontSize: 13 }}>{t.beschreibung}</p>
-                {t.fotos.length > 0 && (
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                    {t.fotos.map((foto, i) => (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        key={i}
-                        src={foto}
-                        alt="Ticket-Foto"
-                        style={{ width: 80, height: 80, objectFit: "cover", borderRadius: 8, cursor: "pointer" }}
-                        onClick={() => setGrossesTicketBild(foto)}
-                      />
+            {alleTickets
+              .filter((t) => t.status !== "UMGESETZT")
+              .map((t) => (
+                <div key={t.id} className="card" style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                    <strong style={{ fontSize: 14 }}>{t.titel}</strong>
+                    <span className={`pill pill-${t.status === "ABGELEHNT" ? "abgelehnt" : t.status === "EINGEREICHT" ? "offen" : "genehmigt"}`}>
+                      {TICKET_STATUS_LABEL[t.status] ?? t.status}
+                    </span>
+                  </div>
+                  <p style={{ margin: 0, fontSize: 13 }}>{t.beschreibung}</p>
+                  {t.fotos.length > 0 && (
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                      {t.fotos.map((foto, i) => (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          key={i}
+                          src={foto}
+                          alt="Ticket-Foto"
+                          style={{ width: 80, height: 80, objectFit: "cover", borderRadius: 8, cursor: "pointer" }}
+                          onClick={() => setGrossesTicketBild(foto)}
+                        />
+                      ))}
+                    </div>
+                  )}
+                  <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>
+                    Von {t.erstellerName} · Eingereicht am {new Date(t.createdAt).toLocaleDateString("de-DE")}
+                    {t.status !== "EINGEREICHT" && <> · Entschieden am {new Date(t.updatedAt).toLocaleDateString("de-DE")}</>}
+                  </p>
+                  {t.begruendung && <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>Begründung: „{t.begruendung}"</p>}
+                  <input
+                    placeholder="Begründung (optional)"
+                    value={ticketBegruendungen[t.id] ?? ""}
+                    onChange={(e) => setTicketBegruendungen((prev) => ({ ...prev, [t.id]: e.target.value }))}
+                    style={{ fontSize: 13 }}
+                  />
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                    {["GENEHMIGT", "ABGELEHNT", "UMGESETZT"].map((s) => (
+                      <button
+                        key={s}
+                        className="btn-secondary"
+                        style={{
+                          fontSize: 12,
+                          padding: "4px 10px",
+                          background: t.status === s ? "var(--accent)" : undefined,
+                          color: t.status === s ? "var(--accent-contrast)" : undefined,
+                        }}
+                        onClick={() => startTransition(() => setzeTicketStatus(t.id, s, ticketBegruendungen[t.id] || undefined))}
+                      >
+                        {TICKET_STATUS_LABEL[s]}
+                      </button>
                     ))}
                   </div>
-                )}
-                <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>
-                  Von {t.erstellerName} · Eingereicht am {new Date(t.createdAt).toLocaleDateString("de-DE")}
-                  {t.status !== "EINGEREICHT" && <> · Entschieden am {new Date(t.updatedAt).toLocaleDateString("de-DE")}</>}
-                </p>
-                {t.begruendung && <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>Begründung: „{t.begruendung}"</p>}
-                <input
-                  placeholder="Begründung (optional)"
-                  value={ticketBegruendungen[t.id] ?? ""}
-                  onChange={(e) => setTicketBegruendungen((prev) => ({ ...prev, [t.id]: e.target.value }))}
-                  style={{ fontSize: 13 }}
-                />
-                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                  {["GENEHMIGT", "ABGELEHNT", "UMGESETZT"].map((s) => (
-                    <button
-                      key={s}
-                      className="btn-secondary"
-                      style={{
-                        fontSize: 12,
-                        padding: "4px 10px",
-                        background: t.status === s ? "var(--accent)" : undefined,
-                        color: t.status === s ? "var(--accent-contrast)" : undefined,
-                      }}
-                      onClick={() => startTransition(() => setzeTicketStatus(t.id, s, ticketBegruendungen[t.id] || undefined))}
-                    >
-                      {TICKET_STATUS_LABEL[s]}
-                    </button>
-                  ))}
                 </div>
-              </div>
-            ))}
+              ))}
+            {alleTickets.some((t) => t.status === "UMGESETZT") && (
+              <details>
+                <summary style={{ cursor: "pointer", fontSize: 13, color: "var(--text-muted)" }}>
+                  Umgesetzte Tickets ({alleTickets.filter((t) => t.status === "UMGESETZT").length})
+                </summary>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
+                  {alleTickets
+                    .filter((t) => t.status === "UMGESETZT")
+                    .map((t) => (
+                      <div key={t.id} className="card" style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                          <strong style={{ fontSize: 14 }}>{t.titel}</strong>
+                          <span className="pill pill-genehmigt">{TICKET_STATUS_LABEL[t.status] ?? t.status}</span>
+                        </div>
+                        <p style={{ margin: 0, fontSize: 13 }}>{t.beschreibung}</p>
+                        <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>
+                          Von {t.erstellerName} · Entschieden am {new Date(t.updatedAt).toLocaleDateString("de-DE")}
+                        </p>
+                      </div>
+                    ))}
+                </div>
+              </details>
+            )}
           </div>
         </details>
       )}
@@ -1101,12 +1173,7 @@ export default function EinstellungenClient({
             )}
             {kind && schulprofilUndFaecherKarten(kind)}
             {kind && (
-              <NotengewichtungSektion
-                kindId={kind.id}
-                kindName={kind.name}
-                gewichtung={kind.gewichtung}
-                alleKinder={kinder.map((k) => ({ id: k.id, name: k.name }))}
-              />
+              <NotengewichtungSektion kindId={kind.id} kindName={kind.name} gewichtung={kind.gewichtung} />
             )}
           </div>
         </details>

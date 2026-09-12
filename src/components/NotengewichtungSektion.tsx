@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { setNotenGewichtung, uebertrageGewichtungAufFaecher, uebertrageGewichtungAufKinder } from "@/app/(app)/schule/actions";
+import { setNotenGewichtung } from "@/app/(app)/schule/actions";
 
 const ART_LABEL: Record<string, string> = {
   KLASSENARBEIT: "Arbeit",
@@ -17,12 +17,10 @@ export default function NotengewichtungSektion({
   kindId,
   kindName,
   gewichtung,
-  alleKinder,
 }: {
   kindId: string;
   kindName: string;
   gewichtung: Gewichtung[];
-  alleKinder: { id: string; name: string }[];
 }) {
   const [pending, startTransition] = useTransition();
   const [werte, setWerte] = useState<Record<string, number>>(() => {
@@ -30,8 +28,6 @@ export default function NotengewichtungSektion({
     gewichtung.forEach((g) => g.gewichtungen.forEach((x) => (init[`${g.fachId}_${x.art}`] = x.gewichtung)));
     return init;
   });
-
-  const andereKinder = alleKinder.filter((k) => k.id !== kindId);
 
   return (
     <details>
@@ -59,34 +55,6 @@ export default function NotengewichtungSektion({
                       onChange={(e) => setWerte((prev) => ({ ...prev, [key]: parseFloat(e.target.value) || 0 }))}
                       onBlur={() => startTransition(() => setNotenGewichtung(kindId, g.fachId, x.art, werte[key] ?? 1))}
                     />
-                    <button
-                      className="btn-secondary"
-                      style={{ fontSize: 11, padding: "4px 6px" }}
-                      disabled={pending}
-                      title="Diesen Wert auf alle Fächer dieses Kindes übertragen"
-                      onClick={() =>
-                        startTransition(() =>
-                          uebertrageGewichtungAufFaecher(kindId, x.art, werte[key] ?? 1, gewichtung.map((f) => f.fachId))
-                        )
-                      }
-                    >
-                      → andere Fächer
-                    </button>
-                    {andereKinder.length > 0 && (
-                      <button
-                        className="btn-secondary"
-                        style={{ fontSize: 11, padding: "4px 6px" }}
-                        disabled={pending}
-                        title="Diesen Wert für das gleichnamige Fach bei anderen Kindern übertragen"
-                        onClick={() =>
-                          startTransition(() =>
-                            uebertrageGewichtungAufKinder(g.fachName, x.art, werte[key] ?? 1, andereKinder.map((k) => k.id))
-                          )
-                        }
-                      >
-                        → andere Kinder
-                      </button>
-                    )}
                   </div>
                 );
               })}

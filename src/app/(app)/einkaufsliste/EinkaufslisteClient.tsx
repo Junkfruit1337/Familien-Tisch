@@ -951,15 +951,17 @@ export default function EinkaufslisteClient({
                   </button>
                   <button
                     className="btn-danger"
-                    style={{ marginLeft: "auto", borderRadius: 10, border: "none", padding: "10px 16px" }}
-                    onClick={() =>
+                    title="Artikel löschen"
+                    style={{ marginLeft: "auto", borderRadius: 10, border: "none", padding: "6px 10px", fontSize: 14 }}
+                    onClick={() => {
+                      if (!confirm(`„${a.name}" wirklich löschen?`)) return;
                       startTransition(async () => {
                         await deleteArtikel(a.id);
                         setBearbeiteId(null);
-                      })
-                    }
+                      });
+                    }}
                   >
-                    Löschen
+                    🗑
                   </button>
                 </div>
               </div>
