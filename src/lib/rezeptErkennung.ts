@@ -99,12 +99,40 @@ export async function erkenneRezeptAusSprache(text: string): Promise<ErkanntesRe
   );
 }
 
+// Fix-Batch 74 (Florian, nachdem er die Kosten der Web-Suche erfahren hat: "vorerst ein
+// KI-Rezept"): günstige Variante OHNE Web-Suche — reine Modell-Generierung anhand der freien
+// Beschreibung, wie schon bei der saisonalen Idee. Kostet nur normale Token-Kosten (ca. ein
+// Zehntel bis Zwanzigstel der Web-Suche-Variante), da kein Such-Werkzeug involviert ist.
+export async function schlageRezeptZuBeschreibungVor(beschreibung: string): Promise<ErkanntesRezept> {
+  const apiKey = holeApiKey();
+  const client = new Anthropic({ apiKey });
+  const prompt =
+    `Ein Familienmitglied möchte ein Rezept, das zu folgender Beschreibung passt: "${beschreibung}"\n` +
+    "(das kann eine Gerichtsart sein, z. B. \"eine Suppe\", oder was gerade an Zutaten zuhause ist, z. B. \"ich hab Zucchini und Reis da\").\n" +
+    "Schlage ein einfaches, alltagstaugliches Familien-Rezept vor, das dazu passt.\n" +
+    "Antworte AUSSCHLIESSLICH mit einem JSON-Objekt, ohne Markdown-Codeblock, ohne weiteren Text, in genau diesem Format:\n" +
+    '{"name": "Gerichtname", "zutaten": "eine Zutat pro Zeile, Format \'Menge Einheit Name\'", "zubereitung": "Zubereitungsschritte als Fließtext oder nummerierte Liste", "portionen": Zahl oder null}';
+  const response = await client.messages.create({
+    model: "claude-sonnet-5",
+    max_tokens: 1500,
+    messages: [{ role: "user", content: prompt }],
+  });
+  const textBlock = response.content.find((b): b is Anthropic.TextBlock => b.type === "text");
+  return parseRezeptAntwort(
+    textBlock?.text ?? "",
+    "Konnte keinen Rezeptvorschlag erzeugen. Bitte erneut versuchen oder die Felder manuell ausfüllen."
+  );
+}
+
 // Fix-Batch 73 (Florians Wunsch): Rezept-Finder per freier Beschreibung ("eine Suppe",
 // "was mit Hähnchen", "ich hab Zucchini und Reis da") — nutzt Claudes serverseitiges
 // Web-Such-Werkzeug, damit ein ECHTES, im Internet auffindbares und gut bewertetes Rezept
 // vorgeschlagen wird, statt eines von der KI frei erfundenen (Florian ausdrücklich: "muss
 // immer gut bewertet sein, das ist sehr wichtig"). Läuft über denselben ANTHROPIC_API_KEY,
 // verursacht aber zusätzliche Kosten pro Suche (Anthropics Web-Suche wird separat abgerechnet).
+// Fix-Batch 74: nachdem Florian die Kosten dafür erfahren hat, ist dies jetzt bewusst NICHT
+// mehr die Standard-Option im Formular, sondern eine sekundäre, klar mit Kostenhinweis
+// versehene Wahl (siehe EssensplanClient) — der günstige Weg oben ist der Standard.
 // Da die Antwort neben reinem Text auch Such-Werkzeug-Blöcke enthalten kann, werden alle
 // "text"-Blöcke aneinandergehängt statt nur den ersten zu nehmen.
 export async function findeRezeptImInternet(beschreibung: string): Promise<ErkanntesRezept> {

@@ -17,6 +17,7 @@ import {
   fuegeZutatenDesTagsHinzu,
   fuegeZutatenDerWocheHinzu,
   pruefeGelocktenTagWechsel,
+  entferneTag,
   erkenneRezeptAusFoto,
   erkenneRezeptAusText,
   updateRezeptPortionenBasis,
@@ -26,6 +27,7 @@ import {
   schreibeRezeptUmVorschau,
   pruefeAusgewogenheitDerWoche,
   findeRezeptImInternetVorschau,
+  schlageRezeptZuBeschreibungVorschau,
 } from "./actions";
 import SeitenTitel from "@/components/SeitenTitel";
 import Spracheingabe from "@/components/Spracheingabe";
@@ -180,6 +182,14 @@ export default function EssensplanClient({
     startTransition(() => setTag(plan.wocheStart, t.tag, neuesRezeptId).then(() => ladeWoche(offset)));
   }
 
+  // Fix-Batch 74 (Florians Bug-Meldung): "– kein Gericht –" auswählen setzte bisher gar nichts
+  // in Bewegung, das Dropdown sprang optisch sofort auf das weiterhin bestehende Gericht
+  // zurück ("bleibt durchgehend geöffnet"). Nur relevant, wenn überhaupt ein Eintrag da ist.
+  function tagEntfernen(t: Tag) {
+    if (!t.eintrag) return;
+    startTransition(() => entferneTag(plan.wocheStart, t.tag).then(() => ladeWoche(offset)));
+  }
+
   async function klickSchloss(t: Tag) {
     if (!t.eintrag) return;
     if (!t.eintrag.gelockt) {
@@ -232,7 +242,7 @@ export default function EssensplanClient({
                 <select
                   value={t.eintrag?.rezeptId ?? ""}
                   disabled={!!t.eintrag?.gelockt}
-                  onChange={(e) => e.target.value && tagAendern(t, e.target.value)}
+                  onChange={(e) => (e.target.value ? tagAendern(t, e.target.value) : tagEntfernen(t))}
                 >
                   <option value="">– kein Gericht –</option>
                   {vorschlaege.map((r) => (
@@ -838,12 +848,14 @@ export default function EssensplanClient({
               {saisonLaeuft ? "Idee wird gesucht …" : "🍂 Saisonale Idee vorschlagen"}
             </button>
 
-            {/* Fix-Batch 73 (Florians Wunsch): Rezept-Finder per freier Beschreibung (Typ,
-                z.B. "Suppe", oder was gerade zuhause ist) — sucht per Web-Suche ein echtes,
-                gut bewertetes Rezept statt eines von der KI erfundenen. */}
+            {/* Fix-Batch 73/74 (Florians Wunsch, Kosten-Rückfrage): Rezept-Finder per freier
+                Beschreibung (Typ, z.B. "Suppe", oder was gerade zuhause ist). Standard ist
+                die günstige KI-Variante (nur normale Token-Kosten); die Websuche-Variante
+                (echtes, geprüft gut bewertetes Rezept, aber zusätzliche Kosten pro Suche) steht
+                als klar gekennzeichnete Zusatz-Option daneben. */}
             <div style={{ display: "flex", flexDirection: "column", gap: 6, borderTop: "1px solid var(--border)", paddingTop: 8 }}>
               <span style={{ fontSize: 13, color: "var(--text-muted)" }}>
-                🔍 Rezept im Internet finden (gut bewertet) — Art des Gerichts oder was gerade da ist beschreiben:
+                🍳 Rezept vorschlagen lassen — Art des Gerichts oder was gerade da ist beschreiben:
               </span>
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                 {["Suppe", "Mit Fleisch", "Vegetarisch", "Nudeln", "Auflauf"].map((vorschlag) => (
@@ -874,6 +886,32 @@ export default function EssensplanClient({
                     setRezeptFinderLaeuft(true);
                     setRezeptFinderQuelle(null);
                     try {
+                      const ergebnis = await schlageRezeptZuBeschreibungVorschau(rezeptFinderText);
+                      if (!ergebnis.ok) {
+                        alert(ergebnis.fehler);
+                        return;
+                      }
+                      setNeuName(ergebnis.rezept.name);
+                      setNeuZutaten(ergebnis.rezept.zutaten);
+                      setNeuZubereitung(ergebnis.rezept.zubereitung);
+                      if (ergebnis.rezept.portionen) setNeuPortionenBasis(String(ergebnis.rezept.portionen));
+                    } finally {
+                      setRezeptFinderLaeuft(false);
+                    }
+                  })
+                }
+              >
+                {rezeptFinderLaeuft ? "Wird vorgeschlagen …" : "Rezept vorschlagen"}
+              </button>
+              <button
+                className="btn-secondary"
+                style={{ fontSize: 12, alignSelf: "flex-start", color: "var(--text-muted)" }}
+                disabled={rezeptFinderLaeuft || !rezeptFinderText.trim()}
+                onClick={() =>
+                  startTransition(async () => {
+                    setRezeptFinderLaeuft(true);
+                    setRezeptFinderQuelle(null);
+                    try {
                       const ergebnis = await findeRezeptImInternetVorschau(rezeptFinderText);
                       if (!ergebnis.ok) {
                         alert(ergebnis.fehler);
@@ -890,7 +928,7 @@ export default function EssensplanClient({
                   })
                 }
               >
-                {rezeptFinderLaeuft ? "Suche läuft …" : "Rezept suchen"}
+                {rezeptFinderLaeuft ? "Suche läuft …" : "🌐 Stattdessen echtes, gut bewertetes Rezept aus dem Internet suchen (zusätzliche Kosten, ca. 2–5 Cent)"}
               </button>
               {rezeptFinderQuelle && (
                 <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>Gefunden auf: {rezeptFinderQuelle}</p>

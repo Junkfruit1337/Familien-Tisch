@@ -11,6 +11,7 @@ import {
   schlageSaisonalesRezeptVor,
   verdichteZubereitung,
   findeRezeptImInternet,
+  schlageRezeptZuBeschreibungVor,
   type ErkanntesRezept,
 } from "@/lib/rezeptErkennung";
 
@@ -165,6 +166,22 @@ export async function schlageSaisonaleIdeeVor(): Promise<{ ok: true; rezept: Erk
 // Fix-Batch 73 (Florians Wunsch: Rezept-Finder per Beschreibung, z.B. "eine Suppe", "was
 // mit Hähnchen", "ich hab Zucchini und Reis da") — liefert nur eine Vorschau, gespeichert
 // wird erst nach Prüfung durch die Eltern (analog Foto-/Sprach-Erkennung).
+// Fix-Batch 74 (Florians Wunsch, nach Kosten-Rückfrage): günstige Standard-Variante ohne
+// Web-Suche — Vorschau wie gehabt, nichts wird automatisch gespeichert.
+export async function schlageRezeptZuBeschreibungVorschau(
+  beschreibung: string
+): Promise<{ ok: true; rezept: ErkanntesRezept } | { ok: false; fehler: string }> {
+  await requireParent();
+  try {
+    const rezept = await schlageRezeptZuBeschreibungVor(beschreibung);
+    return { ok: true, rezept };
+  } catch (err) {
+    console.error("KI-Rezeptvorschlag fehlgeschlagen:", err);
+    const fehler = err instanceof Error ? err.message : "Unbekannter Fehler beim Erstellen des Vorschlags.";
+    return { ok: false, fehler };
+  }
+}
+
 export async function findeRezeptImInternetVorschau(
   beschreibung: string
 ): Promise<{ ok: true; rezept: ErkanntesRezept } | { ok: false; fehler: string }> {
@@ -356,6 +373,24 @@ export async function setTag(wocheStartIso: string, tagIso: string, rezeptId: st
   } else {
     await prisma.essensplanEintrag.create({ data: { wocheStart, tag, rezeptId } });
   }
+  revalidatePath("/essensplan");
+}
+
+// Fix-Batch 74 (Florians Bug-Meldung): "– kein Gericht –" im Dropdown tat bisher nichts (der
+// bisherige onChange rief tagAendern nur bei einem NICHT-leeren Wert auf) — ein einmal
+// gewähltes Gericht ließ sich dadurch nie mehr zurücksetzen. Nur bei entsperrtem Tag möglich
+// (das Dropdown ist bei gesperrtem Tag ohnehin deaktiviert); es können zu diesem Zeitpunkt
+// keine essensplanHerkuenfte mehr an diesem Eintrag hängen (die werden beim Entsperren bereits
+// vollständig aufgelöst), ein einfaches Löschen des Eintrags reicht daher aus.
+export async function entferneTag(wocheStartIso: string, tagIso: string) {
+  await requireParent();
+  const wocheStart = new Date(wocheStartIso);
+  const tag = new Date(tagIso);
+  const bestehend = await prisma.essensplanEintrag.findFirst({ where: { wocheStart, tag } });
+  if (!bestehend) return;
+  if (bestehend.gelockt) throw new Error("Diese Woche ist gesperrt. Erst entsperren.");
+  await prisma.essensplanHerkunft.deleteMany({ where: { eintragId: bestehend.id } });
+  await prisma.essensplanEintrag.delete({ where: { id: bestehend.id } });
   revalidatePath("/essensplan");
 }
 
