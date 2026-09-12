@@ -197,11 +197,13 @@ function SchulEintraegeSektion({
   eigeneId,
   kinder,
   eintraege,
+  ausgewaehlteKindId,
 }: {
   istEltern: boolean;
   eigeneId: string;
   kinder: { id: string; name: string; farbe: string; faecher: { id: string; name: string }[] }[];
   eintraege: SchulEintrag[];
+  ausgewaehlteKindId?: string;
 }) {
   const [pending, startTransition] = useTransition();
   const [zeigeForm, setZeigeForm] = useState(false);
@@ -210,7 +212,6 @@ function SchulEintraegeSektion({
   const [art, setArt] = useState("KLASSENARBEIT");
   const [datum, setDatum] = useState("");
   const [ausgewaehlteKinder, setAusgewaehlteKinder] = useState<string[]>(istEltern ? [] : [eigeneId]);
-  const [filterKindId, setFilterKindId] = useState<string>("alle");
   const [bearbeiteId, setBearbeiteId] = useState<string | null>(null);
   const [bearbeitenThema, setBearbeitenThema] = useState("");
   const [bearbeitenDatum, setBearbeitenDatum] = useState("");
@@ -255,38 +256,18 @@ function SchulEintraegeSektion({
     }
   }
 
-  const sichtbareEintraege = eintraege.filter((e) => filterKindId === "alle" || e.personId === filterKindId);
+  // Folgt jetzt der EINEN Kind-Auswahl oben im Elternbereich statt einer eigenen,
+  // verwirrenden zweiten Auswahl hier (Florians Feedback: zwei fast identische
+  // Kind-Filter kurz hintereinander waren unübersichtlich).
+  const sichtbareEintraege = eintraege.filter((e) => !ausgewaehlteKindId || e.personId === ausgewaehlteKindId);
 
   return (
-    <div className="card" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <strong>🎓 Arbeiten &amp; HÜs</strong>
-        {!istEltern && (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      {!istEltern && (
+        <div style={{ display: "flex", justifyContent: "flex-end" }}>
           <button className="btn-secondary" style={{ fontSize: 12 }} onClick={() => setZeigeForm((v) => !v)}>
             {zeigeForm ? "Abbrechen" : "+ Eintrag"}
           </button>
-        )}
-      </div>
-
-      {istEltern && kinder.length > 1 && (
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-          <button
-            className="btn-secondary"
-            style={{ fontSize: 12, background: filterKindId === "alle" ? "var(--accent)" : undefined, color: filterKindId === "alle" ? "var(--accent-contrast)" : undefined }}
-            onClick={() => setFilterKindId("alle")}
-          >
-            Alle
-          </button>
-          {kinder.map((k) => (
-            <button
-              key={k.id}
-              className="btn-secondary"
-              style={{ fontSize: 12, background: filterKindId === k.id ? k.farbe : undefined, color: filterKindId === k.id ? "#fff" : undefined }}
-              onClick={() => setFilterKindId(k.id)}
-            >
-              {k.name}
-            </button>
-          ))}
         </div>
       )}
 
@@ -515,23 +496,12 @@ export default function SchuleClient({
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <SeitenTitel icon="🎓" farbe={BEREICH_FARBEN.schule}>Schule &amp; Taschengeld</SeitenTitel>
-      {(kind.klasse || kind.klassenstufe) && (
-        <p style={{ margin: "-8px 0 0", fontSize: 13, color: "var(--text-muted)" }}>
-          {klasseAnzeige(kind.klassenstufe, kind.klasse)}
-          {kind.bundesland ? ` · ${kind.bundesland}` : ""}
-        </p>
-      )}
 
-      {feier && <Feier onEnde={() => setFeier(false)} />}
-      {grossesBild && <BildModal src={grossesBild} onClose={() => setGrossesBild(null)} />}
-
-      <SchulEintraegeSektion
-        istEltern={istEltern}
-        eigeneId={eigeneId}
-        kinder={kinder.map((k) => ({ id: k.id, name: k.name, farbe: k.farbe, faecher: k.faecher }))}
-        eintraege={schulEintraege}
-      />
-
+      {/* Fix-Batch 53 (Florians Feedback): die Kind-Auswahl steht jetzt GANZ OBEN, direkt
+          unter dem Titel — vorher stand die Klasse/Bundesland-Zeile schon oben (unklar wessen
+          Klasse gemeint war), dann eine eigene Kind-Filterleiste in "Arbeiten & HÜs", und erst
+          darunter die eigentliche, für den Rest der Seite maßgebliche Kind-Auswahl. Jetzt gibt
+          es nur noch EINE Auswahl, die alles darunter steuert (auch "Arbeiten & HÜs"). */}
       {istEltern && kinder.length > 1 && (
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           {kinder.map((k) => (
@@ -547,10 +517,33 @@ export default function SchuleClient({
           ))}
         </div>
       )}
+      {(kind.klasse || kind.klassenstufe) && (
+        <p style={{ margin: "-8px 0 0", fontSize: 13, color: "var(--text-muted)" }}>
+          {klasseAnzeige(kind.klassenstufe, kind.klasse)}
+          {kind.bundesland ? ` · ${kind.bundesland}` : ""}
+        </p>
+      )}
+
+      {feier && <Feier onEnde={() => setFeier(false)} />}
+      {grossesBild && <BildModal src={grossesBild} onClose={() => setGrossesBild(null)} />}
+
+      <details className="card">
+        <summary style={{ cursor: "pointer", fontWeight: 600 }}>🎓 Arbeiten &amp; HÜs</summary>
+        <div style={{ marginTop: 10 }}>
+          <SchulEintraegeSektion
+            istEltern={istEltern}
+            eigeneId={eigeneId}
+            kinder={kinder.map((k) => ({ id: k.id, name: k.name, farbe: k.farbe, faecher: k.faecher }))}
+            eintraege={schulEintraege}
+            ausgewaehlteKindId={istEltern ? kind.id : undefined}
+          />
+        </div>
+      </details>
 
       {istEltern && offeneNoten.length > 0 && (
-        <div className="card">
-          <strong>Noten zur Genehmigung</strong>
+        <details className="card">
+          <summary style={{ cursor: "pointer", fontWeight: 600 }}>Noten zur Genehmigung ({offeneNoten.length})</summary>
+          <div style={{ marginTop: 10 }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 8 }}>
             {offeneNoten.map((n) => (
               <div
@@ -636,7 +629,8 @@ export default function SchuleClient({
               </div>
             ))}
           </div>
-        </div>
+          </div>
+        </details>
       )}
 
       <div className="card">
@@ -781,8 +775,9 @@ export default function SchuleClient({
       </div>
 
       {(istEltern || kind.id === eigeneId) && (
-        <div className="card" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          <strong>Note eintragen</strong>
+        <details className="card">
+          <summary style={{ cursor: "pointer", fontWeight: 600 }}>Note eintragen</summary>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 10 }}>
           <Spracheingabe onErgebnis={spracheErkannt} disabled={spracheVerarbeitung} />
           {spracheVerarbeitung && <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>Spracheingabe wird verarbeitet …</p>}
           <div style={{ display: "flex", gap: 8 }}>
@@ -837,7 +832,8 @@ export default function SchuleClient({
           <button className="btn" disabled={pending} onClick={() => startTransition(jetztEinreichen)}>
             Eintragen
           </button>
-        </div>
+          </div>
+        </details>
       )}
 
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
