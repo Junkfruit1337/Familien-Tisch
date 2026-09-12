@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { logout } from "./actions";
 import { BEREICH_FARBEN } from "@/lib/bereichFarben";
 import PersonChip from "@/components/PersonChip";
+import { DESIGN_KEY } from "@/lib/designThemes";
 
 type Person = { id: string; name: string; farbe: string; rolle: string };
 type Theme = "hell" | "dunkel";
@@ -15,6 +16,10 @@ const THEME_KEY = "familientisch-theme";
 function anwendenTheme(theme: Theme) {
   document.documentElement.setAttribute("data-theme", theme === "hell" ? "light" : "dark");
 }
+
+// Fix-Batch 70: Design-Vorlage wird, wie schon der Hell/Dunkel-Schalter, pro Browser/Person
+// in localStorage gemerkt und beim App-Start hier einmal angewendet — die eigentliche Auswahl
+// passiert in den Einstellungen (dort wird dieselbe Funktion beim Antippen erneut aufgerufen).
 
 const NAV = [
   { href: "/dashboard", label: "Heute", icon: "🏠", farbe: BEREICH_FARBEN.dashboard },
@@ -40,6 +45,11 @@ export default function AppShell({ person, children }: { person: Person; childre
     const startwert: Theme = gespeichert ?? (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dunkel" : "hell");
     setTheme(startwert);
     anwendenTheme(startwert);
+
+    try {
+      const design = localStorage.getItem(DESIGN_KEY);
+      if (design) document.documentElement.setAttribute("data-design", design);
+    } catch {}
   }, []);
 
   function themeUmschalten() {

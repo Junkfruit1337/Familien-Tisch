@@ -32,6 +32,7 @@ import {
   setKoerperpflegetag,
 } from "../dienstplan/actions";
 import PushBenachrichtigungen from "@/components/PushBenachrichtigungen";
+import DesignAuswahl from "@/components/DesignAuswahl";
 import Spracheingabe from "@/components/Spracheingabe";
 import SeitenTitel from "@/components/SeitenTitel";
 import { BEREICH_FARBEN } from "@/lib/bereichFarben";
@@ -950,6 +951,7 @@ export default function EinstellungenClient({
           </details>
         )}
         <p style={{ color: "var(--text-muted)" }}>Der Rest dieses Bereichs ist nur für Eltern.</p>
+        <DesignAuswahl />
         <PushBenachrichtigungen />
       </div>
     );
@@ -1520,6 +1522,7 @@ export default function EinstellungenClient({
       <details>
         <summary style={{ cursor: "pointer", fontWeight: 600 }}>🔔 Benachrichtigungen &amp; Verlauf</summary>
         <div style={{ display: "flex", flexDirection: "column", gap: 16, marginTop: 10 }}>
+      <DesignAuswahl />
       <PushBenachrichtigungen />
 
       <details className="card">
