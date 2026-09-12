@@ -237,6 +237,19 @@ model SaisonVorschlag {
   createdAt DateTime @default(now())
 }
 
+// Fix-Batch 71 (Florians Wunsch: "die KI muss ständig dazulernen ... egal aus welcher
+// Quelle die Eingabe kommt") — Gegenstück zu GelernteArtikelIcons, aber für die Kategorie:
+// sobald eine Kategorie manuell korrigiert wird, wird das global für diesen Artikelnamen
+// gemerkt. Speichert bewusst den KATEGORIE-NAMEN (nicht die id) — Kategorien können
+// umbenannt/gelöscht werden, ein Name lässt sich beim Lesen sicher nachschlagen, eine
+// veraltete id könnte dagegen eine Fremdschlüssel-Verletzung beim Anlegen auslösen.
+model GelernteArtikelKategorie {
+  id            String   @id @default(cuid())
+  name          String   @unique // kleingeschriebener, getrimmter Artikelname
+  kategorieName String
+  updatedAt     DateTime @updatedAt
+}
+
 enum WunschStatus {
   OFFEN
   GENEHMIGT

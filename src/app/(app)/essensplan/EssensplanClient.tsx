@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import {
   addRezept,
   deleteRezept,
@@ -28,6 +28,7 @@ import {
 } from "./actions";
 import SeitenTitel from "@/components/SeitenTitel";
 import Spracheingabe from "@/components/Spracheingabe";
+import { pruefeZutatenVollstaendig } from "@/lib/rezeptValidierung";
 import PersonChip from "@/components/PersonChip";
 import { BEREICH_FARBEN } from "@/lib/bereichFarben";
 
@@ -132,6 +133,14 @@ export default function EssensplanClient({
   const [neuZubereitung, setNeuZubereitung] = useState("");
   const [neuPortionenBasis, setNeuPortionenBasis] = useState("6");
   const [erkennungLaeuft, setErkennungLaeuft] = useState(false);
+  const [zeigeZutatenWarnungNeu, setZeigeZutatenWarnungNeu] = useState(false);
+  const [zeigeZutatenWarnungEdit, setZeigeZutatenWarnungEdit] = useState(false);
+
+  // Fix-Batch 71 (Florians Wunsch): egal woher die Zutatenliste kommt (manuell, Sprache,
+  // Foto, KI-Umschreibung/-Vorschlag) — jede Zeile braucht eine Menge, mit der später
+  // gerechnet werden kann (g/kg/ml/l/Stück/EL/TL/...), einzige Ausnahme "Prise".
+  const neuZutatenPruefung = useMemo(() => pruefeZutatenVollstaendig(neuZutaten), [neuZutaten]);
+  const rezeptZutatenEntwurfPruefung = useMemo(() => pruefeZutatenVollstaendig(rezeptZutatenEntwurf), [rezeptZutatenEntwurf]);
 
   async function ladeWoche(neuerOffset: number) {
     const neuerPlan = await getWochenplan(neuerOffset);
@@ -443,10 +452,28 @@ export default function EssensplanClient({
                       <textarea
                         rows={Math.max(4, r.zutaten.split("\n").length)}
                         value={rezeptZutatenEntwurf}
-                        onChange={(e) => setRezeptZutatenEntwurf(e.target.value)}
+                        onChange={(e) => {
+                          setRezeptZutatenEntwurf(e.target.value);
+                          setZeigeZutatenWarnungEdit(false);
+                        }}
                         style={{ fontFamily: "inherit" }}
                       />
                     </label>
+                    {/* Fix-Batch 71 (Florians Wunsch): jede Zutatenzeile braucht eine Menge
+                        (außer "Prise") — sonst kann die Einkaufslisten-Zusammenführung später
+                        nicht sauber rechnen. Egal woher die Zeilen kommen (hier: manuell
+                        editiert, oder per Umschreiben/Verdichten vorbefüllt). */}
+                    {zeigeZutatenWarnungEdit && rezeptZutatenEntwurfPruefung.some((z) => !z.vollstaendig) && (
+                      <p style={{ margin: 0, fontSize: 13, color: "var(--danger)" }}>
+                        ⚠️ Bitte bei diesen Zutaten eine Menge angeben (außer bei „Prise"):{" "}
+                        <strong>
+                          {rezeptZutatenEntwurfPruefung
+                            .filter((z) => !z.vollstaendig)
+                            .map((z) => z.zeile)
+                            .join(" · ")}
+                        </strong>
+                      </p>
+                    )}
                     <label style={{ fontSize: 13, display: "flex", flexDirection: "column", gap: 4 }}>
                       Zubereitung
                       <textarea rows={5} value={rezeptZubereitungEntwurf} onChange={(e) => setRezeptZubereitungEntwurf(e.target.value)} />
@@ -477,12 +504,16 @@ export default function EssensplanClient({
                       <button
                         className="btn"
                         style={{ fontSize: 12, padding: "4px 10px" }}
-                        onClick={() =>
+                        onClick={() => {
+                          if (rezeptZutatenEntwurfPruefung.some((z) => !z.vollstaendig)) {
+                            setZeigeZutatenWarnungEdit(true);
+                            return;
+                          }
                           startTransition(async () => {
                             await updateRezept(r.id, { zutaten: rezeptZutatenEntwurf, zubereitung: rezeptZubereitungEntwurf || undefined });
                             setBearbeiteRezeptId(null);
-                          })
-                        }
+                          });
+                        }}
                       >
                         Speichern
                       </button>
@@ -809,8 +840,20 @@ export default function EssensplanClient({
               placeholder={"Zutaten, eine pro Zeile, z.B.\n500 g Spaghetti\n2 Zwiebeln"}
               rows={5}
               value={neuZutaten}
-              onChange={(e) => setNeuZutaten(e.target.value)}
+              onChange={(e) => {
+                setNeuZutaten(e.target.value);
+                setZeigeZutatenWarnungNeu(false);
+              }}
             />
+            {/* Fix-Batch 71 (Florians Wunsch): jede Zutatenzeile braucht eine Menge (außer
+                "Prise") — egal ob manuell getippt, per Sprache/Foto erkannt oder von der
+                saisonalen KI-Idee vorbefüllt. */}
+            {zeigeZutatenWarnungNeu && neuZutatenPruefung.some((z) => !z.vollstaendig) && (
+              <p style={{ margin: 0, fontSize: 13, color: "var(--danger)" }}>
+                ⚠️ Bitte bei diesen Zutaten eine Menge angeben (außer bei „Prise"):{" "}
+                <strong>{neuZutatenPruefung.filter((z) => !z.vollstaendig).map((z) => z.zeile).join(" · ")}</strong>
+              </p>
+            )}
             <textarea placeholder="Zubereitung (optional)" rows={4} value={neuZubereitung} onChange={(e) => setNeuZubereitung(e.target.value)} />
             <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
               Rezept ist geschrieben für
@@ -830,17 +873,22 @@ export default function EssensplanClient({
             <button
               className="btn"
               disabled={pending || erkennungLaeuft}
-              onClick={() =>
+              onClick={() => {
+                if (!neuName) return;
+                if (neuZutatenPruefung.some((z) => !z.vollstaendig)) {
+                  setZeigeZutatenWarnungNeu(true);
+                  return;
+                }
                 startTransition(async () => {
-                  if (!neuName) return;
                   const portionenBasis = parseInt(neuPortionenBasis, 10) || 6;
                   await addRezept(neuName, neuZutaten, neuZubereitung || undefined, portionenBasis);
                   setNeuName("");
                   setNeuZutaten("");
                   setNeuZubereitung("");
                   setNeuPortionenBasis("6");
-                })
-              }
+                  setZeigeZutatenWarnungNeu(false);
+                });
+              }}
             >
               Rezept speichern
             </button>

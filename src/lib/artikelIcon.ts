@@ -12,6 +12,10 @@ import { erkenneKategorie } from "./kategorisierung";
 // Erbsen/Bohnen hatten vorher gar kein eigenes Icon und landeten beim generischen
 // Kategorie-Fallback statt bei einem passenden Symbol.
 const REGELN: { icon: string; keywords: string[] }[] = [
+  // Fix-Batch 71 (Florians Beispiel): verarbeitete/eingedoste Tomatenprodukte sollen ein
+  // Dosen-/Verpackungs-Icon zeigen statt der rohen Tomate — muss VOR der allgemeinen
+  // "tomate"-Regel stehen, sonst würde diese zuerst greifen.
+  { icon: "🥫", keywords: ["passierte tomate", "stückige tomate", "geschälte tomate", "tomatenmark"] },
   { icon: "🍅", keywords: ["tomate"] },
   { icon: "🥒", keywords: ["gurke", "zucchini"] },
   { icon: "🍎", keywords: ["apfel"] },

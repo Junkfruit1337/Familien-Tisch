@@ -15,7 +15,13 @@
 const SPEZIFIKATIONS_REGELN: { kategorie: string; keywords: string[] }[] = [
   {
     kategorie: "Konserven",
-    keywords: ["dose", "dosen", "konserve", "konserven", "eingelegt", "eingemacht", "einweckglas"],
+    keywords: [
+      "dose", "dosen", "konserve", "konserven", "eingelegt", "eingemacht", "einweckglas",
+      // Fix-Batch 71 (Florians Beispiel "passierte Tomaten"): Produkte, die praktisch immer
+      // in Dosen/Gläsern verkauft werden, auch ohne dass "Dose" im Namen steht.
+      "passierte tomate", "stückige tomate", "geschälte tomate", "tomatenmark",
+      "kichererbse", "kidneybohne",
+    ],
   },
   {
     kategorie: "Tiefkühl",

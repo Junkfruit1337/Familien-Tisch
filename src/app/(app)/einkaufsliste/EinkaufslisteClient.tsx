@@ -19,6 +19,7 @@ import {
   lehneArtikelAb,
   erkenneArtikelAusText,
   erkenneEinkaufslisteAusFoto,
+  listErledigteArtikel,
 } from "./actions";
 import { pruefeZutatenFuerRezept, uebernehmeZusaetzlicheZutaten } from "../essensplan/actions";
 import { erkenneKategorie } from "@/lib/kategorisierung";
@@ -185,6 +186,7 @@ type ListenVorschauZeile = { name: string; menge: string; ausgewaehlt: boolean }
 export default function EinkaufslisteClient({
   istEltern,
   artikel,
+  erledigtInitial,
   wuensche,
   kategorien,
   vorschlaege,
@@ -194,6 +196,7 @@ export default function EinkaufslisteClient({
 }: {
   istEltern: boolean;
   artikel: Artikel[];
+  erledigtInitial: { items: Artikel[]; gesamtAnzahl: number };
   wuensche: Wunsch[];
   kategorien: Kategorie[];
   vorschlaege: Vorschlag[];
@@ -326,16 +329,44 @@ export default function EinkaufslisteClient({
   }
 
   const nachKategorie = useMemo(() => {
-    const offene = artikel.filter((a) => !a.erledigt);
     const gruppen: Record<string, Artikel[]> = {};
-    for (const a of offene) {
+    for (const a of artikel) {
       gruppen[a.kategorieName] = gruppen[a.kategorieName] || [];
       gruppen[a.kategorieName].push(a);
     }
     return gruppen;
   }, [artikel]);
 
-  const erledigt = artikel.filter((a) => a.erledigt);
+  // Fix-Batch 71 (Florians Wunsch): "Bereits eingekauft" auf 50 gedeckelt, mit "mehr
+  // anzeigen" höher ladbar — Historie bleibt komplett in der Datenbank erhalten (Fix-Batch
+  // 67), es wird nur nicht mehr alles auf einmal angezeigt/geladen.
+  const [erledigt, setErledigt] = useState(erledigtInitial.items);
+  const [erledigtGesamt, setErledigtGesamt] = useState(erledigtInitial.gesamtAnzahl);
+  const [erledigtLimit, setErledigtLimit] = useState(50);
+  const [erledigtLaedt, setErledigtLaedt] = useState(false);
+
+  // Nach jeder Server-Aktion (z.B. ein anderer Artikel wird abgehakt) liefert Next.js frische
+  // Props — die frischesten 50 wieder als Ausgangspunkt übernehmen, statt an einer evtl.
+  // schon höher geladenen, jetzt veralteten Auswahl festzuhalten.
+  useEffect(() => {
+    setErledigt(erledigtInitial.items);
+    setErledigtGesamt(erledigtInitial.gesamtAnzahl);
+    setErledigtLimit(50);
+  }, [erledigtInitial]);
+
+  async function mehrErledigteLaden() {
+    setErledigtLaedt(true);
+    try {
+      const neuesLimit = erledigtLimit + 50;
+      const ergebnis = await listErledigteArtikel(neuesLimit);
+      setErledigt(ergebnis.items);
+      setErledigtGesamt(ergebnis.gesamtAnzahl);
+      setErledigtLimit(neuesLimit);
+    } finally {
+      setErledigtLaedt(false);
+    }
+  }
+
   const offeneWuensche = wuensche.filter((w) => w.status === "OFFEN");
   const entschiedeneWuensche = wuensche.filter((w) => w.status !== "OFFEN");
 
@@ -376,7 +407,7 @@ export default function EinkaufslisteClient({
       </div>
       {einkaufsmodus && (
         <p style={{ margin: "-8px 0 0", fontSize: 13, color: "var(--text-muted)" }}>
-          {erledigt.length} von {artikel.length} erledigt — Bildschirm bleibt an, solange der Einkaufsmodus läuft.
+          {erledigtGesamt} von {artikel.length + erledigtGesamt} erledigt — Bildschirm bleibt an, solange der Einkaufsmodus läuft.
         </p>
       )}
 
@@ -962,9 +993,9 @@ export default function EinkaufslisteClient({
         </div>
       ))}
 
-      {erledigt.length > 0 && (
+      {erledigtGesamt > 0 && (
         <details>
-          <summary style={{ cursor: "pointer", color: "var(--text-muted)" }}>Bereits eingekauft ({erledigt.length})</summary>
+          <summary style={{ cursor: "pointer", color: "var(--text-muted)" }}>Bereits eingekauft ({erledigtGesamt})</summary>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(66px, 1fr))", gap: 10, marginTop: 8 }}>
             {erledigt.map((a) => (
               <ArtikelKachel
@@ -980,6 +1011,19 @@ export default function EinkaufslisteClient({
               />
             ))}
           </div>
+          {/* Fix-Batch 71 (Florians Wunsch): standardmäßig nur 50, Rest per Nachladen — die
+              komplette Historie bleibt für spätere Statistiken vollständig in der Datenbank,
+              es wird nur nicht mehr alles auf einmal geladen/angezeigt. */}
+          {erledigt.length < erledigtGesamt && (
+            <button
+              className="btn-secondary"
+              style={{ fontSize: 13, marginTop: 8 }}
+              disabled={erledigtLaedt}
+              onClick={() => startTransition(mehrErledigteLaden)}
+            >
+              {erledigtLaedt ? "Lädt …" : `Weitere anzeigen (${erledigt.length} von ${erledigtGesamt})`}
+            </button>
+          )}
         </details>
       )}
 

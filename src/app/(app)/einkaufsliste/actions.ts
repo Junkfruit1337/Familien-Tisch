@@ -38,9 +38,19 @@ export async function erkenneEinkaufslisteAusFoto(
   }
 }
 
-// Ermittelt automatisch eine Kategorie-ID anhand des Artikelnamens (Stichwort-Erkennung).
-// Wird nur genutzt, wenn keine Kategorie manuell ausgewählt wurde.
+// Ermittelt automatisch eine Kategorie-ID anhand des Artikelnamens. Fix-Batch 71 (Florians
+// Wunsch, dass die KI "ständig dazulernt" — analog zur Icon-Lerndatenbank aus Fix-Batch 63):
+// zuerst wird geprüft, ob für diesen Artikelnamen schon einmal eine Kategorie manuell
+// bestätigt/korrigiert wurde (GelernteArtikelKategorie) — das hat Vorrang vor der reinen
+// Stichwort-Erkennung, egal ob der Artikel gerade manuell, per Sprache, Foto oder aus einem
+// Rezept angelegt wird. Erst wenn nichts gelernt ist, greift die Stichwort-Erkennung.
 export async function autoKategorieId(name: string): Promise<string | null> {
+  const normalisiert = name.trim().toLowerCase();
+  const gelernt = normalisiert ? await prisma.gelernteArtikelKategorie.findUnique({ where: { name: normalisiert } }) : null;
+  if (gelernt) {
+    const kategorie = await prisma.einkaufsKategorie.findUnique({ where: { name: gelernt.kategorieName } });
+    if (kategorie) return kategorie.id;
+  }
   const erkannt = erkenneKategorie(name);
   if (!erkannt) return null;
   const kategorie = await prisma.einkaufsKategorie.findUnique({ where: { name: erkannt } });
@@ -125,12 +135,46 @@ export async function mergeMenge(bestehend: string | null, neu?: string | null):
 // vorkommen, aber schadet nicht als Absicherung) und für neu hinzugefügte Artikel innerhalb
 // ihrer Kategorie IMMER deterministisch bleibt, statt von der (nicht garantierten) Datenbank-
 // internen Reihenfolge abzuhängen.
+// Fix-Batch 71 (Florians Wunsch): liefert nur noch die AKTIVEN (noch nicht erledigten)
+// Artikel — die "Bereits eingekauft"-Historie kann inzwischen (seit Fix-Batch 67 hakt
+// Einkaufsmodus-Antippen nur noch ab, statt zu löschen) beliebig groß werden und wird
+// deshalb separat, gedeckelt und mit "mehr anzeigen" nachgeladen (siehe listErledigteArtikel).
 export async function listArtikel() {
   return prisma.einkaufsArtikel.findMany({
-    where: { bestaetigt: true },
+    where: { bestaetigt: true, erledigt: false },
     include: { kategorie: true },
-    orderBy: [{ erledigt: "asc" }, { kategorie: { reihenfolge: "asc" } }, { createdAt: "asc" }],
+    orderBy: [{ kategorie: { reihenfolge: "asc" } }, { createdAt: "asc" }],
   });
+}
+
+// Fix-Batch 71: "Bereits eingekauft" gedeckelt auf `limit` (Standard 50, siehe Florians
+// Wunsch), neueste zuerst — mit "mehr anzeigen" im Client höher ladbar. Nichts wird dabei
+// gelöscht (siehe Fix-Batch 67), die komplette Historie bleibt für spätere Statistiken
+// vollständig in der Datenbank erhalten, es wird nur nicht mehr alles auf einmal geladen.
+export async function listErledigteArtikel(limit = 50) {
+  const [rohArtikel, gesamtAnzahl] = await Promise.all([
+    prisma.einkaufsArtikel.findMany({
+      where: { bestaetigt: true, erledigt: true },
+      include: { kategorie: true },
+      orderBy: { updatedAt: "desc" },
+      take: limit,
+    }),
+    prisma.einkaufsArtikel.count({ where: { bestaetigt: true, erledigt: true } }),
+  ]);
+  // Bereits hier auf die vom Client erwartete flache Form gebracht (kategorieName statt
+  // verschachteltem kategorie-Objekt), damit sowohl page.tsx als auch der client-seitige
+  // "mehr anzeigen"-Aufruf dieselbe Form bekommen.
+  const items = rohArtikel.map((a) => ({
+    id: a.id,
+    name: a.name,
+    menge: a.menge,
+    notiz: a.notiz,
+    iconOverride: a.iconOverride,
+    erledigt: a.erledigt,
+    kategorieId: a.kategorieId,
+    kategorieName: a.kategorie?.name ?? "Sonstiges",
+  }));
+  return { items, gesamtAnzahl };
 }
 
 // "Noch nicht zugesagt" (Fix-Batch 24): Zutaten, die aus dem Essensplan auf die Einkaufsliste
@@ -264,12 +308,25 @@ export async function listGelernteIcons(): Promise<Record<string, string>> {
 }
 
 // Eltern: Artikel manuell in eine andere Kategorie verschieben (übersteuert die Auto-Erkennung dauerhaft).
+// Fix-Batch 71: eine manuelle Kategorie-Korrektur wird ab sofort global für diesen
+// Artikelnamen gemerkt (siehe autoKategorieId oben), damit sie künftigen Eingaben desselben
+// Artikels zugutekommt, egal aus welcher Quelle sie kommen.
 export async function verschiebeArtikelKategorie(id: string, kategorieId: string) {
   await requireParent();
-  await prisma.einkaufsArtikel.update({
+  const artikel = await prisma.einkaufsArtikel.update({
     where: { id },
     data: { kategorieId: kategorieId || null },
   });
+  if (kategorieId) {
+    const kategorie = await prisma.einkaufsKategorie.findUnique({ where: { id: kategorieId } });
+    if (kategorie) {
+      await prisma.gelernteArtikelKategorie.upsert({
+        where: { name: artikel.name.trim().toLowerCase() },
+        update: { kategorieName: kategorie.name },
+        create: { name: artikel.name.trim().toLowerCase(), kategorieName: kategorie.name },
+      });
+    }
+  }
   revalidatePath("/einkaufsliste");
 }
 
