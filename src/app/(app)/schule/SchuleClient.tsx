@@ -856,8 +856,16 @@ export default function SchuleClient({
           </div>
           {foto && (
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={foto} alt="Vorschau" style={{ width: 60, height: 60, objectFit: "cover", borderRadius: 8 }} />
+              {/* Fix-Batch 69 (Florians Meldung): vorher nur eine winzige, nicht antippbare
+                  Vorschau — man konnte das gerade aufgenommene Foto vor dem Abschicken nicht
+                  richtig ansehen (erst danach, in der Noten-Übersicht, öffnete sich ein
+                  Groß-Bild). Jetzt dieselbe Groß-Ansicht (BildModal) auch schon hier nutzbar. */}
+              <img
+                src={foto}
+                alt="Vorschau"
+                style={{ width: 60, height: 60, objectFit: "cover", borderRadius: 8, cursor: "pointer" }}
+                onClick={() => setGrossesBild(foto)}
+              />
               <button className="btn-secondary" style={{ fontSize: 12, padding: "4px 8px" }} onClick={() => setFoto(null)}>
                 Entfernen
               </button>
