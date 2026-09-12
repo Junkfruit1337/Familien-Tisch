@@ -145,15 +145,15 @@ export default function DashboardClient({ daten, istEltern }: { daten: Daten; is
 
         {daten.schulEintraege.length === 0 && <p style={{ margin: "4px 0 0", color: "var(--text-muted)" }}>Nichts Anstehendes.</p>}
         {daten.schulEintraege.map((s) => (
-          <div key={s.id} className="card" style={{ marginTop: 8 }}>
-            <div style={{ fontWeight: 700, fontSize: 15 }}>
+          <div key={s.id} style={{ marginTop: 8, borderTop: "1px solid var(--border)", paddingTop: 8 }}>
+            <div style={{ fontWeight: 700, fontSize: "var(--font-md)" }}>
               {new Date(s.datum).toLocaleDateString("de-DE", { weekday: "long", day: "2-digit", month: "2-digit" })}
             </div>
             <div style={{ fontWeight: 600, marginTop: 2 }}>
               {s.titel} {istEltern && <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>· {s.personName}</span>}
             </div>
-            <div style={{ fontSize: 13, color: "var(--text-muted)" }}>noch {s.tageBis} Tag(e)</div>
-            {s.lerntipp && <div style={{ fontSize: 13, marginTop: 4 }}>💡 {s.lerntipp}</div>}
+            <div style={{ fontSize: "var(--font-sm)", color: "var(--text-muted)" }}>noch {s.tageBis} Tag(e)</div>
+            {s.lerntipp && <div style={{ fontSize: "var(--font-sm)", marginTop: 4 }}>💡 {s.lerntipp}</div>}
           </div>
         ))}
       </div>

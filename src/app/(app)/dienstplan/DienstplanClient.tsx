@@ -263,44 +263,63 @@ export default function DienstplanClient({
             Zum Tauschen: zwei Namen in derselben Zeile nacheinander anklicken.
           </p>
         )}
-        {(["morgens", "abends"] as const).map((zeitpunkt) => (
-          <div key={zeitpunkt} style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
-            <span style={{ fontSize: "var(--font-sm)", color: "var(--text-muted)", width: 70 }}>{zeitpunkt === "morgens" ? "Morgens" : "Abends"}</span>
-            {badplan[zeitpunkt].map((b, i) => {
-              const ausgewaehlt = badAuswahl?.zeitpunkt === zeitpunkt && badAuswahl.position === b.position;
-              return istEltern ? (
-                <span key={b.position} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  {i > 0 && <span style={{ color: "var(--text-muted)" }}>→</span>}
-                  <button
-                    className="btn-secondary"
-                    onClick={() => badKlick(zeitpunkt, b.position)}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 6,
-                      padding: "4px 10px",
-                      fontSize: "var(--font-sm)",
-                      background: ausgewaehlt ? b.kindFarbe : undefined,
-                      color: ausgewaehlt ? "#fff" : undefined,
-                      borderColor: b.kindFarbe,
-                    }}
-                  >
-                    {!ausgewaehlt && <PersonChip name={b.kindName} farbe={b.kindFarbe} size={16} />}
-                    {b.kindName}
-                  </button>
-                </span>
-              ) : (
-                <span key={b.position} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "var(--font-sm)" }}>
-                  {i > 0 && <span style={{ color: "var(--text-muted)" }}>→</span>}
-                  <span style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 10px 4px 4px", borderRadius: "var(--radius-pill)", border: `1px solid ${b.kindFarbe}` }}>
-                    <PersonChip name={b.kindName} farbe={b.kindFarbe} size={18} />
-                    {b.kindName}
-                  </span>
-                </span>
-              );
-            })}
-          </div>
-        ))}
+        {/* Redesign (Florians Feedback): die vorherige horizontale Kette mit Pfeilen brach auf
+            schmalen Bildschirmen mitten in der Zeile um und wirkte dadurch chaotisch/verrutscht.
+            Jetzt eine feste, immer senkrechte Reihenfolge-Liste je Tageszeit — bricht nie um,
+            sieht auf jeder Bildschirmbreite gleich aufgeräumt aus. */}
+        <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginTop: 8 }}>
+          {(["morgens", "abends"] as const).map((zeitpunkt) => (
+            <div key={zeitpunkt} style={{ flex: "1 0 150px" }}>
+              <div style={{ fontSize: "var(--font-sm)", color: "var(--text-muted)", fontWeight: 600, marginBottom: 6 }}>
+                {zeitpunkt === "morgens" ? "☀️ Morgens" : "🌙 Abends"}
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                {badplan[zeitpunkt].map((b, i) => {
+                  const ausgewaehlt = badAuswahl?.zeitpunkt === zeitpunkt && badAuswahl.position === b.position;
+                  return istEltern ? (
+                    <button
+                      key={b.position}
+                      className="btn-secondary"
+                      onClick={() => badKlick(zeitpunkt, b.position)}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                        padding: "6px 10px",
+                        fontSize: "var(--font-sm)",
+                        justifyContent: "flex-start",
+                        background: ausgewaehlt ? b.kindFarbe : undefined,
+                        color: ausgewaehlt ? "#fff" : undefined,
+                        borderColor: b.kindFarbe,
+                      }}
+                    >
+                      <span style={{ fontSize: "var(--font-xs)", color: ausgewaehlt ? "#fff" : "var(--text-muted)", width: 14 }}>{i + 1}.</span>
+                      {!ausgewaehlt && <PersonChip name={b.kindName} farbe={b.kindFarbe} size={18} />}
+                      {b.kindName}
+                    </button>
+                  ) : (
+                    <div
+                      key={b.position}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                        fontSize: "var(--font-sm)",
+                        padding: "6px 10px",
+                        borderRadius: "var(--radius-sm)",
+                        border: `1px solid ${b.kindFarbe}`,
+                      }}
+                    >
+                      <span style={{ fontSize: "var(--font-xs)", color: "var(--text-muted)", width: 14 }}>{i + 1}.</span>
+                      <PersonChip name={b.kindName} farbe={b.kindFarbe} size={18} />
+                      {b.kindName}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
         {istEltern && (
           <details style={{ marginTop: 10 }}>
             <summary style={{ fontSize: "var(--font-sm)" }}>Position dauerhaft festlegen</summary>
@@ -397,14 +416,14 @@ export default function DienstplanClient({
                 </option>
               ))}
             </select>
-            <div style={{ display: "flex", gap: 6 }}>
-              <button type="button" className={scope === "woche" ? "btn" : "btn-secondary"} style={{ flex: 1, fontSize: "var(--font-sm)" }} onClick={() => setScope("woche")}>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              <button type="button" className={scope === "woche" ? "btn" : "btn-secondary"} style={{ flex: "1 0 90px", fontSize: "var(--font-sm)" }} onClick={() => setScope("woche")}>
                 Ganze Woche
               </button>
-              <button type="button" className={scope === "tag" ? "btn" : "btn-secondary"} style={{ flex: 1, fontSize: "var(--font-sm)" }} onClick={() => setScope("tag")}>
+              <button type="button" className={scope === "tag" ? "btn" : "btn-secondary"} style={{ flex: "1 0 90px", fontSize: "var(--font-sm)" }} onClick={() => setScope("tag")}>
                 Einzelner Tag
               </button>
-              <button type="button" className={scope === "dauerhaft" ? "btn" : "btn-secondary"} style={{ flex: 1, fontSize: "var(--font-sm)" }} onClick={() => setScope("dauerhaft")}>
+              <button type="button" className={scope === "dauerhaft" ? "btn" : "btn-secondary"} style={{ flex: "1 0 90px", fontSize: "var(--font-sm)" }} onClick={() => setScope("dauerhaft")}>
                 Dauerhaft
               </button>
             </div>
