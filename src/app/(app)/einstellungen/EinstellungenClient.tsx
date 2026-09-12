@@ -30,7 +30,6 @@ import {
   deleteTagesroutine,
   setKoerperpflegetag,
 } from "../dienstplan/actions";
-import NotengewichtungSektion from "@/components/NotengewichtungSektion";
 import PushBenachrichtigungen from "@/components/PushBenachrichtigungen";
 import Spracheingabe from "@/components/Spracheingabe";
 import SeitenTitel from "@/components/SeitenTitel";
@@ -66,12 +65,10 @@ type Person = { id: string; name: string; rolle: string; farbe: string; aktiv: b
 type Tagesroutine = { id: string; kategorie: string; text: string };
 type Koerperpflegetag = { wochentag: number; text: string };
 type Kategorie = { id: string; name: string; reihenfolge: number };
-type Gewichtung = { fachId: string; fachName: string; gewichtungen: { art: string; gewichtung: number }[] };
 type Kind = {
   id: string;
   name: string;
   faecher: { id: string; name: string }[];
-  gewichtung: Gewichtung[];
   bundesland: string | null;
   klassenstufe: number | null;
   klasse: string | null;
@@ -912,9 +909,10 @@ export default function EinstellungenClient({
       {grossesTicketBildModal}
       <SeitenTitel icon="⚙️" farbe={BEREICH_FARBEN.einstellungen}>Einstellungen</SeitenTitel>
 
+      <details>
+        <summary style={{ cursor: "pointer", fontWeight: 600 }}>📋 Feedback &amp; Meldungen</summary>
+        <div style={{ display: "flex", flexDirection: "column", gap: 16, marginTop: 10 }}>
       {fehlerMeldenSektion}
-
-      {geburtstagSektion}
 
       {hausreparaturenSektion}
 
@@ -1003,9 +1001,16 @@ export default function EinstellungenClient({
           </div>
         </details>
       )}
+        </div>
+      </details>
 
       <details>
-        <summary style={{ cursor: "pointer", fontWeight: 600 }}>👪 Personen &amp; Zugänge</summary>
+        <summary style={{ cursor: "pointer", fontWeight: 600 }}>👪 Familie &amp; Zugänge</summary>
+        <div style={{ display: "flex", flexDirection: "column", gap: 16, marginTop: 10 }}>
+      {geburtstagSektion}
+
+      <details>
+        <summary style={{ cursor: "pointer", fontWeight: 600 }}>Personen &amp; Zugänge</summary>
         <div className="card" style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
           {personen.map((p) => (
             <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", borderTop: "1px solid var(--border)", paddingTop: 8 }}>
@@ -1089,6 +1094,12 @@ export default function EinstellungenClient({
           </details>
         </div>
       </details>
+        </div>
+      </details>
+
+      <details>
+        <summary style={{ cursor: "pointer", fontWeight: 600 }}>🏠 Verwaltung</summary>
+        <div style={{ display: "flex", flexDirection: "column", gap: 16, marginTop: 10 }}>
 
       <details>
         <summary style={{ cursor: "pointer", fontWeight: 600 }}>🛒 Einkaufsliste: Kategorien</summary>
@@ -1137,7 +1148,7 @@ export default function EinstellungenClient({
 
       {kinder.length > 0 && (
         <details>
-          <summary style={{ cursor: "pointer", fontWeight: 600 }}>🎓 Schule: Fächer &amp; Notengewichtung</summary>
+          <summary style={{ cursor: "pointer", fontWeight: 600 }}>🎓 Schule: Fächer verwalten</summary>
           <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 8 }}>
             {kinder.length > 1 && (
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -1172,9 +1183,9 @@ export default function EinstellungenClient({
               </details>
             )}
             {kind && schulprofilUndFaecherKarten(kind)}
-            {kind && (
-              <NotengewichtungSektion kindId={kind.id} kindName={kind.name} gewichtung={kind.gewichtung} />
-            )}
+            <p style={{ fontSize: 12, color: "var(--text-muted)", margin: 0 }}>
+              Die Notengewichtung findet sich jetzt direkt auf der Schule-Seite bei den Noten des jeweiligen Kindes.
+            </p>
           </div>
         </details>
       )}
@@ -1446,13 +1457,20 @@ export default function EinstellungenClient({
           </div>
         </div>
       </details>
+        </div>
+      </details>
+
+      <details>
+        <summary style={{ cursor: "pointer", fontWeight: 600 }}>🔔 Benachrichtigungen &amp; Verlauf</summary>
+        <div style={{ display: "flex", flexDirection: "column", gap: 16, marginTop: 10 }}>
+      <PushBenachrichtigungen />
 
       <details className="card">
-        <summary style={{ cursor: "pointer", fontWeight: 600 }}>🕘 Änderungshistorie ({historie.length})</summary>
+        <summary style={{ cursor: "pointer", fontWeight: 600 }}>Änderungshistorie ({historie.length})</summary>
         <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 10 }}>
           {historie.length === 0 && <p style={{ margin: 0, color: "var(--text-muted)" }}>Noch keine Änderungen erfasst.</p>}
           {historie.map((h) => (
-            <div key={h.id} style={{ fontSize: 13, borderBottom: "1px solid rgba(128,128,128,0.15)", paddingBottom: 4 }}>
+            <div key={h.id} style={{ fontSize: "var(--font-sm)", borderBottom: "1px solid var(--border)", paddingBottom: 4 }}>
               <span style={{ color: "var(--text-muted)" }}>
                 {new Date(h.zeitpunkt).toLocaleString("de-DE", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
               </span>{" "}
@@ -1462,8 +1480,8 @@ export default function EinstellungenClient({
           ))}
         </div>
       </details>
-
-      <PushBenachrichtigungen />
+        </div>
+      </details>
     </div>
   );
 }

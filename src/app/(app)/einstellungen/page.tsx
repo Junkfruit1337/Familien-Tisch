@@ -1,7 +1,7 @@
 import { getCurrentPerson } from "@/lib/auth";
 import { listPersonen, listMeineTickets, listAlleTickets, listHausprobleme } from "./actions";
 import { listKategorien } from "../einkaufsliste/actions";
-import { listKinder, listFaecher, listNotenGewichtung } from "../schule/actions";
+import { listKinder, listFaecher } from "../schule/actions";
 import { listDienstkatalog, listTagesroutinen, listKoerperpflegeplan } from "../dienstplan/actions";
 import { getAenderungshistorie } from "../dashboard/actions";
 import EinstellungenClient from "./EinstellungenClient";
@@ -22,12 +22,11 @@ export default async function EinstellungenPage() {
   const kinder = istEltern ? await listKinder() : person ? [person] : [];
   const kinderDaten = await Promise.all(
     kinder.map(async (k) => {
-      const [faecher, gewichtung] = await Promise.all([listFaecher(k.id), istEltern ? listNotenGewichtung(k.id) : Promise.resolve([])]);
+      const faecher = await listFaecher(k.id);
       return {
         id: k.id,
         name: k.name,
         faecher: faecher.map((f) => ({ id: f.id, name: f.name })),
-        gewichtung,
         bundesland: k.bundesland,
         klassenstufe: k.klassenstufe,
         klasse: k.klasse,

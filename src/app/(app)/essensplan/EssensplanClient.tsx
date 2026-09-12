@@ -24,6 +24,7 @@ import {
 } from "./actions";
 import SeitenTitel from "@/components/SeitenTitel";
 import Spracheingabe from "@/components/Spracheingabe";
+import PersonChip from "@/components/PersonChip";
 import { BEREICH_FARBEN } from "@/lib/bereichFarben";
 
 // Für die Foto-Erkennung etwas größer/hochwertiger als bei Notenfotos (Batch 3),
@@ -205,29 +206,36 @@ export default function EssensplanClient({
               <div>{t.eintrag?.rezeptName ?? "– kein Gericht –"}</div>
             )}
             {istEltern && t.eintrag && (
-              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                <button className="btn-secondary" style={{ fontSize: 12 }} onClick={() => klickSchloss(t)}>
-                  {t.eintrag.gelockt ? "🔒 Gesperrt" : "🔓 Entsperrt"}
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", borderTop: "1px solid var(--border)", paddingTop: 8 }}>
+                <button className="btn-secondary" style={{ fontSize: "var(--font-xs)" }} onClick={() => klickSchloss(t)}>
+                  {t.eintrag.gelockt ? "🔓 Entsperren" : "🔒 Sperren"}
                 </button>
+                {t.eintrag.gelockt && <span className="pill pill-neutral">Gesperrt</span>}
                 {!t.eintrag.gelockt && (
-                  <button className="btn-secondary" style={{ fontSize: 12 }} onClick={() => zutatenHinzufuegen(t.eintrag!.id)} disabled={pending}>
-                    Zutaten zur Einkaufsliste hinzufügen
+                  <button className="btn-secondary" style={{ fontSize: "var(--font-xs)" }} onClick={() => zutatenHinzufuegen(t.eintrag!.id)} disabled={pending}>
+                    🛒 Zutaten zur Einkaufsliste hinzufügen
                   </button>
                 )}
               </div>
             )}
 
             {istEltern && t.eintrag && (
-              <div>
+              <div style={{ borderTop: "1px solid var(--border)", paddingTop: 8 }}>
                 {(() => {
                   const aktiveIds = t.eintrag!.esserIds.length === 0 ? familie.map((f) => f.id) : t.eintrag!.esserIds;
                   const esserSumme = familie.filter((f) => aktiveIds.includes(f.id)).reduce((s, f) => s + f.portionsGewicht, 0);
                   const gesamtPortionen = esserSumme + t.eintrag!.extraPortionen;
                   const portionenBasis = rezepteAlle.find((r) => r.id === t.eintrag!.rezeptId)?.portionenBasis ?? 6;
+                  const diffProzent = Math.round((t.eintrag!.esserFaktor - 1) * 100);
+                  const mengenHinweis =
+                    Math.abs(diffProzent) < 3
+                      ? "passt genau zur Rezeptmenge"
+                      : diffProzent > 0
+                      ? `+${diffProzent}% mehr Zutaten als im Rezept`
+                      : `${diffProzent}% weniger Zutaten als im Rezept`;
                   return (
-                    <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 4 }}>
-                      Wer isst mit? ({gesamtPortionen.toFixed(1)} von {portionenBasis} Portionen · Faktor {t.eintrag!.esserFaktor.toFixed(2)})
-                      {t.eintrag!.gelockt && " · 🔒 gesperrt"}
+                    <div style={{ fontSize: "var(--font-xs)", color: "var(--text-muted)", marginBottom: 4 }}>
+                      👪 Wer isst mit? ({gesamtPortionen.toFixed(1)} von {portionenBasis} Portionen · {mengenHinweis})
                     </div>
                   );
                 })()}
@@ -239,20 +247,30 @@ export default function EssensplanClient({
                         key={f.id}
                         className="btn-secondary"
                         disabled={t.eintrag!.gelockt}
-                        style={{ fontSize: 12, padding: "4px 10px", background: aktiv ? f.farbe : undefined, color: aktiv ? "#fff" : undefined }}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 6,
+                          fontSize: "var(--font-xs)",
+                          padding: "4px 10px",
+                          background: aktiv ? f.farbe : undefined,
+                          color: aktiv ? "#fff" : undefined,
+                          borderColor: aktiv ? f.farbe : undefined,
+                        }}
                         onClick={() => {
                           const aktuelle = t.eintrag!.esserIds.length === 0 ? familie.map((x) => x.id) : t.eintrag!.esserIds;
                           const neu = aktuelle.includes(f.id) ? aktuelle.filter((id) => id !== f.id) : [...aktuelle, f.id];
                           startTransition(() => setEsser(t.eintrag!.id, neu).then(() => ladeWoche(offset)));
                         }}
                       >
+                        {!aktiv && <PersonChip name={f.name} farbe={f.farbe} size={16} />}
                         {f.name}
                       </button>
                     );
                   })}
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 6 }}>
-                  <span style={{ fontSize: 12, color: "var(--text-muted)" }}>+ Gäste-Portionen (z. B. Besuch):</span>
+                  <span style={{ fontSize: "var(--font-xs)", color: "var(--text-muted)" }}>+ Gäste-Portionen (z. B. Besuch):</span>
                   <input
                     type="number"
                     min={0}
@@ -476,19 +494,21 @@ export default function EssensplanClient({
                 )}
                 {istEltern && (
                   <button
-                    className="btn-secondary"
-                    style={{ fontSize: 12, alignSelf: "flex-start" }}
-                    onClick={() =>
+                    className="btn-icon btn-icon-danger"
+                    title="Rezept löschen"
+                    style={{ alignSelf: "flex-start" }}
+                    onClick={() => {
+                      if (!confirm(`Rezept „${r.name}" wirklich löschen?`)) return;
                       startTransition(async () => {
                         try {
                           await deleteRezept(r.id);
                         } catch (e: any) {
                           alert(e.message);
                         }
-                      })
-                    }
+                      });
+                    }}
                   >
-                    Löschen
+                    🗑
                   </button>
                 )}
               </div>

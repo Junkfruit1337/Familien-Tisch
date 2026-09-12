@@ -8,6 +8,7 @@ import {
   getSparziel,
   listSchulEintraege,
   listFerienFuerKind,
+  listNotenGewichtung,
 } from "./actions";
 import SchuleClient from "./SchuleClient";
 
@@ -18,13 +19,18 @@ export default async function SchulePage() {
 
   const kinderDaten = await Promise.all(
     kinder.map(async (k) => {
-      const [faecher, noten, stand, taschengeld, sparziel, ferien] = await Promise.all([
+      const [faecher, noten, stand, taschengeld, sparziel, ferien, gewichtung] = await Promise.all([
         listFaecher(k.id),
         listNoten(k.id),
         kontostand(k.id),
         listTaschengeld(k.id),
         getSparziel(k.id),
         listFerienFuerKind(k.id),
+        // Notengewichtung ist Eltern-only (siehe requireParent in listNotenGewichtung) — sonst
+        // wirft der Aufruf für Kinder einen Fehler (Fix-Batch 50 hat genau das schon einmal
+        // an anderer Stelle korrigiert). Redesign Fix-Batch 58: von den Einstellungen hierher
+        // verschoben, direkt neben die restliche Noten-Verwaltung, wo sie hingehört.
+        istEltern ? listNotenGewichtung(k.id) : Promise.resolve([]),
       ]);
       return {
         id: k.id,
@@ -56,6 +62,7 @@ export default async function SchulePage() {
         })),
         sparziel: sparziel ? { bezeichnung: sparziel.bezeichnung, zielbetrag: sparziel.zielbetrag } : null,
         ferien,
+        gewichtung,
       };
     })
   );

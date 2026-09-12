@@ -21,6 +21,7 @@ import HistorieVerlauf from "@/components/HistorieVerlauf";
 import Spracheingabe from "@/components/Spracheingabe";
 import { erkenneSparzielIcon } from "@/lib/sparzielIcon";
 import SeitenTitel from "@/components/SeitenTitel";
+import NotengewichtungSektion from "@/components/NotengewichtungSektion";
 import { BEREICH_FARBEN } from "@/lib/bereichFarben";
 
 type Note = {
@@ -51,6 +52,7 @@ type Kind = {
   taschengeld: Transaktion[];
   sparziel: { bezeichnung: string; zielbetrag: number } | null;
   ferien: FerienUebersicht;
+  gewichtung: { fachId: string; fachName: string; gewichtungen: { art: string; gewichtung: number }[] }[];
 };
 type SchulEintrag = {
   id: string;
@@ -1032,6 +1034,12 @@ export default function SchuleClient({
         })}
         {kind.noten.length === 0 && <p style={{ color: "var(--text-muted)" }}>Noch keine Noten.</p>}
       </div>
+
+      {/* Redesign Fix-Batch 58: von den Einstellungen hierher verschoben — Florians Wunsch,
+          dass Dinge dort einsortiert werden, wo sie inhaltlich hingehören. Wer gerade die
+          Noten eines Kindes betrachtet, will die Gewichtung direkt hier anpassen können,
+          nicht in einem separaten, leicht zu übersehenden Einstellungen-Unterpunkt. */}
+      {istEltern && <NotengewichtungSektion kindId={kind.id} kindName={kind.name} gewichtung={kind.gewichtung} />}
 
       <details>
         <summary style={{ cursor: "pointer", color: "var(--text-muted)" }}>Verlauf Taschengeld</summary>
