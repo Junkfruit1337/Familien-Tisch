@@ -264,7 +264,6 @@ export default function EssensplanClient({
   const [bearbeiteRezeptId, setBearbeiteRezeptId] = useState<string | null>(null);
   const [rezeptZutatenEntwurf, setRezeptZutatenEntwurf] = useState("");
   const [rezeptZubereitungEntwurf, setRezeptZubereitungEntwurf] = useState("");
-  const [bearbeiteKategorie, setBearbeiteKategorie] = useState("Hauptgang");
   const [extraEntwuerfe, setExtraEntwuerfe] = useState<Record<string, string>>({});
 
   const [sperrDialog, setSperrDialog] = useState<{ eintragId: string; herkuenfte: Herkunft[] } | null>(null);
@@ -724,18 +723,26 @@ export default function EssensplanClient({
                 {r.name} <span className="pill pill-neutral" style={{ fontSize: 11 }}>{r.kategorie}</span>
               </summary>
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {/* Fix-Batch 81 (Florians Bug-Meldung: "man kann nicht die Kategorie ändern"):
+                    die Kategorie war vorher nur über den unbeschrifteten Umweg "✎ Zutaten/
+                    Zubereitung bearbeiten" erreichbar (nicht auffindbar) — jetzt immer
+                    sichtbar und sofort beim Auswählen gespeichert, kein Extra-Klick nötig. */}
+                <label style={{ fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}>
+                  Kategorie
+                  <select
+                    value={r.kategorie}
+                    disabled={!istEltern}
+                    onChange={(e) => startTransition(() => updateRezept(r.id, { kategorie: e.target.value }))}
+                  >
+                    {REZEPT_KATEGORIEN.map((k) => (
+                      <option key={k} value={k}>
+                        {k}
+                      </option>
+                    ))}
+                  </select>
+                </label>
                 {bearbeiteRezeptId === r.id ? (
                   <>
-                    <label style={{ fontSize: 13, display: "flex", flexDirection: "column", gap: 4 }}>
-                      Kategorie
-                      <select value={bearbeiteKategorie} onChange={(e) => setBearbeiteKategorie(e.target.value)}>
-                        {REZEPT_KATEGORIEN.map((k) => (
-                          <option key={k} value={k}>
-                            {k}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
                     <label style={{ fontSize: 13, display: "flex", flexDirection: "column", gap: 4 }}>
                       Zutaten (eine Zeile je Zutat, z. B. "200 g Mehl")
                       <textarea
@@ -802,7 +809,6 @@ export default function EssensplanClient({
                             await updateRezept(r.id, {
                               zutaten: rezeptZutatenEntwurf,
                               zubereitung: rezeptZubereitungEntwurf || undefined,
-                              kategorie: bearbeiteKategorie,
                             });
                             setBearbeiteRezeptId(null);
                           });
@@ -835,7 +841,6 @@ export default function EssensplanClient({
                           setBearbeiteRezeptId(r.id);
                           setRezeptZutatenEntwurf(r.zutaten);
                           setRezeptZubereitungEntwurf(r.zubereitung ?? "");
-                          setBearbeiteKategorie(r.kategorie);
                         }}
                       >
                         ✎ Zutaten/Zubereitung bearbeiten
