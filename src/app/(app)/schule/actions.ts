@@ -6,7 +6,14 @@ import { logAenderung } from "@/lib/history";
 import { revalidatePath } from "next/cache";
 import { sendePushAnEltern, sendePushAnPerson } from "@/lib/push";
 import { erkenneNoteAusSprache, type ErkannteNote, erkenneSchulEintragAusSprache, type ErkannterSchulEintrag, pruefeFachDuplikatKI } from "@/lib/spracheErkennung";
-import { erstelleSpickzettel, erklaereAufgabe, generiereUebungsaufgaben, type Uebungsaufgabe } from "@/lib/lernhilfe";
+import {
+  erstelleSpickzettel,
+  erklaereAufgabe,
+  erklaereThema,
+  generiereUebungsaufgaben,
+  generiereUebungsaufgabenZuThema,
+  type Uebungsaufgabe,
+} from "@/lib/lernhilfe";
 
 function betragFuerNote(note: number): number {
   if (note === 1) return 10;
@@ -610,6 +617,36 @@ export async function generiereUebungsaufgabenVorschau(
     return { ok: true, aufgaben };
   } catch (err) {
     console.error("Übungsaufgaben-Erstellung fehlgeschlagen:", err);
+    const fehler = err instanceof Error ? err.message : "Unbekannter Fehler bei der Übungsaufgaben-Erstellung.";
+    return { ok: false, fehler };
+  }
+}
+
+// Fix-Batch 65 (Florians Wunsch): Erklär-/Übungsmodus auch per Sprache/Text nutzbar, indem
+// man ein ganzes Thema beschreibt, statt zwingend ein Foto zu machen.
+export async function erklaereThemaVorschau(
+  thema: string
+): Promise<{ ok: true; text: string } | { ok: false; fehler: string }> {
+  await requirePerson();
+  try {
+    const text = await erklaereThema(thema);
+    return { ok: true, text };
+  } catch (err) {
+    console.error("Erklärmodus (Thema) fehlgeschlagen:", err);
+    const fehler = err instanceof Error ? err.message : "Unbekannter Fehler beim Erklären.";
+    return { ok: false, fehler };
+  }
+}
+
+export async function generiereUebungsaufgabenZuThemaVorschau(
+  thema: string
+): Promise<{ ok: true; aufgaben: Uebungsaufgabe[] } | { ok: false; fehler: string }> {
+  await requirePerson();
+  try {
+    const aufgaben = await generiereUebungsaufgabenZuThema(thema);
+    return { ok: true, aufgaben };
+  } catch (err) {
+    console.error("Übungsaufgaben-Erstellung (Thema) fehlgeschlagen:", err);
     const fehler = err instanceof Error ? err.message : "Unbekannter Fehler bei der Übungsaufgaben-Erstellung.";
     return { ok: false, fehler };
   }

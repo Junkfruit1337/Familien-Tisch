@@ -5,7 +5,10 @@ import {
   erstelleSpickzettelVorschau,
   erklaereAufgabeVorschau,
   generiereUebungsaufgabenVorschau,
+  erklaereThemaVorschau,
+  generiereUebungsaufgabenZuThemaVorschau,
 } from "@/app/(app)/schule/actions";
+import Spracheingabe from "@/components/Spracheingabe";
 
 type Uebungsaufgabe = { frage: string; antwort: string };
 type Modus = "SPICKZETTEL" | "ERKLAEREN" | "UEBEN";
@@ -70,6 +73,28 @@ function FotoAuswahl({ disabled, onFoto }: { disabled: boolean; onFoto: (base64:
           }}
         />
       </label>
+    </div>
+  );
+}
+
+// Fix-Batch 65 (Florians Wunsch): Erklär-/Übungsmodus sollen sich nicht nur per Foto,
+// sondern auch per Sprache/Text bedienen lassen — man beschreibt einfach das ganze Thema,
+// statt zwingend eine konkrete Aufgabe fotografieren zu müssen.
+function ThemaEingabe({ disabled, onSenden, platzhalter }: { disabled: boolean; onSenden: (text: string) => void; platzhalter: string }) {
+  const [text, setText] = useState("");
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      <Spracheingabe disabled={disabled} onErgebnis={setText} />
+      <textarea
+        placeholder={platzhalter}
+        rows={2}
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        disabled={disabled}
+      />
+      <button className="btn" disabled={disabled || !text.trim()} onClick={() => onSenden(text)}>
+        Los
+      </button>
     </div>
   );
 }
@@ -182,6 +207,24 @@ export default function LernHilfe() {
     }
   }
 
+  async function themaVerarbeiten(text: string) {
+    setLaeuft(true);
+    setErgebnisText(null);
+    try {
+      if (modus === "ERKLAEREN") {
+        const ergebnis = await erklaereThemaVorschau(text);
+        if (!ergebnis.ok) return alert(ergebnis.fehler);
+        setErgebnisText(ergebnis.text);
+      } else if (modus === "UEBEN") {
+        const ergebnis = await generiereUebungsaufgabenZuThemaVorschau(text);
+        if (!ergebnis.ok) return alert(ergebnis.fehler);
+        setUebungsaufgaben(ergebnis.aufgaben);
+      }
+    } finally {
+      setLaeuft(false);
+    }
+  }
+
   function zurueck() {
     setModus(null);
     setErgebnisText(null);
@@ -228,12 +271,18 @@ export default function LernHilfe() {
           <>
             <span style={{ fontSize: 13, color: "var(--text-muted)" }}>Foto der Aufgabe, die du nicht verstehst:</span>
             <FotoAuswahl disabled={laeuft} onFoto={fotoVerarbeiten} />
+            <div style={{ textAlign: "center", fontSize: 12, color: "var(--text-muted)" }}>— oder —</div>
+            <span style={{ fontSize: 13, color: "var(--text-muted)" }}>Thema per Sprache oder Text beschreiben:</span>
+            <ThemaEingabe disabled={laeuft} onSenden={themaVerarbeiten} platzhalter="z. B. Erkläre mir Bruchrechnen" />
           </>
         )}
         {modus === "UEBEN" && (
           <>
             <span style={{ fontSize: 13, color: "var(--text-muted)" }}>Foto einer Aufgabe — du bekommst 3 neue, ähnliche Aufgaben zum Selbst-Üben:</span>
             <FotoAuswahl disabled={laeuft} onFoto={fotoVerarbeiten} />
+            <div style={{ textAlign: "center", fontSize: 12, color: "var(--text-muted)" }}>— oder —</div>
+            <span style={{ fontSize: 13, color: "var(--text-muted)" }}>Thema per Sprache oder Text beschreiben:</span>
+            <ThemaEingabe disabled={laeuft} onSenden={themaVerarbeiten} platzhalter="z. B. Übungsaufgaben zu Bruchrechnen" />
           </>
         )}
 
