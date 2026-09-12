@@ -423,20 +423,23 @@ export async function addKategorie(name: string) {
   revalidatePath("/einstellungen");
 }
 
-// Kategorie-Reihenfolge in der App änderbar machen (Fragenkatalog Frage 7).
-export async function verschiebeKategorie(id: string, richtung: "hoch" | "runter") {
+// Fix-Batch 45 Nachtrag (Bugticket "Sortierung funktioniert nicht zuverlässig"): die
+// vorherige ↑/↓-Tausch-Logik (verschiebeKategorie) war anfällig für schnelles Doppelklicken —
+// React zeigt während einer laufenden Transition noch die alte Liste, ein zweiter Klick vor
+// dem Neuladen konnte dieselbe Position nochmal verschieben und landete dann woanders als
+// erwartet. Jetzt direkt die gewünschte 1-basierte Position übergeben — das berechnet die
+// GESAMTE Reihenfolge neu und ist dadurch unabhängig davon, wie oft/schnell geklickt wurde.
+export async function setzeKategorieReihenfolge(id: string, neuePosition1Basiert: number) {
   await requireParent();
   const kategorien = await prisma.einkaufsKategorie.findMany({ orderBy: { reihenfolge: "asc" } });
-  const index = kategorien.findIndex((k) => k.id === id);
-  if (index === -1) return;
-  const zielIndex = richtung === "hoch" ? index - 1 : index + 1;
-  if (zielIndex < 0 || zielIndex >= kategorien.length) return;
-  const a = kategorien[index];
-  const b = kategorien[zielIndex];
-  await prisma.$transaction([
-    prisma.einkaufsKategorie.update({ where: { id: a.id }, data: { reihenfolge: b.reihenfolge } }),
-    prisma.einkaufsKategorie.update({ where: { id: b.id }, data: { reihenfolge: a.reihenfolge } }),
-  ]);
+  const ohneZiel = kategorien.filter((k) => k.id !== id);
+  const ziel = kategorien.find((k) => k.id === id);
+  if (!ziel) return;
+  const einfuegeIndex = Math.max(0, Math.min(ohneZiel.length, neuePosition1Basiert - 1));
+  const neueReihenfolge = [...ohneZiel.slice(0, einfuegeIndex), ziel, ...ohneZiel.slice(einfuegeIndex)];
+  await prisma.$transaction(
+    neueReihenfolge.map((k, i) => prisma.einkaufsKategorie.update({ where: { id: k.id }, data: { reihenfolge: i } }))
+  );
   revalidatePath("/einkaufsliste");
   revalidatePath("/einstellungen");
 }

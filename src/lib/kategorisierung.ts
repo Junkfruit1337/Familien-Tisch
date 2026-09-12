@@ -1,13 +1,28 @@
 // Einfache Stichwort-Erkennung für die automatische Kategorisierung von Einkaufsartikeln.
-// Deckt die 8 Standard-Kategorien aus dem Seed ab (alles andere bleibt "Sonstiges").
 // Fix-Batch 28: Obst und Gemüse getrennt (Florians Wunsch), "dattel(n)" ergänzt, und das
 // bare Stichwort "ei" entfernt — es traf als Teilstring versehentlich auch "entsteint",
 // "Reis", "Seife" usw. und kategorisierte sie fälschlich als Milchprodukte.
-// Fix-Batch 35 Nachtrag (Bugticket "fehlende Kategorisierung"): Stichwortliste deutlich
-// erweitert, analog zur breiteren Liste in artikelIcon.ts. Bewusst NICHT erweitert um
-// Grundzutaten/Gewürze/Süßes (Nudeln, Reis, Zucker, Gewürze, Honig, Süßigkeiten, Öl,
-// Essig, Nüsse) — die passen semantisch zu keiner der 8 bestehenden Kategorien gut; das
-// wäre eine neue 9. Kategorie ("Vorrat"?) und damit Florians Entscheidung, nicht meine.
+// Fix-Batch 35 Nachtrag (Ticket "Verbesserte Produktkategorisierung nach Spezifikation"):
+// zwei neue Kategorien "Konserven" und "Vorrat" ergänzt (Florian bestätigt: mehr Kategorien
+// sind gewünscht) — Verpackungs-/Zubereitungsart (Dose, TK) wird jetzt VOR der reinen
+// Zutaten-Erkennung geprüft, damit z.B. "Erbsen (Dose)" als Konserven statt als Gemüse
+// einsortiert wird, und "Fisch TK" sicher als Tiefkühl statt Fleisch & Fisch.
+
+// Spezifikations-Modifikatoren — haben Vorrang vor der reinen Zutaten-Erkennung unten,
+// weil die Verpackungs-/Zubereitungsart die Regal-/Kategorie-Zuordnung im Supermarkt stärker
+// bestimmt als die reine Zutat (Erbsen frisch vs. Erbsen aus der Dose landen im Laden in
+// komplett unterschiedlichen Gängen).
+const SPEZIFIKATIONS_REGELN: { kategorie: string; keywords: string[] }[] = [
+  {
+    kategorie: "Konserven",
+    keywords: ["dose", "dosen", "konserve", "konserven", "eingelegt", "eingemacht", "einweckglas"],
+  },
+  {
+    kategorie: "Tiefkühl",
+    keywords: ["tiefkühl", "tiefgefroren", "gefroren", "tk-", "tk ", "(tk)", " tk)", "tk)"],
+  },
+];
+
 const REGELN: { kategorie: string; keywords: string[] }[] = [
   {
     kategorie: "Obst",
@@ -57,10 +72,7 @@ const REGELN: { kategorie: string; keywords: string[] }[] = [
   },
   {
     kategorie: "Tiefkühl",
-    keywords: [
-      "tiefkühl", "tk-", "pizza", "eis ", "eiscreme", "pommes", "fischstäbchen",
-      "gefroren", "tiefgefroren", "rahmspinat",
-    ],
+    keywords: ["pizza", "eis ", "eiscreme", "pommes", "fischstäbchen", "rahmspinat"],
   },
   {
     kategorie: "Getränke",
@@ -80,16 +92,37 @@ const REGELN: { kategorie: string; keywords: string[] }[] = [
       "weichspüler", "reiniger", "putzmittel", "müllbeutel",
     ],
   },
+  {
+    // Neue Kategorie (Fix-Batch 35 Nachtrag) für Grundzutaten, die zu keiner der obigen
+    // gut passen — vorher landeten die alle unspezifisch in "Sonstiges".
+    kategorie: "Vorrat",
+    keywords: [
+      "nudel", "spaghetti", "pasta", "reis", "linsen", "couscous", "quinoa",
+      "zucker", "salz", "essig", "öl", "olivenöl", "honig", "marmelade",
+      "nuss-nougat", "nuss", "erdnuss", "mandel", "cashew", "walnuss",
+      "schokolade", "schoko", "süßigkeit", "bonbon", "gummibär", "chips",
+      "knabber", "gewürz", "curry", "chili", "pfeffer", "paprikapulver",
+      "zimt", "vanille", "backpulver", "brühe", "senf", "ketchup",
+      "mayonnaise", "sojasauce", "müsli", "cornflakes", "haferflocken",
+    ],
+  },
 ];
 
 /**
  * Erkennt anhand von Stichwörtern im Artikelnamen eine passende Kategorie.
  * Gibt den Kategorienamen zurück (muss in EinkaufsKategorie existieren) oder null,
- * wenn nichts erkannt wurde (→ landet dann in "Sonstiges").
+ * wenn nichts erkannt wurde (→ landet dann in "Sonstiges"). Spezifikations-Modifikatoren
+ * (Verpackungs-/Zubereitungsart wie "Dose" oder "TK") haben Vorrang vor der reinen
+ * Zutaten-Erkennung.
  */
 export function erkenneKategorie(artikelName: string): string | null {
   const name = artikelName.toLowerCase().trim();
   if (!name) return null;
+  for (const regel of SPEZIFIKATIONS_REGELN) {
+    if (regel.keywords.some((kw) => name.includes(kw))) {
+      return regel.kategorie;
+    }
+  }
   for (const regel of REGELN) {
     if (regel.keywords.some((kw) => name.includes(kw))) {
       return regel.kategorie;

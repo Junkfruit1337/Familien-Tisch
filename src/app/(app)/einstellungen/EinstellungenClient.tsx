@@ -12,7 +12,7 @@ import {
   erkenneTicketAusText,
   setzeTicketStatus,
 } from "./actions";
-import { addKategorie, verschiebeKategorie } from "../einkaufsliste/actions";
+import { addKategorie, setzeKategorieReihenfolge } from "../einkaufsliste/actions";
 import { addFach, updateFach, deleteFach, pruefeFachDuplikat, setSchulProfil } from "../schule/actions";
 import {
   addDienst,
@@ -151,6 +151,7 @@ export default function EinstellungenClient({
   const [pins, setPins] = useState<Record<string, string>>({});
   const [portionenEntwuerfe, setPortionenEntwuerfe] = useState<Record<string, string>>({});
   const [neueKategorie, setNeueKategorie] = useState("");
+  const [kategoriePositionEntwuerfe, setKategoriePositionEntwuerfe] = useState<Record<string, string>>({});
   const [ausgewaehltesKind, setAusgewaehltesKind] = useState(kinder[0]?.id ?? "");
   const [neuesFach, setNeuesFach] = useState("");
   const [bearbeiteFachId, setBearbeiteFachId] = useState<string | null>(null);
@@ -701,22 +702,25 @@ export default function EinstellungenClient({
           {kategorien.map((k, i) => (
             <div key={k.id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <span style={{ flex: 1, fontSize: 14 }}>{k.name}</span>
-              <button
-                className="btn-secondary"
-                style={{ fontSize: 12, padding: "3px 8px" }}
-                disabled={i === 0}
-                onClick={() => startTransition(() => verschiebeKategorie(k.id, "hoch"))}
-              >
-                ↑
-              </button>
-              <button
-                className="btn-secondary"
-                style={{ fontSize: 12, padding: "3px 8px" }}
-                disabled={i === kategorien.length - 1}
-                onClick={() => startTransition(() => verschiebeKategorie(k.id, "runter"))}
-              >
-                ↓
-              </button>
+              <span style={{ fontSize: 12, color: "var(--text-muted)" }}>Position</span>
+              <input
+                type="number"
+                min={1}
+                max={kategorien.length}
+                value={kategoriePositionEntwuerfe[k.id] ?? String(i + 1)}
+                onChange={(e) => setKategoriePositionEntwuerfe((prev) => ({ ...prev, [k.id]: e.target.value }))}
+                onBlur={(e) => {
+                  const wert = parseInt(e.target.value, 10);
+                  setKategoriePositionEntwuerfe((prev) => {
+                    const rest = { ...prev };
+                    delete rest[k.id];
+                    return rest;
+                  });
+                  if (!wert || wert === i + 1) return;
+                  startTransition(() => setzeKategorieReihenfolge(k.id, wert));
+                }}
+                style={{ width: 55 }}
+              />
             </div>
           ))}
           <div style={{ display: "flex", gap: 8, borderTop: "1px solid var(--border)", paddingTop: 8 }}>

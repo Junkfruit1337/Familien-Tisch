@@ -15,7 +15,12 @@ const FAMILIE = [
   { name: "Ayla", rolle: "KIND_OHNE_ZUGANG" as const, farbe: "#d9b25c" },
 ];
 
-const KATEGORIEN = ["Obst", "Gemüse", "Milchprodukte", "Fleisch & Fisch", "Backwaren", "Tiefkühl", "Getränke", "Drogerie", "Sonstiges"];
+// Konserven & Vorrat ergänzt (Fix-Batch 35 Nachtrag, Ticket "Verbesserte Produktkategorisierung
+// nach Spezifikation") — läuft beim nächsten Deploy per upsert automatisch in die Live-DB ein.
+const KATEGORIEN = [
+  "Obst", "Gemüse", "Milchprodukte", "Fleisch & Fisch", "Backwaren", "Tiefkühl",
+  "Konserven", "Vorrat", "Getränke", "Drogerie", "Sonstiges",
+];
 
 async function main() {
   console.log("Seed: Standard-PIN für alle Login-Personen ist 0000 — bitte in den Einstellungen sofort ändern!");
