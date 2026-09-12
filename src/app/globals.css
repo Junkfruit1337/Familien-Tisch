@@ -542,21 +542,69 @@ input[type="radio"] {
   }
 }
 
-/* Fix-Batch 70 (Florians Wunsch): 10 auswählbare, bunte Design-Vorlagen — pro Person im
-   Browser gespeichert, genau wie der Hell/Dunkel-Schalter (kein Server/keine Datenbank
-   nötig, jeder kann für sich selbst wählen). Überschreiben bewusst NUR die Akzentfarbe
-   (Buttons, aktive Navigation, Header-Icon-Hintergrund, Ränder aktiver Elemente) — der
-   ruhige Grundton/Kontrast der App (Redesign Fix-Batch 56-58) bleibt erhalten, es wird nur
-   bunter. Ans Ende der Datei gesetzt, damit dieselbe Spezifität wie [data-theme] IMMER
-   gewinnt (bei gleicher Spezifität entscheidet die Reihenfolge in der Datei), unabhängig
-   davon ob Hell- oder Dunkelmodus aktiv ist. "standard" (Klassisch) braucht keinen Block,
-   das ist einfach die vorhandene Grundfarbe von oben. */
-:root[data-design="ozean"] { --accent: #1b8a8a; --accent-soft: #d9f0ef; --accent-contrast: #ffffff; }
-:root[data-design="sonnenuntergang"] { --accent: #e2662d; --accent-soft: #fbe3d3; --accent-contrast: #ffffff; }
-:root[data-design="wald"] { --accent: #2f7d4f; --accent-soft: #dcefe1; --accent-contrast: #ffffff; }
-:root[data-design="beere"] { --accent: #a83e78; --accent-soft: #f3dcea; --accent-contrast: #ffffff; }
-:root[data-design="lavendel"] { --accent: #7b5ea7; --accent-soft: #e8e0f3; --accent-contrast: #ffffff; }
-:root[data-design="feuer"] { --accent: #c93a3a; --accent-soft: #f6dcdc; --accent-contrast: #ffffff; }
-:root[data-design="himmel"] { --accent: #2f8fd6; --accent-soft: #dcedf9; --accent-contrast: #ffffff; }
-:root[data-design="honig"] { --accent: #d69e1f; --accent-soft: #f8ecc9; --accent-contrast: #2b2100; }
-:root[data-design="pastell"] { --accent: #e78fb3; --accent-soft: #fbe6ee; --accent-contrast: #4a2436; }
+/* Fix-Batch 70/72 (Florians Wunsch, präzisiert): 10 auswählbare Design-Vorlagen — pro Person
+   im Browser gespeichert, genau wie der Hell/Dunkel-Schalter (kein Server/keine Datenbank
+   nötig, jeder kann für sich selbst wählen). Fix-Batch 70 hat nur die Akzentfarbe überschrieben
+   — Florian hat das explizit korrigiert: "nicht einfach nur eine Farbe, sondern wirklich ein
+   anderes Design". Fix-Batch 72 ergänzt deshalb pro Vorlage zusätzlich eine eigene "Stil-
+   Persönlichkeit" über Ecken-Radius und Schatten (--radius-sm/--radius/--radius-lg,
+   --shadow-sm/--shadow-md) — echte, von Hand gezeichnete Icon-Sets pro Vorlage wären dagegen
+   nicht sinnvoll herstellbar, das wurde mit Florian abgestimmt. --radius-pill bleibt überall
+   999px (Pillen sollen immer rund bleiben). Ans Ende der Datei gesetzt, damit dieselbe
+   Spezifität wie [data-theme] IMMER gewinnt (Reihenfolge entscheidet bei gleicher
+   Spezifität), unabhängig von Hell-/Dunkelmodus. "standard" (Klassisch) braucht keinen
+   Block, das ist einfach die vorhandene Optik von oben. */
+:root[data-design="ozean"] {
+  --accent: #1b8a8a; --accent-soft: #d9f0ef; --accent-contrast: #ffffff;
+  --radius-sm: 10px; --radius: 18px; --radius-lg: 26px;
+  --shadow-sm: 0 2px 6px rgba(27, 138, 138, 0.12), 0 1px 2px rgba(27, 138, 138, 0.08);
+  --shadow-md: 0 10px 24px rgba(27, 138, 138, 0.16), 0 3px 8px rgba(27, 138, 138, 0.1);
+}
+:root[data-design="sonnenuntergang"] {
+  --accent: #e2662d; --accent-soft: #fbe3d3; --accent-contrast: #ffffff;
+  --radius-sm: 10px; --radius: 18px; --radius-lg: 24px;
+  --shadow-sm: 0 2px 6px rgba(226, 102, 45, 0.14), 0 1px 2px rgba(226, 102, 45, 0.08);
+  --shadow-md: 0 10px 22px rgba(226, 102, 45, 0.18), 0 3px 8px rgba(226, 102, 45, 0.1);
+}
+:root[data-design="wald"] {
+  --accent: #2f7d4f; --accent-soft: #dcefe1; --accent-contrast: #ffffff;
+  --radius-sm: 6px; --radius: 12px; --radius-lg: 18px;
+  --shadow-sm: 0 1px 2px rgba(47, 125, 79, 0.14), 0 1px 1px rgba(47, 125, 79, 0.08);
+  --shadow-md: 0 5px 14px rgba(47, 125, 79, 0.16), 0 2px 4px rgba(47, 125, 79, 0.1);
+}
+:root[data-design="beere"] {
+  --accent: #a83e78; --accent-soft: #f3dcea; --accent-contrast: #ffffff;
+  --radius-sm: 14px; --radius: 24px; --radius-lg: 32px;
+  --shadow-sm: 0 3px 8px rgba(168, 62, 120, 0.16), 0 1px 3px rgba(168, 62, 120, 0.1);
+  --shadow-md: 0 12px 26px rgba(168, 62, 120, 0.2), 0 4px 10px rgba(168, 62, 120, 0.12);
+}
+:root[data-design="lavendel"] {
+  --accent: #7b5ea7; --accent-soft: #e8e0f3; --accent-contrast: #ffffff;
+  --radius-sm: 10px; --radius: 18px; --radius-lg: 26px;
+  --shadow-sm: 0 2px 5px rgba(123, 94, 167, 0.1), 0 1px 2px rgba(123, 94, 167, 0.06);
+  --shadow-md: 0 10px 22px rgba(123, 94, 167, 0.14), 0 3px 7px rgba(123, 94, 167, 0.08);
+}
+:root[data-design="feuer"] {
+  --accent: #c93a3a; --accent-soft: #f6dcdc; --accent-contrast: #ffffff;
+  --radius-sm: 4px; --radius: 8px; --radius-lg: 12px;
+  --shadow-sm: 0 2px 3px rgba(201, 58, 58, 0.22), 0 1px 1px rgba(201, 58, 58, 0.14);
+  --shadow-md: 0 6px 12px rgba(201, 58, 58, 0.26), 0 2px 4px rgba(201, 58, 58, 0.16);
+}
+:root[data-design="himmel"] {
+  --accent: #2f8fd6; --accent-soft: #dcedf9; --accent-contrast: #ffffff;
+  --radius-sm: 10px; --radius: 20px; --radius-lg: 28px;
+  --shadow-sm: 0 1px 3px rgba(47, 143, 214, 0.08), 0 1px 1px rgba(47, 143, 214, 0.05);
+  --shadow-md: 0 8px 20px rgba(47, 143, 214, 0.1), 0 2px 5px rgba(47, 143, 214, 0.06);
+}
+:root[data-design="honig"] {
+  --accent: #d69e1f; --accent-soft: #f8ecc9; --accent-contrast: #2b2100;
+  --radius-sm: 8px; --radius: 16px; --radius-lg: 22px;
+  --shadow-sm: 0 2px 5px rgba(214, 158, 31, 0.16), 0 1px 2px rgba(214, 158, 31, 0.1);
+  --shadow-md: 0 9px 20px rgba(214, 158, 31, 0.2), 0 3px 7px rgba(214, 158, 31, 0.12);
+}
+:root[data-design="pastell"] {
+  --accent: #e78fb3; --accent-soft: #fbe6ee; --accent-contrast: #4a2436;
+  --radius-sm: 14px; --radius: 24px; --radius-lg: 32px;
+  --shadow-sm: 0 2px 6px rgba(231, 143, 179, 0.14), 0 1px 2px rgba(231, 143, 179, 0.08);
+  --shadow-md: 0 9px 20px rgba(231, 143, 179, 0.16), 0 3px 7px rgba(231, 143, 179, 0.1);
+}
