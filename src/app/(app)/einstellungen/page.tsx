@@ -66,7 +66,7 @@ export default async function EinstellungenPage() {
         beschreibung: t.beschreibung,
         status: t.status,
         begruendung: t.begruendung,
-        fotoBase64: t.fotoBase64,
+        fotos: t.fotos,
         createdAt: t.createdAt.toISOString(),
         updatedAt: t.updatedAt.toISOString(),
       }))}
@@ -76,7 +76,7 @@ export default async function EinstellungenPage() {
         beschreibung: t.beschreibung,
         status: t.status,
         begruendung: t.begruendung,
-        fotoBase64: t.fotoBase64,
+        fotos: t.fotos,
         erstellerName: t.erstelltVon.name,
         createdAt: t.createdAt.toISOString(),
         updatedAt: t.updatedAt.toISOString(),

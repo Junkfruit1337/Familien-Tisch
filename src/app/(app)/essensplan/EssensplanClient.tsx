@@ -450,7 +450,6 @@ export default function EssensplanClient({
               <input
                 type="file"
                 accept="image/*"
-                capture="environment"
                 disabled={erkennungLaeuft}
                 onChange={async (e) => {
                   const file = e.target.files?.[0];

@@ -98,7 +98,7 @@ type Ticket = {
   beschreibung: string;
   status: string;
   begruendung: string | null;
-  fotoBase64: string | null;
+  fotos: string[];
   createdAt: string;
   updatedAt: string;
 };
@@ -172,7 +172,7 @@ export default function EinstellungenClient({
 
   const [ticketTitel, setTicketTitel] = useState("");
   const [ticketBeschreibung, setTicketBeschreibung] = useState("");
-  const [ticketFoto, setTicketFoto] = useState<string | null>(null);
+  const [ticketFotos, setTicketFotos] = useState<string[]>([]);
   const [ticketVerarbeitung, setTicketVerarbeitung] = useState(false);
   const [ticketBegruendungen, setTicketBegruendungen] = useState<Record<string, string>>({});
   const [grossesTicketBild, setGrossesTicketBild] = useState<string | null>(null);
@@ -381,24 +381,45 @@ export default function EinstellungenClient({
           onChange={(e) => setTicketBeschreibung(e.target.value)}
         />
         <label style={{ fontSize: 13, display: "flex", flexDirection: "column", gap: 4 }}>
-          Bild dazufügen (optional, z. B. Screenshot)
+          Bilder dazufügen (optional, z. B. mehrere Screenshots)
           <input
             type="file"
             accept="image/*"
+            multiple
             onChange={async (e) => {
-              const file = e.target.files?.[0];
-              if (!file) return;
-              setTicketFoto(await ticketFotoAufBase64(file));
+              const files = Array.from(e.target.files ?? []);
+              if (files.length === 0) return;
+              e.target.value = "";
+              const neue = await Promise.all(files.map((f) => ticketFotoAufBase64(f)));
+              setTicketFotos((prev) => [...prev, ...neue]);
             }}
           />
         </label>
-        {ticketFoto && (
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={ticketFoto} alt="Vorschau" style={{ width: 60, height: 60, objectFit: "cover", borderRadius: 8 }} />
-            <button className="btn-secondary" style={{ fontSize: 12, padding: "4px 8px" }} onClick={() => setTicketFoto(null)}>
-              Entfernen
-            </button>
+        {ticketFotos.length > 0 && (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {ticketFotos.map((foto, i) => (
+              <div key={i} style={{ position: "relative" }}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={foto} alt="Vorschau" style={{ width: 60, height: 60, objectFit: "cover", borderRadius: 8 }} />
+                <button
+                  className="btn-secondary"
+                  style={{
+                    position: "absolute",
+                    top: -6,
+                    right: -6,
+                    width: 20,
+                    height: 20,
+                    padding: 0,
+                    fontSize: 11,
+                    borderRadius: 999,
+                    lineHeight: 1,
+                  }}
+                  onClick={() => setTicketFotos((prev) => prev.filter((_, idx) => idx !== i))}
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
           </div>
         )}
         <button
@@ -406,10 +427,10 @@ export default function EinstellungenClient({
           disabled={pending || !ticketTitel.trim() || !ticketBeschreibung.trim()}
           onClick={() =>
             startTransition(async () => {
-              await erstelleTicket(ticketTitel, ticketBeschreibung, ticketFoto || undefined);
+              await erstelleTicket(ticketTitel, ticketBeschreibung, ticketFotos);
               setTicketTitel("");
               setTicketBeschreibung("");
-              setTicketFoto(null);
+              setTicketFotos([]);
             })
           }
         >
@@ -429,14 +450,19 @@ export default function EinstellungenClient({
                 </summary>
                 <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 6, paddingLeft: 4 }}>
                   <span>{t.beschreibung}</span>
-                  {t.fotoBase64 && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={t.fotoBase64}
-                      alt="Ticket-Foto"
-                      style={{ width: 60, height: 60, objectFit: "cover", borderRadius: 8, cursor: "pointer" }}
-                      onClick={() => setGrossesTicketBild(t.fotoBase64)}
-                    />
+                  {t.fotos.length > 0 && (
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                      {t.fotos.map((foto, i) => (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          key={i}
+                          src={foto}
+                          alt="Ticket-Foto"
+                          style={{ width: 60, height: 60, objectFit: "cover", borderRadius: 8, cursor: "pointer" }}
+                          onClick={() => setGrossesTicketBild(foto)}
+                        />
+                      ))}
+                    </div>
                   )}
                   <span style={{ color: "var(--text-muted)", fontSize: 12 }}>
                     Eingereicht am {new Date(t.createdAt).toLocaleDateString("de-DE")}
@@ -535,14 +561,19 @@ export default function EinstellungenClient({
                   </span>
                 </div>
                 <p style={{ margin: 0, fontSize: 13 }}>{t.beschreibung}</p>
-                {t.fotoBase64 && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={t.fotoBase64}
-                    alt="Ticket-Foto"
-                    style={{ width: 80, height: 80, objectFit: "cover", borderRadius: 8, cursor: "pointer" }}
-                    onClick={() => setGrossesTicketBild(t.fotoBase64)}
-                  />
+                {t.fotos.length > 0 && (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                    {t.fotos.map((foto, i) => (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        key={i}
+                        src={foto}
+                        alt="Ticket-Foto"
+                        style={{ width: 80, height: 80, objectFit: "cover", borderRadius: 8, cursor: "pointer" }}
+                        onClick={() => setGrossesTicketBild(foto)}
+                      />
+                    ))}
+                  </div>
                 )}
                 <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>
                   Von {t.erstellerName} · Eingereicht am {new Date(t.createdAt).toLocaleDateString("de-DE")}

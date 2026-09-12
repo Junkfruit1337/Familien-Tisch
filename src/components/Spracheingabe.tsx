@@ -15,13 +15,21 @@ export default function Spracheingabe({
   const [unterstuetzt, setUnterstuetzt] = useState(false);
   const [laeuft, setLaeuft] = useState(false);
   const erkennungRef = useRef<any>(null);
+  // Das Browser-eigene "kein Ton mehr erkannt"-Zeitlimit beendet die Aufnahme oft schon nach
+  // wenigen Sekunden Sprechpause — SELBST mit continuous=true (Fix-Batch 35 Nachtrag,
+  // Ticket "Spracheingabe bricht bei kurzen Pausen ab": continuous=true allein reichte nicht).
+  // Deshalb: solange der Nutzer nicht selbst auf "Stoppen" getippt hat, wird bei jedem
+  // automatischen onend sofort eine neue Aufnahme-Runde gestartet — der bisher erkannte Text
+  // bleibt dabei erhalten (gesammelt in textRef), nur die Browser-Session läuft neu an.
+  const sollLaufenRef = useRef(false);
+  const textRef = useRef("");
 
   useEffect(() => {
     const SpeechRecognitionKlasse = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     setUnterstuetzt(!!SpeechRecognitionKlasse);
   }, []);
 
-  function start() {
+  function starteRunde() {
     const SpeechRecognitionKlasse = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognitionKlasse) return;
 
@@ -29,26 +37,44 @@ export default function Spracheingabe({
     erkennung.lang = "de-DE";
     erkennung.interimResults = false;
     erkennung.maxAlternatives = 1;
-    // continuous=true (Fix-Batch 35, Florians Wunsch): ohne das beendet der Browser die
-    // Aufnahme selbständig schon nach der ersten kurzen Sprechpause (z. B. beim Nachdenken),
-    // was zu abgebrochenen/unvollständigen Aufnahmen führte. Jetzt läuft die Aufnahme weiter,
-    // bis der Nutzer selbst auf "Stoppen" tippt (oder das Browser-eigene Zeitlimit greift).
     erkennung.continuous = true;
     erkennung.onresult = (event: any) => {
-      let text = "";
+      let neu = "";
       for (let i = 0; i < event.results.length; i++) {
-        text += event.results[i][0].transcript;
+        neu += event.results[i][0].transcript;
       }
-      if (text.trim()) onErgebnis(text.trim());
+      const kombiniert = (textRef.current + " " + neu).trim();
+      textRef.current = kombiniert;
+      if (kombiniert) onErgebnis(kombiniert);
     };
-    erkennung.onerror = () => setLaeuft(false);
-    erkennung.onend = () => setLaeuft(false);
+    erkennung.onerror = (event: any) => {
+      // "no-speech" (Stille) ist kein echter Fehler, sondern genau der Fall, den wir per
+      // Auto-Neustart abfangen wollen — nur bei echten Fehlern (z. B. Mikrofon-Berechtigung)
+      // wirklich beenden.
+      if (event.error !== "no-speech" && event.error !== "aborted") {
+        sollLaufenRef.current = false;
+      }
+    };
+    erkennung.onend = () => {
+      if (sollLaufenRef.current) {
+        starteRunde();
+      } else {
+        setLaeuft(false);
+      }
+    };
     erkennungRef.current = erkennung;
-    setLaeuft(true);
     erkennung.start();
   }
 
+  function start() {
+    textRef.current = "";
+    sollLaufenRef.current = true;
+    setLaeuft(true);
+    starteRunde();
+  }
+
   function stop() {
+    sollLaufenRef.current = false;
     erkennungRef.current?.stop();
     setLaeuft(false);
   }

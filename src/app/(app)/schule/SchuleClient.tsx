@@ -799,7 +799,6 @@ export default function SchuleClient({
             <input
               type="file"
               accept="image/*"
-              capture="environment"
               onChange={async (e) => {
                 const file = e.target.files?.[0];
                 if (!file) return;
@@ -993,9 +992,12 @@ export default function SchuleClient({
         <summary style={{ cursor: "pointer", color: "var(--text-muted)" }}>Verlauf Taschengeld</summary>
         <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 8 }}>
           {kind.taschengeld.map((t) => (
-            <div key={t.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 14 }}>
-              <span>{t.grund ?? t.typ}</span>
-              <span style={{ color: t.typ === "GUTSCHRIFT" ? "var(--success)" : "var(--danger)" }}>
+            <div key={t.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 14, gap: 8 }}>
+              <span>
+                {t.grund ?? t.typ}
+                <span style={{ color: "var(--text-muted)", fontSize: 12 }}> · {new Date(t.createdAt).toLocaleDateString("de-DE")}</span>
+              </span>
+              <span style={{ color: t.typ === "GUTSCHRIFT" ? "var(--success)" : "var(--danger)", flexShrink: 0 }}>
                 {t.typ === "GUTSCHRIFT" ? "+" : "-"}
                 {t.betrag.toFixed(2)} €
               </span>

@@ -82,11 +82,12 @@ export async function erkenneTicketAusText(text: string): Promise<{ ok: true; ti
   }
 }
 
-export async function erstelleTicket(titel: string, beschreibung: string, fotoBase64?: string) {
+// fotos erlaubt mehrere Screenshots pro Ticket (Fix-Batch 35 Nachtrag, Florians Wunsch).
+export async function erstelleTicket(titel: string, beschreibung: string, fotos?: string[]) {
   const person = await requirePerson();
   if (!titel.trim() || !beschreibung.trim()) throw new Error("Titel und Beschreibung dürfen nicht leer sein.");
   await prisma.ticket.create({
-    data: { titel: titel.trim(), beschreibung: beschreibung.trim(), fotoBase64: fotoBase64 || undefined, erstelltVonId: person.id },
+    data: { titel: titel.trim(), beschreibung: beschreibung.trim(), fotos: fotos ?? [], erstelltVonId: person.id },
   });
   revalidatePath("/einstellungen");
 }

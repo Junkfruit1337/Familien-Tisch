@@ -88,7 +88,10 @@ function formatMenge(basiswert: number, family: "gewicht" | "volumen"): string {
 export async function mergeMenge(bestehend: string | null, neu?: string | null): Promise<string | null> {
   if (!neu) return bestehend;
   if (!bestehend) return neu;
-  if (bestehend === neu || bestehend.includes(neu)) return bestehend;
+  // Fix-Batch 35 Nachtrag (Bugticket "Artikel-Menge wird nicht addiert"): früher wurde bei
+  // exakt gleicher oder als Teilstring enthaltener Mengenangabe gar nicht gemerged, sondern
+  // stillschweigend die alte Menge beibehalten — dadurch erhöhte sich z.B. "500 g" + "500 g"
+  // fälschlich NICHT auf "1000 g". Jetzt läuft es immer durch die echte Zusammenführung unten.
 
   const a = parseMenge(bestehend);
   const b = parseMenge(neu);
@@ -100,11 +103,16 @@ export async function mergeMenge(bestehend: string | null, neu?: string | null):
 
 // Nur bestätigte Artikel — "noch nicht zugesagte" Essensplan-Posten laufen über den
 // eigenen Bereich (listUnbestaetigteArtikel), bis sie geprüft/bestätigt wurden (Fix-Batch 24).
+// Fix-Batch 35 Nachtrag (Bugticket "folgt nicht der Kategorieordnung"): zusätzlich nach
+// createdAt sortiert, damit die Reihenfolge auch bei gleichem reihenfolge-Wert (sollte nicht
+// vorkommen, aber schadet nicht als Absicherung) und für neu hinzugefügte Artikel innerhalb
+// ihrer Kategorie IMMER deterministisch bleibt, statt von der (nicht garantierten) Datenbank-
+// internen Reihenfolge abzuhängen.
 export async function listArtikel() {
   return prisma.einkaufsArtikel.findMany({
     where: { bestaetigt: true },
     include: { kategorie: true },
-    orderBy: [{ erledigt: "asc" }, { kategorie: { reihenfolge: "asc" } }],
+    orderBy: [{ erledigt: "asc" }, { kategorie: { reihenfolge: "asc" } }, { createdAt: "asc" }],
   });
 }
 
