@@ -65,7 +65,16 @@ type TagEintrag = {
 type Tag = { tag: string; vergangen: boolean; eintrag: TagEintrag | null };
 type Plan = { wocheStart: string; wocheEnde: string; tage: Tag[] };
 type RezeptDetail = { id: string; name: string; zutaten: string; zubereitung: string | null; portionenBasis: number };
-type RezeptKurz = { id: string; name: string };
+type RezeptKurz = { id: string; name: string; zuletztGeplant: string | null };
+
+// Fix-Batch 62 (Florians Wunsch): Rezepte, die lange nicht (oder noch nie) auf dem Plan
+// standen, im Auswahl-Dropdown markieren, damit nicht immer dieselben paar Gerichte laufen.
+const LANGE_NICHT_GEKOCHT_TAGE = 21;
+function istLangeNichtGekocht(zuletztGeplant: string | null): boolean {
+  if (!zuletztGeplant) return true;
+  const tageHer = (Date.now() - new Date(zuletztGeplant).getTime()) / (1000 * 60 * 60 * 24);
+  return tageHer >= LANGE_NICHT_GEKOCHT_TAGE;
+}
 type Familienmitglied = { id: string; name: string; farbe: string; portionsGewicht: number };
 type Herkunft = { artikelId: string; artikelName: string; menge: string | null };
 
@@ -190,6 +199,7 @@ export default function EssensplanClient({
                   {vorschlaege.map((r) => (
                     <option key={r.id} value={r.id}>
                       {r.name}
+                      {istLangeNichtGekocht(r.zuletztGeplant) ? " · schon länger nicht mehr" : ""}
                     </option>
                   ))}
                   {t.eintrag && !vorschlaege.some((r) => r.id === t.eintrag!.rezeptId) && (

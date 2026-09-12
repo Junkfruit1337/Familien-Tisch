@@ -36,6 +36,9 @@ model Person {
   klasse        String? // z.B. "5a"
   // Geburtstag (Fix-Batch 30) — erscheint dann automatisch im Kalender ALLER Familienmitglieder.
   geburtsdatum  DateTime?
+  // Fix-Batch 62: verhindert, dass die 7-Tage-vorher-Push-Erinnerung im selben Jahr mehrfach
+  // rausgeht — geprüft/gesetzt bei jedem Dashboard-Aufruf (siehe dashboard/actions.ts).
+  geburtstagErinnerungJahr Int?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -330,6 +333,9 @@ model SchulEintrag {
   personId     String
   person       Person   @relation("SchulEintragPerson", fields: [personId], references: [id])
   createdAt    DateTime @default(now())
+  // Fix-Batch 62: verhindert mehrfache Lerntipp-Push-Erinnerungen für denselben Eintrag —
+  // geprüft/gesetzt bei jedem Dashboard-Aufruf (siehe dashboard/actions.ts).
+  lerntippGesendet Boolean @default(false)
 }
 
 // ---------- Dienstplan ----------

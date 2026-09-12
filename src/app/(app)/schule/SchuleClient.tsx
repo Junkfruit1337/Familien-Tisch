@@ -884,12 +884,35 @@ export default function SchuleClient({
           const genehmigt = notenDesFachs.filter((n) => n.status === "GENEHMIGT" && istImLaufendenSchuljahr(n.datum));
           const summeGewicht = genehmigt.reduce((s, n) => s + n.gewichtung, 0);
           const schnitt = summeGewicht > 0 ? genehmigt.reduce((s, n) => s + n.note * n.gewichtung, 0) / summeGewicht : null;
+          // Fix-Batch 62 (Florians Wunsch): einfacher Trendpfeil, ob sich der Schnitt zuletzt
+          // eher verbessert (Note wird zahlenmäßig kleiner) oder verschlechtert hat — Vergleich
+          // ältere Hälfte vs. jüngere Hälfte der genehmigten Noten dieses Schuljahres. Braucht
+          // mindestens 4 Noten, sonst wäre das Signal zu wackelig.
+          const trend = (() => {
+            if (genehmigt.length < 4) return null;
+            const sortiert = [...genehmigt].sort((a, b) => new Date(a.datum).getTime() - new Date(b.datum).getTime());
+            const mitte = Math.floor(sortiert.length / 2);
+            const avg = (arr: typeof sortiert) => {
+              const g = arr.reduce((s, n) => s + n.gewichtung, 0);
+              return g > 0 ? arr.reduce((s, n) => s + n.note * n.gewichtung, 0) / g : null;
+            };
+            const alt = avg(sortiert.slice(0, mitte));
+            const neu = avg(sortiert.slice(mitte));
+            if (alt === null || neu === null) return null;
+            const diff = neu - alt;
+            if (diff <= -0.3) return "besser" as const;
+            if (diff >= 0.3) return "schlechter" as const;
+            return "stabil" as const;
+          })();
           return (
             <details key={f.id} className="card">
               <summary style={{ cursor: "pointer", display: "flex", justifyContent: "space-between" }}>
                 <span>{f.name}</span>
-                <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>
+                <span style={{ color: "var(--text-muted)", fontWeight: 400, display: "flex", alignItems: "center", gap: 4 }}>
                   {schnitt !== null ? `Ø ${schnitt.toFixed(2)} · ${genehmigt.length} Note(n)` : "noch keine genehmigte Note"}
+                  {trend === "besser" && <span title="Zuletzt verbessert" style={{ color: "var(--success)" }}>↗</span>}
+                  {trend === "schlechter" && <span title="Zuletzt verschlechtert" style={{ color: "var(--danger)" }}>↘</span>}
+                  {trend === "stabil" && <span title="Zuletzt stabil" style={{ color: "var(--text-muted)" }}>→</span>}
                 </span>
               </summary>
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>

@@ -4,6 +4,7 @@ import { requirePerson } from "@/lib/auth";
 import { getWochenplan } from "../essensplan/actions";
 import { listAnstehendeSchulEintraege } from "../schule/actions";
 import { prisma } from "@/lib/prisma";
+import { sendePushAnEltern, sendePushAnPerson } from "@/lib/push";
 
 function lerntipp(tageBis: number): string {
   if (tageBis <= 0) return "Heute ist es so weit — nochmal kurz die Zusammenfassung durchlesen!";
@@ -12,12 +13,62 @@ function lerntipp(tageBis: number): string {
   return "Ist noch etwas hin — schon mal die Übersicht/Zusammenfassung anlegen.";
 }
 
+// Fix-Batch 62 (Florians Wunsch nach Push-Erinnerungen): es gibt keinen echten Cron-Job im
+// Hintergrund, deshalb wird hier bei JEDEM Dashboard-Aufruf (durch egal welche Person)
+// geprüft, ob eine der beiden zeitgesteuerten Erinnerungen fällig ist — dank der Gesendet-
+// Markierungen (geburtstagErinnerungJahr/lerntippGesendet) passiert das trotzdem nur einmal.
+// Reicht in der Praxis, da die Startseite ohnehin mehrmals täglich von irgendjemandem
+// geöffnet wird.
+async function pruefeUndSendeErinnerungen() {
+  const heute = new Date();
+  heute.setHours(0, 0, 0, 0);
+
+  // Geburtstags-Vorlauf-Erinnerung: 7 Tage vorher einmal pro Jahr an die Eltern, damit noch
+  // Zeit fürs Geschenk bleibt.
+  const in7Tagen = new Date(heute);
+  in7Tagen.setDate(in7Tagen.getDate() + 7);
+  const zielJahr = in7Tagen.getFullYear();
+  const personenMitGeburtstag = await prisma.person.findMany({ where: { aktiv: true, geburtsdatum: { not: null } } });
+  for (const p of personenMitGeburtstag) {
+    if (!p.geburtsdatum) continue;
+    const passt = p.geburtsdatum.getMonth() === in7Tagen.getMonth() && p.geburtsdatum.getDate() === in7Tagen.getDate();
+    if (passt && p.geburtstagErinnerungJahr !== zielJahr) {
+      await sendePushAnEltern({
+        title: "Geburtstag in einer Woche 🎂",
+        body: `${p.name} hat in 7 Tagen Geburtstag — noch Zeit, ein Geschenk zu besorgen.`,
+        url: "/kalender",
+      });
+      await prisma.person.update({ where: { id: p.id }, data: { geburtstagErinnerungJahr: zielJahr } });
+    }
+  }
+
+  // Lerntipp-Push: einmalig pro Klassenarbeit/HÜ-Kontrolle, sobald sie höchstens 2 Tage
+  // entfernt ist — dieselbe Empfehlung, die im Dashboard steht, geht dann zusätzlich als
+  // Push direkt ans betroffene Kind raus.
+  const in3Tagen = new Date(heute);
+  in3Tagen.setDate(in3Tagen.getDate() + 3);
+  const baldigeEintraege = await prisma.schulEintrag.findMany({
+    where: { datum: { gte: heute, lt: in3Tagen }, lerntippGesendet: false },
+  });
+  for (const s of baldigeEintraege) {
+    const tageBis = Math.ceil((s.datum.getTime() - heute.getTime()) / (24 * 60 * 60 * 1000));
+    await sendePushAnPerson(s.personId, {
+      title: "Lerntipp 💡",
+      body: `${s.titel} (${tageBis <= 0 ? "heute" : tageBis === 1 ? "morgen" : `noch ${tageBis} Tage`}): ${lerntipp(tageBis)}`,
+      url: "/dashboard",
+    });
+    await prisma.schulEintrag.update({ where: { id: s.id }, data: { lerntippGesendet: true } });
+  }
+}
+
 export async function getDashboardDaten() {
   const person = await requirePerson();
   const heute = new Date();
   heute.setHours(0, 0, 0, 0);
   const morgenFrueh = new Date(heute);
   morgenFrueh.setDate(morgenFrueh.getDate() + 1);
+
+  await pruefeUndSendeErinnerungen();
 
   const plan = await getWochenplan(0);
   const heutigesEssen = plan.tage.find((t) => new Date(t.tag).toDateString() === heute.toDateString());

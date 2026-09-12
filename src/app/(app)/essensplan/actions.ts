@@ -143,7 +143,7 @@ export async function listRezepteFuerWoche(wocheStartIso: string) {
   return rezepte
     .filter((r) => !ausgeblendeteIds.has(r.id))
     .sort((a, b) => (a.planEintraege[0]?.tag.getTime() ?? 0) - (b.planEintraege[0]?.tag.getTime() ?? 0))
-    .map((r) => ({ id: r.id, name: r.name }));
+    .map((r) => ({ id: r.id, name: r.name, zuletztGeplant: r.planEintraege[0]?.tag.toISOString() ?? null }));
 }
 
 export async function listAusgeblendeteFuerWoche(wocheStartIso: string) {
