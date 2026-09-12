@@ -122,8 +122,10 @@ type Hausproblem = {
   createdAt: string;
 };
 
+// "Gemeldet" klang missverständlich, als hätte man es schon dem Vermieter mitgeteilt —
+// "Erfasst" macht klar: erstmal nur intern in der App notiert (Florians Feedback).
 const HAUSPROBLEM_STATUS_LABEL: Record<string, string> = {
-  GEMELDET: "Gemeldet",
+  GEMELDET: "Erfasst",
   IN_BEARBEITUNG: "In Bearbeitung",
   ERLEDIGT: "Erledigt",
 };
@@ -446,7 +448,12 @@ export default function EinstellungenClient({
             {ticketFotos.map((foto, i) => (
               <div key={i} style={{ position: "relative" }}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={foto} alt="Vorschau" style={{ width: 60, height: 60, objectFit: "cover", borderRadius: 8 }} />
+                <img
+                  src={foto}
+                  alt="Vorschau"
+                  style={{ width: 60, height: 60, objectFit: "cover", borderRadius: 8, cursor: "pointer" }}
+                  onClick={() => setGrossesTicketBild(foto)}
+                />
                 <button
                   className="btn-secondary"
                   style={{
@@ -569,7 +576,140 @@ export default function EinstellungenClient({
     <details>
       <summary style={{ cursor: "pointer", fontWeight: 600 }}>🏠 Hausreparaturen ({hausprobleme.filter((h) => h.status !== "ERLEDIGT").length} offen)</summary>
       <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
-        {hausprobleme.length === 0 && <p style={{ margin: 0, fontSize: 13, color: "var(--text-muted)" }}>Noch nichts gemeldet.</p>}
+        <div className="card" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <strong style={{ fontSize: 13 }}>Neues Problem melden</strong>
+          <Spracheingabe
+            onErgebnis={async (text) => {
+              setHausproblemSpracheVerarbeitung(true);
+              try {
+                const ergebnis = await erkenneHausproblemAusText(text);
+                if (!ergebnis.ok) {
+                  alert(ergebnis.fehler);
+                  return;
+                }
+                setNeuesHausproblemTitel(ergebnis.titel);
+                setNeuesHausproblemBeschreibung(ergebnis.beschreibung);
+              } finally {
+                setHausproblemSpracheVerarbeitung(false);
+              }
+            }}
+            disabled={hausproblemSpracheVerarbeitung}
+          />
+          {hausproblemSpracheVerarbeitung && <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>Spracheingabe wird verarbeitet …</p>}
+          <input placeholder="Titel (z. B. Wasserhahn tropft)" value={neuesHausproblemTitel} onChange={(e) => setNeuesHausproblemTitel(e.target.value)} />
+          <textarea
+            placeholder="Beschreibung"
+            rows={3}
+            value={neuesHausproblemBeschreibung}
+            onChange={(e) => setNeuesHausproblemBeschreibung(e.target.value)}
+          />
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <label
+              className="btn-secondary"
+              style={{ fontSize: 13, padding: "8px 12px", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}
+            >
+              📷 Foto
+              <input
+                type="file"
+                accept="image/*"
+                capture="environment"
+                style={{ display: "none" }}
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  e.target.value = "";
+                  const base64 = await ticketFotoAufBase64(file);
+                  setNeuesHausproblemFotos((prev) => [...prev, base64]);
+                }}
+              />
+            </label>
+            <label
+              className="btn-secondary"
+              style={{ fontSize: 13, padding: "8px 12px", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}
+            >
+              📁 Aus Galerie
+              <input
+                type="file"
+                accept="image/*"
+                multiple
+                style={{ display: "none" }}
+                onChange={async (e) => {
+                  const files = Array.from(e.target.files ?? []);
+                  if (files.length === 0) return;
+                  e.target.value = "";
+                  const neue = await Promise.all(files.map((f) => ticketFotoAufBase64(f)));
+                  setNeuesHausproblemFotos((prev) => [...prev, ...neue]);
+                }}
+              />
+            </label>
+          </div>
+          {neuesHausproblemFotos.length > 0 && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              {neuesHausproblemFotos.map((foto, i) => (
+                <div key={i} style={{ position: "relative" }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={foto}
+                    alt="Vorschau"
+                    style={{ width: 60, height: 60, objectFit: "cover", borderRadius: 8, cursor: "pointer" }}
+                    onClick={() => setGrossesTicketBild(foto)}
+                  />
+                  <button
+                    className="btn-secondary"
+                    style={{ position: "absolute", top: -6, right: -6, width: 20, height: 20, padding: 0, fontSize: 11, borderRadius: 999, lineHeight: 1 }}
+                    onClick={() => setNeuesHausproblemFotos((prev) => prev.filter((_, idx) => idx !== i))}
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          <div style={{ display: "flex", gap: 6 }}>
+            <button
+              type="button"
+              className={neuesHausproblemZustaendigkeit === "VERMIETER" ? "btn" : "btn-secondary"}
+              style={{ flex: 1, fontSize: 13 }}
+              onClick={() => setNeuesHausproblemZustaendigkeit("VERMIETER")}
+            >
+              Vermieter zuständig
+            </button>
+            <button
+              type="button"
+              className={neuesHausproblemZustaendigkeit === "FAMILIE" ? "btn" : "btn-secondary"}
+              style={{ flex: 1, fontSize: 13 }}
+              onClick={() => setNeuesHausproblemZustaendigkeit("FAMILIE")}
+            >
+              Wir erledigen es selbst
+            </button>
+          </div>
+          <button
+            className="btn"
+            disabled={pending || !neuesHausproblemTitel.trim() || !neuesHausproblemBeschreibung.trim()}
+            onClick={() =>
+              startTransition(async () => {
+                await erstelleHausproblem({
+                  titel: neuesHausproblemTitel,
+                  beschreibung: neuesHausproblemBeschreibung,
+                  zustaendigkeit: neuesHausproblemZustaendigkeit,
+                  fotos: neuesHausproblemFotos,
+                });
+                setNeuesHausproblemTitel("");
+                setNeuesHausproblemBeschreibung("");
+                setNeuesHausproblemFotos([]);
+              })
+            }
+          >
+            Melden
+          </button>
+        </div>
+
+        {hausprobleme.length > 0 && (
+          <details>
+            <summary style={{ cursor: "pointer", color: "var(--text-muted)" }}>
+              Bereits gemeldete Probleme ({hausprobleme.length})
+            </summary>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
         {hausprobleme.map((h) => (
           <div key={h.id} className="card" style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
@@ -682,128 +822,9 @@ export default function EinstellungenClient({
             )}
           </div>
         ))}
-        <div className="card" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          <strong style={{ fontSize: 13 }}>Neues Problem melden</strong>
-          <Spracheingabe
-            onErgebnis={async (text) => {
-              setHausproblemSpracheVerarbeitung(true);
-              try {
-                const ergebnis = await erkenneHausproblemAusText(text);
-                if (!ergebnis.ok) {
-                  alert(ergebnis.fehler);
-                  return;
-                }
-                setNeuesHausproblemTitel(ergebnis.titel);
-                setNeuesHausproblemBeschreibung(ergebnis.beschreibung);
-              } finally {
-                setHausproblemSpracheVerarbeitung(false);
-              }
-            }}
-            disabled={hausproblemSpracheVerarbeitung}
-          />
-          {hausproblemSpracheVerarbeitung && <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>Spracheingabe wird verarbeitet …</p>}
-          <input placeholder="Titel (z. B. Wasserhahn tropft)" value={neuesHausproblemTitel} onChange={(e) => setNeuesHausproblemTitel(e.target.value)} />
-          <textarea
-            placeholder="Beschreibung"
-            rows={3}
-            value={neuesHausproblemBeschreibung}
-            onChange={(e) => setNeuesHausproblemBeschreibung(e.target.value)}
-          />
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <label
-              className="btn-secondary"
-              style={{ fontSize: 13, padding: "8px 12px", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}
-            >
-              📷 Foto
-              <input
-                type="file"
-                accept="image/*"
-                capture="environment"
-                style={{ display: "none" }}
-                onChange={async (e) => {
-                  const file = e.target.files?.[0];
-                  if (!file) return;
-                  e.target.value = "";
-                  const base64 = await ticketFotoAufBase64(file);
-                  setNeuesHausproblemFotos((prev) => [...prev, base64]);
-                }}
-              />
-            </label>
-            <label
-              className="btn-secondary"
-              style={{ fontSize: 13, padding: "8px 12px", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}
-            >
-              📁 Aus Galerie
-              <input
-                type="file"
-                accept="image/*"
-                multiple
-                style={{ display: "none" }}
-                onChange={async (e) => {
-                  const files = Array.from(e.target.files ?? []);
-                  if (files.length === 0) return;
-                  e.target.value = "";
-                  const neue = await Promise.all(files.map((f) => ticketFotoAufBase64(f)));
-                  setNeuesHausproblemFotos((prev) => [...prev, ...neue]);
-                }}
-              />
-            </label>
-          </div>
-          {neuesHausproblemFotos.length > 0 && (
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-              {neuesHausproblemFotos.map((foto, i) => (
-                <div key={i} style={{ position: "relative" }}>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={foto} alt="Vorschau" style={{ width: 60, height: 60, objectFit: "cover", borderRadius: 8 }} />
-                  <button
-                    className="btn-secondary"
-                    style={{ position: "absolute", top: -6, right: -6, width: 20, height: 20, padding: 0, fontSize: 11, borderRadius: 999, lineHeight: 1 }}
-                    onClick={() => setNeuesHausproblemFotos((prev) => prev.filter((_, idx) => idx !== i))}
-                  >
-                    ✕
-                  </button>
-                </div>
-              ))}
             </div>
-          )}
-          <div style={{ display: "flex", gap: 6 }}>
-            <button
-              type="button"
-              className={neuesHausproblemZustaendigkeit === "VERMIETER" ? "btn" : "btn-secondary"}
-              style={{ flex: 1, fontSize: 13 }}
-              onClick={() => setNeuesHausproblemZustaendigkeit("VERMIETER")}
-            >
-              Vermieter zuständig
-            </button>
-            <button
-              type="button"
-              className={neuesHausproblemZustaendigkeit === "FAMILIE" ? "btn" : "btn-secondary"}
-              style={{ flex: 1, fontSize: 13 }}
-              onClick={() => setNeuesHausproblemZustaendigkeit("FAMILIE")}
-            >
-              Wir erledigen es selbst
-            </button>
-          </div>
-          <button
-            className="btn"
-            disabled={pending || !neuesHausproblemTitel.trim() || !neuesHausproblemBeschreibung.trim()}
-            onClick={() =>
-              startTransition(async () => {
-                await erstelleHausproblem({
-                  titel: neuesHausproblemTitel,
-                  beschreibung: neuesHausproblemBeschreibung,
-                  zustaendigkeit: neuesHausproblemZustaendigkeit,
-                  fotos: neuesHausproblemFotos,
-                });
-                setNeuesHausproblemTitel("");
-                setNeuesHausproblemBeschreibung("");
-                setNeuesHausproblemFotos([]);
-              })
-            }
-          >
-            Melden
-          </button>
-        </div>
+          </details>
+        )}
       </div>
     </details>
   );
