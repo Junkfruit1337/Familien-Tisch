@@ -5,6 +5,7 @@ import { requirePerson, requireParent } from "@/lib/auth";
 import { logAenderung } from "@/lib/history";
 import { erkenneKategorie } from "@/lib/kategorisierung";
 import { erkenneArtikelAusSprache, type ErkannterArtikel } from "@/lib/spracheErkennung";
+import { erkenneEinkaufslisteAusBild, type ErkannterListenArtikel } from "@/lib/einkaufslisteErkennung";
 import { revalidatePath } from "next/cache";
 
 // Spracheingabe fürs Artikel-/Wunsch-Formular (Fix-Batch 30) — für Eltern (Artikel direkt
@@ -17,6 +18,22 @@ export async function erkenneArtikelAusText(text: string): Promise<{ ok: true; a
   } catch (err) {
     console.error("Spracheingabe (Artikel) fehlgeschlagen:", err);
     const fehler = err instanceof Error ? err.message : "Unbekannter Fehler bei der Spracherkennung.";
+    return { ok: false, fehler };
+  }
+}
+
+// Massenimport per Foto/Screenshot (Fix-Batch 35 Nachtrag) — füllt nur eine Vorschauliste,
+// gespeichert wird erst nach Prüfung/Auswahl durch die Eltern (analog Rezept-Fotoerkennung).
+export async function erkenneEinkaufslisteAusFoto(
+  fotoDataUrl: string
+): Promise<{ ok: true; artikel: ErkannterListenArtikel[] } | { ok: false; fehler: string }> {
+  await requireParent();
+  try {
+    const artikel = await erkenneEinkaufslisteAusBild(fotoDataUrl);
+    return { ok: true, artikel };
+  } catch (err) {
+    console.error("Einkaufslisten-Foto-Erkennung fehlgeschlagen:", err);
+    const fehler = err instanceof Error ? err.message : "Unbekannter Fehler bei der Bilderkennung.";
     return { ok: false, fehler };
   }
 }

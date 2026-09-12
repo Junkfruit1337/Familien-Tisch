@@ -19,6 +19,7 @@ import {
   pruefeGelocktenTagWechsel,
   erkenneRezeptAusFoto,
   updateRezeptPortionenBasis,
+  updateRezept,
 } from "./actions";
 import SeitenTitel from "@/components/SeitenTitel";
 import { BEREICH_FARBEN } from "@/lib/bereichFarben";
@@ -89,6 +90,9 @@ export default function EssensplanClient({
   const [ausgeblendete, setAusgeblendete] = useState(initialAusgeblendete);
 
   const [portionenEntwuerfe, setPortionenEntwuerfe] = useState<Record<string, string>>({});
+  const [bearbeiteRezeptId, setBearbeiteRezeptId] = useState<string | null>(null);
+  const [rezeptZutatenEntwurf, setRezeptZutatenEntwurf] = useState("");
+  const [rezeptZubereitungEntwurf, setRezeptZubereitungEntwurf] = useState("");
   const [extraEntwuerfe, setExtraEntwuerfe] = useState<Record<string, string>>({});
 
   const [sperrDialog, setSperrDialog] = useState<{ eintragId: string; herkuenfte: Herkunft[] } | null>(null);
@@ -377,15 +381,65 @@ export default function EssensplanClient({
             <details key={r.id} className="card">
               <summary style={{ cursor: "pointer" }}>{r.name}</summary>
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                <div>
-                  <strong style={{ fontSize: 13 }}>Zutaten</strong>
-                  <pre style={{ whiteSpace: "pre-wrap", fontFamily: "inherit", fontSize: 14, margin: "4px 0" }}>{r.zutaten}</pre>
-                </div>
-                {r.zubereitung && (
-                  <div>
-                    <strong style={{ fontSize: 13 }}>Zubereitung</strong>
-                    <p style={{ fontSize: 14, margin: "4px 0", whiteSpace: "pre-wrap" }}>{r.zubereitung}</p>
-                  </div>
+                {bearbeiteRezeptId === r.id ? (
+                  <>
+                    <label style={{ fontSize: 13, display: "flex", flexDirection: "column", gap: 4 }}>
+                      Zutaten (eine Zeile je Zutat, z. B. "200 g Mehl")
+                      <textarea
+                        rows={Math.max(4, r.zutaten.split("\n").length)}
+                        value={rezeptZutatenEntwurf}
+                        onChange={(e) => setRezeptZutatenEntwurf(e.target.value)}
+                        style={{ fontFamily: "inherit" }}
+                      />
+                    </label>
+                    <label style={{ fontSize: 13, display: "flex", flexDirection: "column", gap: 4 }}>
+                      Zubereitung
+                      <textarea rows={5} value={rezeptZubereitungEntwurf} onChange={(e) => setRezeptZubereitungEntwurf(e.target.value)} />
+                    </label>
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <button
+                        className="btn"
+                        style={{ fontSize: 12, padding: "4px 10px" }}
+                        onClick={() =>
+                          startTransition(async () => {
+                            await updateRezept(r.id, { zutaten: rezeptZutatenEntwurf, zubereitung: rezeptZubereitungEntwurf || undefined });
+                            setBearbeiteRezeptId(null);
+                          })
+                        }
+                      >
+                        Speichern
+                      </button>
+                      <button className="btn-secondary" style={{ fontSize: 12, padding: "4px 10px" }} onClick={() => setBearbeiteRezeptId(null)}>
+                        Abbrechen
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div>
+                      <strong style={{ fontSize: 13 }}>Zutaten</strong>
+                      <pre style={{ whiteSpace: "pre-wrap", fontFamily: "inherit", fontSize: 14, margin: "4px 0" }}>{r.zutaten}</pre>
+                    </div>
+                    {r.zubereitung && (
+                      <div>
+                        <strong style={{ fontSize: 13 }}>Zubereitung</strong>
+                        <p style={{ fontSize: 14, margin: "4px 0", whiteSpace: "pre-wrap" }}>{r.zubereitung}</p>
+                      </div>
+                    )}
+                    {istEltern && (
+                      <button
+                        className="btn-secondary"
+                        style={{ fontSize: 12, alignSelf: "flex-start" }}
+                        onClick={() => {
+                          setBearbeiteRezeptId(r.id);
+                          setRezeptZutatenEntwurf(r.zutaten);
+                          setRezeptZubereitungEntwurf(r.zubereitung ?? "");
+                        }}
+                      >
+                        ✎ Zutaten/Zubereitung bearbeiten
+                      </button>
+                    )}
+                  </>
                 )}
                 {istEltern && (
                   <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, flexWrap: "wrap" }}>

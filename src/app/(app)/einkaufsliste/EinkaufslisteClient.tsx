@@ -18,6 +18,7 @@ import {
   bestaetigeArtikel,
   lehneArtikelAb,
   erkenneArtikelAusText,
+  erkenneEinkaufslisteAusFoto,
 } from "./actions";
 import { pruefeZutatenFuerRezept, uebernehmeZusaetzlicheZutaten } from "../essensplan/actions";
 import { erkenneKategorie } from "@/lib/kategorisierung";
@@ -122,6 +123,34 @@ function ArtikelKachel({
   );
 }
 
+// Für den Foto-Massenimport (Fix-Batch 35 Nachtrag) — analog dem Resize bei Rezept-/Noten-/
+// Ticket-Fotos.
+function listenFotoAufBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const bild = new Image();
+    const reader = new FileReader();
+    reader.onerror = reject;
+    reader.onload = () => {
+      bild.onerror = reject;
+      bild.onload = () => {
+        const maxBreite = 1500;
+        const skalierung = Math.min(1, maxBreite / bild.width);
+        const canvas = document.createElement("canvas");
+        canvas.width = bild.width * skalierung;
+        canvas.height = bild.height * skalierung;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return reject(new Error("Canvas nicht verfügbar"));
+        ctx.drawImage(bild, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL("image/jpeg", 0.85));
+      };
+      bild.src = reader.result as string;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+type ListenVorschauZeile = { name: string; menge: string; ausgewaehlt: boolean };
+
 export default function EinkaufslisteClient({
   istEltern,
   artikel,
@@ -165,6 +194,9 @@ export default function EinkaufslisteClient({
   const [extraGeprueft, setExtraGeprueft] = useState(false);
   const [spracheVerarbeitung, setSpracheVerarbeitung] = useState(false);
   const [einkaufsmodus, setEinkaufsmodus] = useState(false);
+  const [zeigeListenImport, setZeigeListenImport] = useState(false);
+  const [listenImportLaeuft, setListenImportLaeuft] = useState(false);
+  const [listenVorschau, setListenVorschau] = useState<ListenVorschauZeile[] | null>(null);
 
   // Einkaufsmodus (Fix-Batch 35, Florians Wunsch): hält den Bildschirm wach, solange man mit
   // der Liste im Laden unterwegs ist (Wake Lock API) — verhindert, dass das Display beim
@@ -284,6 +316,99 @@ export default function EinkaufslisteClient({
         <p style={{ margin: "-8px 0 0", fontSize: 13, color: "var(--text-muted)" }}>
           {erledigt.length} von {artikel.length} erledigt — Bildschirm bleibt an, solange der Einkaufsmodus läuft.
         </p>
+      )}
+
+      {!einkaufsmodus && istEltern && (
+        <div className="card" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <button className="btn-secondary" onClick={() => setZeigeListenImport((v) => !v)}>
+            📷 Liste aus Foto/Screenshot importieren
+          </button>
+          {zeigeListenImport && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 4 }}>
+              <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>
+                Foto einer handgeschriebenen Liste oder Screenshot einer anderen App — die erkannten Artikel kannst du danach noch prüfen, bevor sie wirklich hinzugefügt werden.
+              </p>
+              <input
+                type="file"
+                accept="image/*"
+                disabled={listenImportLaeuft}
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  e.target.value = "";
+                  setListenImportLaeuft(true);
+                  setListenVorschau(null);
+                  try {
+                    const foto = await listenFotoAufBase64(file);
+                    const ergebnis = await erkenneEinkaufslisteAusFoto(foto);
+                    if (!ergebnis.ok) {
+                      alert(ergebnis.fehler);
+                      return;
+                    }
+                    if (ergebnis.artikel.length === 0) {
+                      alert("Es konnten keine Artikel auf dem Foto erkannt werden.");
+                      return;
+                    }
+                    setListenVorschau(
+                      ergebnis.artikel.map((a) => ({ name: a.name, menge: a.menge ?? "", ausgewaehlt: true }))
+                    );
+                  } finally {
+                    setListenImportLaeuft(false);
+                  }
+                }}
+              />
+              {listenImportLaeuft && <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>Foto wird analysiert …</p>}
+              {listenVorschau && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  <strong style={{ fontSize: 13 }}>Erkannte Artikel — bitte prüfen:</strong>
+                  {listenVorschau.map((zeile, i) => (
+                    <div key={i} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <input
+                        type="checkbox"
+                        checked={zeile.ausgewaehlt}
+                        onChange={(e) =>
+                          setListenVorschau((prev) => prev!.map((z, idx) => (idx === i ? { ...z, ausgewaehlt: e.target.checked } : z)))
+                        }
+                      />
+                      <input
+                        value={zeile.name}
+                        onChange={(e) => setListenVorschau((prev) => prev!.map((z, idx) => (idx === i ? { ...z, name: e.target.value } : z)))}
+                        style={{ flex: 2, fontSize: 13 }}
+                      />
+                      <input
+                        placeholder="Menge"
+                        value={zeile.menge}
+                        onChange={(e) => setListenVorschau((prev) => prev!.map((z, idx) => (idx === i ? { ...z, menge: e.target.value } : z)))}
+                        style={{ flex: 1, fontSize: 13 }}
+                      />
+                    </div>
+                  ))}
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <button
+                      className="btn"
+                      disabled={pending}
+                      onClick={() =>
+                        startTransition(async () => {
+                          const ausgewaehlte = listenVorschau.filter((z) => z.ausgewaehlt && z.name.trim());
+                          for (const z of ausgewaehlte) {
+                            await addArtikel({ name: z.name.trim(), menge: z.menge.trim() || undefined });
+                          }
+                          setListenVorschau(null);
+                          setZeigeListenImport(false);
+                        })
+                      }
+                    >
+                      Ausgewählte hinzufügen ({listenVorschau.filter((z) => z.ausgewaehlt).length})
+                    </button>
+                    <button className="btn-secondary" onClick={() => setListenVorschau(null)}>
+                      Abbrechen
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       )}
 
       {einkaufsmodus ? null : istEltern ? (

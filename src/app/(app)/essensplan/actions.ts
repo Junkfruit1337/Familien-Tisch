@@ -67,6 +67,22 @@ export async function updateRezeptPortionenBasis(rezeptId: string, portionenBasi
   revalidatePath("/einkaufsliste");
 }
 
+// Volle Rezept-Bearbeitung (Fix-Batch 35 Nachtrag, Ticket "Rezept-Bearbeitung erweitern") —
+// vorher war nur die Portionsgrundlage nachträglich änderbar, nicht die Zutatenmengen oder
+// die Zubereitung selbst.
+export async function updateRezept(rezeptId: string, data: { name?: string; zutaten?: string; zubereitung?: string }) {
+  await requireParent();
+  await prisma.rezept.update({
+    where: { id: rezeptId },
+    data: {
+      name: data.name?.trim() || undefined,
+      zutaten: data.zutaten !== undefined ? data.zutaten : undefined,
+      zubereitung: data.zubereitung !== undefined ? data.zubereitung || null : undefined,
+    },
+  });
+  revalidatePath("/essensplan");
+}
+
 // Rezept-Erfassung per Foto (Fragenkatalog Frage 25, Batch 8) — füllt nur das
 // "Neues Rezept"-Formular vor, gespeichert wird erst nach Prüfung/Korrektur durch die Eltern.
 // Fehler werden hier abgefangen und als Ergebnis-Objekt zurückgegeben statt geworfen,
