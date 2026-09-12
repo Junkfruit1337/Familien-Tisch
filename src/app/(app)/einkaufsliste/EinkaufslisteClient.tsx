@@ -362,35 +362,75 @@ export default function EinkaufslisteClient({
               <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>
                 Foto einer handgeschriebenen Liste oder Screenshot einer anderen App — die erkannten Artikel kannst du danach noch prüfen, bevor sie wirklich hinzugefügt werden.
               </p>
-              <input
-                type="file"
-                accept="image/*"
-                disabled={listenImportLaeuft}
-                onChange={async (e) => {
-                  const file = e.target.files?.[0];
-                  if (!file) return;
-                  e.target.value = "";
-                  setListenImportLaeuft(true);
-                  setListenVorschau(null);
-                  try {
-                    const foto = await listenFotoAufBase64(file);
-                    const ergebnis = await erkenneEinkaufslisteAusFoto(foto);
-                    if (!ergebnis.ok) {
-                      alert(ergebnis.fehler);
-                      return;
-                    }
-                    if (ergebnis.artikel.length === 0) {
-                      alert("Es konnten keine Artikel auf dem Foto erkannt werden.");
-                      return;
-                    }
-                    setListenVorschau(
-                      ergebnis.artikel.map((a) => ({ name: a.name, menge: a.menge ?? "", ausgewaehlt: true }))
-                    );
-                  } finally {
-                    setListenImportLaeuft(false);
-                  }
-                }}
-              />
+              <div style={{ display: "flex", gap: 8 }}>
+                <label className="btn-secondary" style={{ fontSize: 13, padding: "8px 12px", cursor: listenImportLaeuft ? "default" : "pointer", display: "flex", alignItems: "center", gap: 4, opacity: listenImportLaeuft ? 0.5 : 1 }}>
+                  📷 Foto
+                  <input
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    disabled={listenImportLaeuft}
+                    style={{ display: "none" }}
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      e.target.value = "";
+                      setListenImportLaeuft(true);
+                      setListenVorschau(null);
+                      try {
+                        const foto = await listenFotoAufBase64(file);
+                        const ergebnis = await erkenneEinkaufslisteAusFoto(foto);
+                        if (!ergebnis.ok) {
+                          alert(ergebnis.fehler);
+                          return;
+                        }
+                        if (ergebnis.artikel.length === 0) {
+                          alert("Es konnten keine Artikel auf dem Foto erkannt werden.");
+                          return;
+                        }
+                        setListenVorschau(
+                          ergebnis.artikel.map((a) => ({ name: a.name, menge: a.menge ?? "", ausgewaehlt: true }))
+                        );
+                      } finally {
+                        setListenImportLaeuft(false);
+                      }
+                    }}
+                  />
+                </label>
+                <label className="btn-secondary" style={{ fontSize: 13, padding: "8px 12px", cursor: listenImportLaeuft ? "default" : "pointer", display: "flex", alignItems: "center", gap: 4, opacity: listenImportLaeuft ? 0.5 : 1 }}>
+                  📁 Aus Galerie
+                  <input
+                    type="file"
+                    accept="image/*"
+                    disabled={listenImportLaeuft}
+                    style={{ display: "none" }}
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      e.target.value = "";
+                      setListenImportLaeuft(true);
+                      setListenVorschau(null);
+                      try {
+                        const foto = await listenFotoAufBase64(file);
+                        const ergebnis = await erkenneEinkaufslisteAusFoto(foto);
+                        if (!ergebnis.ok) {
+                          alert(ergebnis.fehler);
+                          return;
+                        }
+                        if (ergebnis.artikel.length === 0) {
+                          alert("Es konnten keine Artikel auf dem Foto erkannt werden.");
+                          return;
+                        }
+                        setListenVorschau(
+                          ergebnis.artikel.map((a) => ({ name: a.name, menge: a.menge ?? "", ausgewaehlt: true }))
+                        );
+                      } finally {
+                        setListenImportLaeuft(false);
+                      }
+                    }}
+                  />
+                </label>
+              </div>
               {listenImportLaeuft && <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>Foto wird analysiert …</p>}
               {listenVorschau && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>

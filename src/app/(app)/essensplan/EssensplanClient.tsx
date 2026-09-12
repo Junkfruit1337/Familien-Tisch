@@ -542,36 +542,74 @@ export default function EssensplanClient({
                 })
               }
             />
-            <label style={{ fontSize: 13, display: "flex", flexDirection: "column", gap: 4 }}>
-              📷 Rezept aus Foto erkennen (Kochbuch, Zeitschrift oder handschriftlich)
-              <input
-                type="file"
-                accept="image/*"
-                disabled={erkennungLaeuft}
-                onChange={async (e) => {
-                  const file = e.target.files?.[0];
-                  if (!file) return;
-                  e.target.value = "";
-                  setErkennungLaeuft(true);
-                  try {
-                    const base64 = await rezeptfotoAufBase64(file);
-                    const ergebnis = await erkenneRezeptAusFoto(base64);
-                    if (!ergebnis.ok) {
-                      alert(ergebnis.fehler);
-                      return;
-                    }
-                    setNeuName(ergebnis.rezept.name);
-                    setNeuZutaten(ergebnis.rezept.zutaten);
-                    setNeuZubereitung(ergebnis.rezept.zubereitung);
-                    if (ergebnis.rezept.portionen) setNeuPortionenBasis(String(ergebnis.rezept.portionen));
-                  } catch (err: any) {
-                    alert(err.message ?? "Foto konnte nicht erkannt werden.");
-                  } finally {
-                    setErkennungLaeuft(false);
-                  }
-                }}
-              />
-            </label>
+            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <span style={{ fontSize: 13, color: "var(--text-muted)" }}>Rezept aus Foto erkennen (Kochbuch, Zeitschrift oder handschriftlich)</span>
+              <div style={{ display: "flex", gap: 8 }}>
+                <label className="btn-secondary" style={{ fontSize: 13, padding: "8px 12px", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>
+                  📷 Foto
+                  <input
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    disabled={erkennungLaeuft}
+                    style={{ display: "none" }}
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      e.target.value = "";
+                      setErkennungLaeuft(true);
+                      try {
+                        const base64 = await rezeptfotoAufBase64(file);
+                        const ergebnis = await erkenneRezeptAusFoto(base64);
+                        if (!ergebnis.ok) {
+                          alert(ergebnis.fehler);
+                          return;
+                        }
+                        setNeuName(ergebnis.rezept.name);
+                        setNeuZutaten(ergebnis.rezept.zutaten);
+                        setNeuZubereitung(ergebnis.rezept.zubereitung);
+                        if (ergebnis.rezept.portionen) setNeuPortionenBasis(String(ergebnis.rezept.portionen));
+                      } catch (err: any) {
+                        alert(err.message ?? "Foto konnte nicht erkannt werden.");
+                      } finally {
+                        setErkennungLaeuft(false);
+                      }
+                    }}
+                  />
+                </label>
+                <label className="btn-secondary" style={{ fontSize: 13, padding: "8px 12px", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>
+                  📁 Aus Galerie
+                  <input
+                    type="file"
+                    accept="image/*"
+                    disabled={erkennungLaeuft}
+                    style={{ display: "none" }}
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      e.target.value = "";
+                      setErkennungLaeuft(true);
+                      try {
+                        const base64 = await rezeptfotoAufBase64(file);
+                        const ergebnis = await erkenneRezeptAusFoto(base64);
+                        if (!ergebnis.ok) {
+                          alert(ergebnis.fehler);
+                          return;
+                        }
+                        setNeuName(ergebnis.rezept.name);
+                        setNeuZutaten(ergebnis.rezept.zutaten);
+                        setNeuZubereitung(ergebnis.rezept.zubereitung);
+                        if (ergebnis.rezept.portionen) setNeuPortionenBasis(String(ergebnis.rezept.portionen));
+                      } catch (err: any) {
+                        alert(err.message ?? "Foto konnte nicht erkannt werden.");
+                      } finally {
+                        setErkennungLaeuft(false);
+                      }
+                    }}
+                  />
+                </label>
+              </div>
+            </div>
             {erkennungLaeuft && <p style={{ fontSize: 13, color: "var(--text-muted)", margin: 0 }}>Foto wird erkannt …</p>}
             <p style={{ fontSize: 12, color: "var(--text-muted)", margin: 0 }}>
               Ergebnis bitte immer prüfen und bei Bedarf korrigieren, bevor du speicherst.

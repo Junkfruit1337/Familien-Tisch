@@ -822,20 +822,26 @@ export default function SchuleClient({
           </select>
           <input type="date" value={datum} onChange={(e) => setDatum(e.target.value)} />
           <input placeholder="Thema (Pflichtfeld, z. B. Bruchrechnung)" value={notiz} onChange={(e) => setNotiz(e.target.value)} />
-          <label style={{ fontSize: 13, display: "flex", flexDirection: "column", gap: 4 }}>
-            📷 Foto vom Notenzettel (Pflicht — muss mit der Kamera aufgenommen werden, kein Galerie-Bild)
-            <input
-              type="file"
-              accept="image/*"
-              capture="environment"
-              onChange={async (e) => {
-                const file = e.target.files?.[0];
-                if (!file) return;
-                const base64 = await resizeBildAufBase64(file);
-                setFoto(base64);
-              }}
-            />
-          </label>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            <span style={{ fontSize: 13, color: "var(--text-muted)" }}>
+              Foto vom Notenzettel (Pflicht — muss mit der Kamera aufgenommen werden, kein Galerie-Bild)
+            </span>
+            <label className="btn-secondary" style={{ fontSize: 13, padding: "8px 12px", cursor: "pointer", display: "flex", alignItems: "center", gap: 4, alignSelf: "flex-start" }}>
+              📷 Foto aufnehmen
+              <input
+                type="file"
+                accept="image/*"
+                capture="environment"
+                style={{ display: "none" }}
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  const base64 = await resizeBildAufBase64(file);
+                  setFoto(base64);
+                }}
+              />
+            </label>
+          </div>
           {foto && (
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -845,7 +851,7 @@ export default function SchuleClient({
               </button>
             </div>
           )}
-          <button className="btn" disabled={pending} onClick={() => startTransition(jetztEinreichen)}>
+          <button className="btn" disabled={pending || !foto} title={!foto ? "Erst ein Foto vom Notenzettel aufnehmen" : undefined} onClick={() => startTransition(jetztEinreichen)}>
             Eintragen
           </button>
           </div>
