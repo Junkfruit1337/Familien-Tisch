@@ -79,9 +79,18 @@ export default function AppShell({ person, children }: { person: Person; childre
   // wechselt zum nächsten/vorherigen Tab in NAV — nicht nur über die Leiste unten antippbar.
   // Schwelle bewusst recht hoch (80px, deutlich mehr horizontal als vertikal, unter 600ms),
   // damit normales Scrollen/Antippen nicht versehentlich als Wisch gewertet wird.
+  // Fix-Batch 79 (Florians Bug-Meldung): innerhalb der Reiterleiste selbst darf ein Wisch
+  // NICHT den Tab wechseln — sonst kollidiert das mit dem (jetzt ohnehin nicht mehr nötigen,
+  // siehe unten) horizontalen Scrollen der Leiste. Touches, die in der <nav> starten, werden
+  // hier ignoriert.
   const wischStartRef = useRef<{ x: number; y: number; t: number } | null>(null);
+  const navRef = useRef<HTMLElement>(null);
 
   function onTouchStart(e: React.TouchEvent) {
+    if (navRef.current?.contains(e.target as Node)) {
+      wischStartRef.current = null;
+      return;
+    }
     const t = e.touches[0];
     wischStartRef.current = { x: t.clientX, y: t.clientY, t: Date.now() };
   }
@@ -150,14 +159,19 @@ export default function AppShell({ person, children }: { person: Person; childre
         {children}
       </main>
 
+      {/* Fix-Batch 79 (Florians Bug-Meldung): vorher zwangen "flex-shrink: 0" + eine feste
+          Mindestbreite (64px) pro Reiter die Leiste bei 8 Reitern zum horizontalen Scrollen
+          — das kollidierte mit der neuen Wisch-Geste. Jetzt schrumpfen die Reiter frei
+          (kein überschüssiger Platz nötig), sodass alle 8 immer ohne Scrollen auf eine Zeile
+          passen; kein overflowX mehr nötig. */}
       <nav
+        ref={navRef}
         style={{
           position: "fixed",
           bottom: 0,
           left: 0,
           right: 0,
           display: "flex",
-          overflowX: "auto",
           background: "var(--surface)",
           boxShadow: "0 -2px 10px rgba(58, 51, 42, 0.06)",
           paddingBottom: "env(safe-area-inset-bottom)",
@@ -171,24 +185,26 @@ export default function AppShell({ person, children }: { person: Person; childre
               key={item.href}
               href={item.href}
               style={{
-                flex: "1 0 64px",
+                flex: "1 1 0",
+                minWidth: 0,
                 display: "flex",
                 flexDirection: "column",
                 alignItems: "center",
-                gap: 3,
-                padding: "8px 4px 6px",
+                gap: 2,
+                padding: "8px 2px 6px",
                 color: active ? item.farbe : "var(--text-muted)",
-                fontSize: "var(--font-xs)",
+                fontSize: 10,
                 textDecoration: "none",
                 fontWeight: active ? 700 : 500,
+                overflow: "hidden",
               }}
             >
               <span
                 style={{
-                  fontSize: 17,
+                  fontSize: 16,
                   lineHeight: 1,
-                  width: 34,
-                  height: 26,
+                  width: 28,
+                  height: 24,
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
@@ -199,7 +215,7 @@ export default function AppShell({ person, children }: { person: Person; childre
               >
                 {item.icon}
               </span>
-              {item.label}
+              <span style={{ whiteSpace: "nowrap" }}>{item.label}</span>
             </Link>
           );
         })}
