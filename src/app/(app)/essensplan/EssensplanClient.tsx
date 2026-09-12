@@ -39,6 +39,7 @@ import { pruefeZutatenVollstaendig } from "@/lib/rezeptValidierung";
 import { REZEPT_KATEGORIEN } from "@/lib/rezeptKategorien";
 import PersonChip from "@/components/PersonChip";
 import { BEREICH_FARBEN } from "@/lib/bereichFarben";
+import RezeptSucheFeld from "@/components/RezeptSucheFeld";
 
 // Für die Foto-Erkennung etwas größer/hochwertiger als bei Notenfotos (Batch 3),
 // damit auch kleinere Kochbuch-/Handschrift-Texte für die Bilderkennung lesbar bleiben.
@@ -244,7 +245,8 @@ export default function EssensplanClient({
   const [extraFormTag, setExtraFormTag] = useState<string | null>(null);
   const [extraBezeichnung, setExtraBezeichnung] = useState("");
   const [extraRezeptId, setExtraRezeptId] = useState("");
-  const [extraFaktorEntwurf, setExtraFaktorEntwurf] = useState("1");
+  const [extraRezeptName, setExtraRezeptName] = useState("");
+  const [extraPersonen, setExtraPersonen] = useState("");
   const [extraLaeuft, setExtraLaeuft] = useState(false);
 
   const [umschreibeRezeptId, setUmschreibeRezeptId] = useState<string | null>(null);
@@ -544,26 +546,47 @@ export default function EssensplanClient({
                         onChange={(e) => setExtraBezeichnung(e.target.value)}
                         style={{ fontSize: 13 }}
                       />
-                      <select value={extraRezeptId} onChange={(e) => setExtraRezeptId(e.target.value)} style={{ fontSize: 13 }}>
-                        <option value="">– Rezept wählen –</option>
-                        {rezepteAlle.map((r) => (
-                          <option key={r.id} value={r.id}>
-                            {r.name}
-                          </option>
-                        ))}
-                      </select>
-                      <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12 }}>
-                        Menge (1 = wie im Rezept)
-                        <input
-                          type="number"
-                          min={0.25}
-                          step={0.25}
-                          value={extraFaktorEntwurf}
-                          onChange={(e) => setExtraFaktorEntwurf(e.target.value)}
-                          style={{ width: 60 }}
+                      {!extraRezeptId ? (
+                        <RezeptSucheFeld
+                          alle={rezepteAlle}
+                          platzhalter="Rezeptname oder Zutat eingeben …"
+                          onWaehlen={(r) => {
+                            setExtraRezeptId(r.id);
+                            setExtraRezeptName(r.name);
+                            const basis = rezepteAlle.find((x) => x.id === r.id)?.portionenBasis ?? 4;
+                            setExtraPersonen(String(basis));
+                          }}
                         />
-                        ×
-                      </label>
+                      ) : (
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
+                          <strong>{extraRezeptName}</strong>
+                          <button
+                            type="button"
+                            className="btn-secondary"
+                            style={{ fontSize: 11, padding: "2px 8px" }}
+                            onClick={() => {
+                              setExtraRezeptId("");
+                              setExtraRezeptName("");
+                              setExtraPersonen("");
+                            }}
+                          >
+                            Ändern
+                          </button>
+                        </div>
+                      )}
+                      {extraRezeptId && (
+                        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12 }}>
+                          Für wie viele Personen?
+                          <input
+                            type="number"
+                            min={1}
+                            step={1}
+                            value={extraPersonen}
+                            onChange={(e) => setExtraPersonen(e.target.value)}
+                            style={{ width: 60 }}
+                          />
+                        </label>
+                      )}
                       <div style={{ display: "flex", gap: 6 }}>
                         <button
                           className="btn"
@@ -573,12 +596,16 @@ export default function EssensplanClient({
                             startTransition(async () => {
                               setExtraLaeuft(true);
                               try {
-                                await fuegeExtraMahlzeitHinzu(plan.wocheStart, t.tag, extraBezeichnung, extraRezeptId, parseFloat(extraFaktorEntwurf) || 1);
+                                const basis = rezepteAlle.find((r) => r.id === extraRezeptId)?.portionenBasis || 1;
+                                const personen = parseFloat(extraPersonen.replace(",", ".")) || basis;
+                                const faktor = personen / basis;
+                                await fuegeExtraMahlzeitHinzu(plan.wocheStart, t.tag, extraBezeichnung, extraRezeptId, faktor || 1);
                                 await ladeWoche(offset);
                                 setExtraFormTag(null);
                                 setExtraBezeichnung("");
                                 setExtraRezeptId("");
-                                setExtraFaktorEntwurf("1");
+                                setExtraRezeptName("");
+                                setExtraPersonen("");
                               } finally {
                                 setExtraLaeuft(false);
                               }
@@ -587,7 +614,16 @@ export default function EssensplanClient({
                         >
                           {extraLaeuft ? "Wird hinzugefügt …" : "Hinzufügen"}
                         </button>
-                        <button className="btn-secondary" style={{ fontSize: 12, padding: "4px 10px" }} onClick={() => setExtraFormTag(null)}>
+                        <button
+                          className="btn-secondary"
+                          style={{ fontSize: 12, padding: "4px 10px" }}
+                          onClick={() => {
+                            setExtraFormTag(null);
+                            setExtraRezeptId("");
+                            setExtraRezeptName("");
+                            setExtraPersonen("");
+                          }}
+                        >
                           Abbrechen
                         </button>
                       </div>
@@ -600,7 +636,8 @@ export default function EssensplanClient({
                         setExtraFormTag(t.tag);
                         setExtraBezeichnung("");
                         setExtraRezeptId("");
-                        setExtraFaktorEntwurf("1");
+                        setExtraRezeptName("");
+                        setExtraPersonen("");
                       }}
                     >
                       + Weitere Mahlzeit (Frühstück, Snack, …)

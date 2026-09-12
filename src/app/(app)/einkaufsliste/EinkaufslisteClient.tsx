@@ -25,7 +25,7 @@ import { pruefeZutatenFuerRezept, uebernehmeZusaetzlicheZutaten } from "../essen
 import { erkenneKategorie } from "@/lib/kategorisierung";
 import { erkenneArtikelIcon } from "@/lib/artikelIcon";
 import HistorieVerlauf from "@/components/HistorieVerlauf";
-import FaktorLeiste from "@/components/FaktorLeiste";
+import RezeptSucheFeld from "@/components/RezeptSucheFeld";
 import Spracheingabe from "@/components/Spracheingabe";
 import SeitenTitel from "@/components/SeitenTitel";
 import { BEREICH_FARBEN } from "@/lib/bereichFarben";
@@ -65,7 +65,7 @@ type Kategorie = { id: string; name: string };
 type Quelle = { id: string; beschreibung: string; menge: string | null; zeitpunkt: string };
 type Vorschlag = { name: string; menge: string | null };
 type Unbestaetigt = { id: string; name: string; menge: string | null; herkunft: { rezeptName: string; tag: string }[] };
-type RezeptKurz = { id: string; name: string };
+type RezeptKurz = { id: string; name: string; zutaten: string; portionenBasis: number };
 type Zutat = { name: string; menge?: string };
 
 function ArtikelHerkunft({ artikelId }: { artikelId: string }) {
@@ -233,7 +233,8 @@ export default function EinkaufslisteClient({
   const [unbestaetigtNamen, setUnbestaetigtNamen] = useState<Record<string, string>>({});
 
   const [extraRezeptId, setExtraRezeptId] = useState("");
-  const [extraFaktor, setExtraFaktor] = useState(1);
+  const [extraRezeptName, setExtraRezeptName] = useState("");
+  const [extraPersonen, setExtraPersonen] = useState("");
   const [extraZeilen, setExtraZeilen] = useState<Zutat[]>([]);
   const [extraAusgewaehlt, setExtraAusgewaehlt] = useState<boolean[]>([]);
   const [extraGeprueft, setExtraGeprueft] = useState(false);
@@ -298,9 +299,19 @@ export default function EinkaufslisteClient({
     }
   }
 
-  async function aendereExtraFaktor(faktor: number) {
-    setExtraFaktor(faktor);
+  // Fix-Batch 83 (Florians Wunsch): statt eines abstrakten Mengenfaktors trägt man hier die
+  // Personenanzahl ein — der Faktor ergibt sich aus Personen ÷ Rezept-Portionenbasis.
+  function extraFaktorAusPersonen(personen: string, rezeptId: string): number {
+    const basis = rezepte.find((r) => r.id === rezeptId)?.portionenBasis || 1;
+    const p = parseFloat(personen.replace(",", "."));
+    if (!p || p <= 0) return 1;
+    return p / basis;
+  }
+
+  async function aenderePersonen(personen: string) {
+    setExtraPersonen(personen);
     if (extraGeprueft && extraRezeptId) {
+      const faktor = extraFaktorAusPersonen(personen, extraRezeptId);
       const zeilen = await pruefeZutatenFuerRezept(extraRezeptId, faktor);
       setExtraZeilen(zeilen);
       setExtraAusgewaehlt(zeilen.map(() => true));
@@ -309,7 +320,8 @@ export default function EinkaufslisteClient({
 
   async function starteExtraPruefung() {
     if (!extraRezeptId) return;
-    const zeilen = await pruefeZutatenFuerRezept(extraRezeptId, extraFaktor);
+    const faktor = extraFaktorAusPersonen(extraPersonen, extraRezeptId);
+    const zeilen = await pruefeZutatenFuerRezept(extraRezeptId, faktor);
     setExtraZeilen(zeilen);
     setExtraAusgewaehlt(zeilen.map(() => true));
     setExtraGeprueft(true);
@@ -755,22 +767,51 @@ export default function EinkaufslisteClient({
             <p style={{ fontSize: 12, color: "var(--text-muted)", margin: 0 }}>
               Für Anlässe außerhalb des Essensplans — z. B. ein Dip fürs Grillen zusätzlich einkaufen.
             </p>
-            <select
-              value={extraRezeptId}
-              onChange={(e) => {
-                setExtraRezeptId(e.target.value);
-                setExtraGeprueft(false);
-                setExtraZeilen([]);
-              }}
-            >
-              <option value="">– Rezept wählen –</option>
-              {rezepte.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.name}
-                </option>
-              ))}
-            </select>
-            <FaktorLeiste faktor={extraFaktor} onChange={aendereExtraFaktor} />
+            {!extraRezeptId ? (
+              <RezeptSucheFeld
+                alle={rezepte}
+                platzhalter="Rezeptname oder Zutat eingeben …"
+                onWaehlen={(r) => {
+                  setExtraRezeptId(r.id);
+                  setExtraRezeptName(r.name);
+                  const basis = rezepte.find((x) => x.id === r.id)?.portionenBasis || 4;
+                  setExtraPersonen(String(basis));
+                  setExtraGeprueft(false);
+                  setExtraZeilen([]);
+                }}
+              />
+            ) : (
+              <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14 }}>
+                <strong>{extraRezeptName}</strong>
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  style={{ fontSize: 12, padding: "2px 8px" }}
+                  onClick={() => {
+                    setExtraRezeptId("");
+                    setExtraRezeptName("");
+                    setExtraPersonen("");
+                    setExtraGeprueft(false);
+                    setExtraZeilen([]);
+                  }}
+                >
+                  Ändern
+                </button>
+              </div>
+            )}
+            {extraRezeptId && (
+              <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12 }}>
+                Für wie viele Personen?
+                <input
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={extraPersonen}
+                  onChange={(e) => aenderePersonen(e.target.value)}
+                  style={{ width: 60 }}
+                />
+              </label>
+            )}
             {!extraGeprueft && (
               <button className="btn-secondary" style={{ alignSelf: "flex-start" }} disabled={!extraRezeptId} onClick={() => startTransition(starteExtraPruefung)}>
                 Zutaten anzeigen
@@ -797,10 +838,11 @@ export default function EinkaufslisteClient({
                     onClick={() =>
                       startTransition(async () => {
                         const ausgewaehlt = extraZeilen.filter((_, i) => extraAusgewaehlt[i]);
-                        const faktorLabel = `${extraFaktor}×`.replace(".", ",");
+                        const faktorLabel = `${extraPersonen} Pers.`;
                         await uebernehmeZusaetzlicheZutaten(extraRezeptId, ausgewaehlt, faktorLabel);
                         setExtraRezeptId("");
-                        setExtraFaktor(1);
+                        setExtraRezeptName("");
+                        setExtraPersonen("");
                         setExtraZeilen([]);
                         setExtraGeprueft(false);
                       })

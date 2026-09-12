@@ -55,7 +55,7 @@ export default async function EinkaufslistePage() {
       kategorien={kategorien.map((k) => ({ id: k.id, name: k.name }))}
       vorschlaege={vorschlaege}
       unbestaetigt={unbestaetigt}
-      rezepte={rezepteAlle.map((r) => ({ id: r.id, name: r.name }))}
+      rezepte={rezepteAlle.map((r) => ({ id: r.id, name: r.name, zutaten: r.zutaten, portionenBasis: r.portionenBasis }))}
       gelernteIcons={gelernteIcons}
     />
   );
