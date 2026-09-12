@@ -22,7 +22,7 @@ export default async function EinstellungenPage() {
   const kinder = istEltern ? await listKinder() : person ? [person] : [];
   const kinderDaten = await Promise.all(
     kinder.map(async (k) => {
-      const [faecher, gewichtung] = await Promise.all([listFaecher(k.id), listNotenGewichtung(k.id)]);
+      const [faecher, gewichtung] = await Promise.all([listFaecher(k.id), istEltern ? listNotenGewichtung(k.id) : Promise.resolve([])]);
       return {
         id: k.id,
         name: k.name,
