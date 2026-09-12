@@ -16,6 +16,7 @@ import {
   loescheHausproblem,
   wandleHausproblemInAufgabeUm,
   erkenneHausproblemAusText,
+  verbessereEntwurf,
 } from "./actions";
 import { addKategorie, setzeKategorieReihenfolge } from "../einkaufsliste/actions";
 import { addFach, updateFach, deleteFach, pruefeFachDuplikat, setSchulProfil } from "../schule/actions";
@@ -425,6 +426,29 @@ export default function EinstellungenClient({
           value={ticketBeschreibung}
           onChange={(e) => setTicketBeschreibung(e.target.value)}
         />
+        <button
+          className="btn-secondary"
+          style={{ fontSize: 12, alignSelf: "flex-start" }}
+          disabled={ticketVerarbeitung || !ticketBeschreibung.trim()}
+          onClick={() =>
+            startTransition(async () => {
+              setTicketVerarbeitung(true);
+              try {
+                const ergebnis = await verbessereEntwurf(ticketTitel, ticketBeschreibung);
+                if (!ergebnis.ok) {
+                  alert(ergebnis.fehler);
+                  return;
+                }
+                setTicketTitel(ergebnis.titel);
+                setTicketBeschreibung(ergebnis.beschreibung);
+              } finally {
+                setTicketVerarbeitung(false);
+              }
+            })
+          }
+        >
+          ✨ Text verbessern
+        </button>
         <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
           <span style={{ fontSize: 13, color: "var(--text-muted)" }}>Bilder dazufügen (optional, z. B. mehrere Screenshots)</span>
           <div style={{ display: "flex", gap: 8 }}>
@@ -651,6 +675,29 @@ export default function EinstellungenClient({
             value={neuesHausproblemBeschreibung}
             onChange={(e) => setNeuesHausproblemBeschreibung(e.target.value)}
           />
+          <button
+            className="btn-secondary"
+            style={{ fontSize: 12, alignSelf: "flex-start" }}
+            disabled={hausproblemSpracheVerarbeitung || !neuesHausproblemBeschreibung.trim()}
+            onClick={() =>
+              startTransition(async () => {
+                setHausproblemSpracheVerarbeitung(true);
+                try {
+                  const ergebnis = await verbessereEntwurf(neuesHausproblemTitel, neuesHausproblemBeschreibung);
+                  if (!ergebnis.ok) {
+                    alert(ergebnis.fehler);
+                    return;
+                  }
+                  setNeuesHausproblemTitel(ergebnis.titel);
+                  setNeuesHausproblemBeschreibung(ergebnis.beschreibung);
+                } finally {
+                  setHausproblemSpracheVerarbeitung(false);
+                }
+              })
+            }
+          >
+            ✨ Text verbessern
+          </button>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <label
               className="btn-secondary"

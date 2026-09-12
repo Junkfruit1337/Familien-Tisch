@@ -3,7 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { requireParent, requirePerson, hashPin } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
-import { erkenneTicketAusSprache, type ErkanntesTicket } from "@/lib/spracheErkennung";
+import { erkenneTicketAusSprache, verbessereFormulierung, type ErkanntesTicket } from "@/lib/spracheErkennung";
 
 export async function listPersonen() {
   await requirePerson();
@@ -78,6 +78,24 @@ export async function erkenneTicketAusText(text: string): Promise<{ ok: true; ti
   } catch (err) {
     console.error("Spracheingabe (Ticket) fehlgeschlagen:", err);
     const fehler = err instanceof Error ? err.message : "Unbekannter Fehler bei der Spracherkennung.";
+    return { ok: false, fehler };
+  }
+}
+
+// Fix-Batch 64 (Florians KI-Vorschlag "KI hilft beim Formulieren"): verbessert einen bereits
+// getippten Entwurf, unabhängig von der Spracheingabe — für Ticket UND Hausproblem-Formular
+// nutzbar (identisches Titel/Beschreibung-Format).
+export async function verbessereEntwurf(
+  titel: string,
+  beschreibung: string
+): Promise<{ ok: true; titel: string; beschreibung: string } | { ok: false; fehler: string }> {
+  await requirePerson();
+  try {
+    const ergebnis = await verbessereFormulierung(titel, beschreibung);
+    return { ok: true, titel: ergebnis.titel, beschreibung: ergebnis.beschreibung };
+  } catch (err) {
+    console.error("Formulierungshilfe fehlgeschlagen:", err);
+    const fehler = err instanceof Error ? err.message : "Unbekannter Fehler bei der Formulierungshilfe.";
     return { ok: false, fehler };
   }
 }

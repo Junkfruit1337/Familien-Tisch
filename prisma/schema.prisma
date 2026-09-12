@@ -228,6 +228,15 @@ model GelernteArtikelIcons {
   updatedAt DateTime @updatedAt
 }
 
+// Fix-Batch 64: merkt sich zuletzt vorgeschlagene saisonale Rezeptnamen, damit die KI nicht
+// wiederholt dasselbe Gericht vorschlägt (Florians Einwand: "nicht immer Kürbis").
+model SaisonVorschlag {
+  id        String   @id @default(cuid())
+  saison    String
+  name      String
+  createdAt DateTime @default(now())
+}
+
 enum WunschStatus {
   OFFEN
   GENEHMIGT

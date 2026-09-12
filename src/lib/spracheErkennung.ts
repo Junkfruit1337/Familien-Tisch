@@ -200,6 +200,25 @@ export async function erkenneTicketAusSprache(text: string): Promise<ErkanntesTi
   };
 }
 
+// Fix-Batch 64 (Florians KI-Vorschlag "KI hilft beim Formulieren"): verbessert einen bereits
+// getippten (nicht gesprochenen) Entwurf für Tickets/Hausprobleme — macht ihn klarer/vollständiger
+// formuliert, ändert aber nicht den gemeldeten Sachverhalt. Nutzt denselben Titel/Beschreibung-
+// Vertrag wie erkenneTicketAusSprache, daher hier bewusst kein eigener Typ.
+export async function verbessereFormulierung(titel: string, beschreibung: string): Promise<ErkanntesTicket> {
+  const prompt =
+    `Ein Familienmitglied hat folgenden Entwurf für eine Meldung in der Familientisch-App getippt:\n` +
+    `Titel: "${titel}"\nBeschreibung: "${beschreibung}"\n\n` +
+    "Formuliere Titel und Beschreibung klarer und vollständiger aus (ganze Sätze), OHNE den inhaltlichen Sachverhalt zu verändern oder zu erfinden. " +
+    "Antworte AUSSCHLIESSLICH mit einem JSON-Objekt, ohne Markdown-Codeblock, ohne weiteren Text, in genau diesem Format:\n" +
+    '{"titel": "kurzer Titel", "beschreibung": "ausformulierte Beschreibung"}';
+
+  const d = await rufeSpracheNluAuf(prompt);
+  return {
+    titel: typeof d.titel === "string" && d.titel.trim() ? d.titel.trim() : titel.trim(),
+    beschreibung: typeof d.beschreibung === "string" && d.beschreibung.trim() ? d.beschreibung.trim() : beschreibung.trim(),
+  };
+}
+
 // Spracheingabe für "Artikel hinzufügen" / Einkaufs-Wunsch (Fix-Batch 30) — trennt
 // Artikelname und Menge aus einem frei gesprochenen Satz wie "wir brauchen noch 2 Kilo Mehl".
 export async function erkenneArtikelAusSprache(text: string): Promise<ErkannterArtikel> {

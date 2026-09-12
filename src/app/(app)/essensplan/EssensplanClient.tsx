@@ -21,6 +21,10 @@ import {
   erkenneRezeptAusText,
   updateRezeptPortionenBasis,
   updateRezept,
+  schlageSaisonaleIdeeVor,
+  verdichteZubereitungVorschau,
+  schreibeRezeptUmVorschau,
+  pruefeAusgewogenheitDerWoche,
 } from "./actions";
 import SeitenTitel from "@/components/SeitenTitel";
 import Spracheingabe from "@/components/Spracheingabe";
@@ -80,6 +84,9 @@ type Herkunft = { artikelId: string; artikelName: string; menge: string | null }
 
 const WOCHEN_LABEL = ["Diese Woche", "Nächste Woche", "Übernächste Woche"];
 
+type Ausgewogenheit = { fleischGerichte: number; gesamtGerichte: number; hinweis: string | null };
+type ErkanntesRezeptClient = { name: string; zutaten: string; zubereitung: string; portionen: number | null };
+
 export default function EssensplanClient({
   istEltern,
   plan: initialPlan,
@@ -87,6 +94,7 @@ export default function EssensplanClient({
   rezepteVorschlaege: initialVorschlaege,
   ausgeblendete: initialAusgeblendete,
   familie,
+  ausgewogenheitInitial,
 }: {
   istEltern: boolean;
   plan: Plan;
@@ -94,12 +102,21 @@ export default function EssensplanClient({
   rezepteVorschlaege: RezeptKurz[];
   ausgeblendete: { rezeptId: string; name: string }[];
   familie: Familienmitglied[];
+  ausgewogenheitInitial: Ausgewogenheit | null;
 }) {
   const [pending, startTransition] = useTransition();
   const [offset, setOffset] = useState(0);
   const [plan, setPlan] = useState(initialPlan);
   const [vorschlaege, setVorschlaege] = useState(initialVorschlaege);
   const [ausgeblendete, setAusgeblendete] = useState(initialAusgeblendete);
+  const [ausgewogenheit, setAusgewogenheit] = useState(ausgewogenheitInitial);
+
+  const [umschreibeRezeptId, setUmschreibeRezeptId] = useState<string | null>(null);
+  const [umschreibeAnweisung, setUmschreibeAnweisung] = useState("");
+  const [umschreibeVorschau, setUmschreibeVorschau] = useState<ErkanntesRezeptClient | null>(null);
+  const [umschreibenLaeuft, setUmschreibenLaeuft] = useState(false);
+  const [verdichtenLaeuft, setVerdichtenLaeuft] = useState(false);
+  const [saisonLaeuft, setSaisonLaeuft] = useState(false);
 
   const [portionenEntwuerfe, setPortionenEntwuerfe] = useState<Record<string, string>>({});
   const [bearbeiteRezeptId, setBearbeiteRezeptId] = useState<string | null>(null);
@@ -118,13 +135,15 @@ export default function EssensplanClient({
 
   async function ladeWoche(neuerOffset: number) {
     const neuerPlan = await getWochenplan(neuerOffset);
-    const [neueVorschlaege, neueAusgeblendete] = await Promise.all([
+    const [neueVorschlaege, neueAusgeblendete, neueAusgewogenheit] = await Promise.all([
       listRezepteFuerWoche(neuerPlan.wocheStart),
       istEltern ? listAusgeblendeteFuerWoche(neuerPlan.wocheStart) : Promise.resolve([]),
+      istEltern ? pruefeAusgewogenheitDerWoche(neuerPlan.wocheStart) : Promise.resolve(null),
     ]);
     setPlan(neuerPlan);
     setVorschlaege(neueVorschlaege);
     setAusgeblendete(neueAusgeblendete);
+    setAusgewogenheit(neueAusgewogenheit);
   }
 
   function wechsleWoche(neuerOffset: number) {
@@ -180,6 +199,12 @@ export default function EssensplanClient({
           ›
         </button>
       </div>
+
+      {istEltern && ausgewogenheit?.hinweis && (
+        <div className="card" style={{ background: "var(--info-soft)", fontSize: 13 }}>
+          ⚖️ {ausgewogenheit.hinweis}
+        </div>
+      )}
 
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {plan.tage.map((t) => (
@@ -426,6 +451,28 @@ export default function EssensplanClient({
                       Zubereitung
                       <textarea rows={5} value={rezeptZubereitungEntwurf} onChange={(e) => setRezeptZubereitungEntwurf(e.target.value)} />
                     </label>
+                    <button
+                      className="btn-secondary"
+                      style={{ fontSize: 12, padding: "4px 10px", alignSelf: "flex-start" }}
+                      disabled={verdichtenLaeuft || !rezeptZubereitungEntwurf.trim()}
+                      onClick={() =>
+                        startTransition(async () => {
+                          setVerdichtenLaeuft(true);
+                          try {
+                            const ergebnis = await verdichteZubereitungVorschau(rezeptZubereitungEntwurf);
+                            if (!ergebnis.ok) {
+                              alert(ergebnis.fehler);
+                              return;
+                            }
+                            setRezeptZubereitungEntwurf(ergebnis.zubereitung);
+                          } finally {
+                            setVerdichtenLaeuft(false);
+                          }
+                        })
+                      }
+                    >
+                      {verdichtenLaeuft ? "Wird verdichtet …" : "🪄 Anleitung kürzer fassen"}
+                    </button>
                     <div style={{ display: "flex", gap: 6 }}>
                       <button
                         className="btn"
@@ -500,6 +547,114 @@ export default function EssensplanClient({
                     >
                       Speichern
                     </button>
+                  </div>
+                )}
+                {istEltern && (
+                  <div style={{ borderTop: "1px solid var(--border)", paddingTop: 8 }}>
+                    {umschreibeRezeptId !== r.id ? (
+                      <button
+                        className="btn-secondary"
+                        style={{ fontSize: 12 }}
+                        onClick={() => {
+                          setUmschreibeRezeptId(r.id);
+                          setUmschreibeAnweisung("");
+                          setUmschreibeVorschau(null);
+                        }}
+                      >
+                        🔄 Rezept umschreiben lassen (z. B. „vegetarisch")
+                      </button>
+                    ) : !umschreibeVorschau ? (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                        <input
+                          placeholder='Anweisung, z. B. "vegetarisch machen" oder "ohne Nüsse"'
+                          value={umschreibeAnweisung}
+                          onChange={(e) => setUmschreibeAnweisung(e.target.value)}
+                          style={{ fontSize: 13 }}
+                        />
+                        <div style={{ display: "flex", gap: 6 }}>
+                          <button
+                            className="btn"
+                            style={{ fontSize: 12, padding: "4px 10px" }}
+                            disabled={umschreibenLaeuft || !umschreibeAnweisung.trim()}
+                            onClick={() =>
+                              startTransition(async () => {
+                                setUmschreibenLaeuft(true);
+                                try {
+                                  const ergebnis = await schreibeRezeptUmVorschau(r.id, umschreibeAnweisung);
+                                  if (!ergebnis.ok) {
+                                    alert(ergebnis.fehler);
+                                    return;
+                                  }
+                                  setUmschreibeVorschau(ergebnis.rezept);
+                                } finally {
+                                  setUmschreibenLaeuft(false);
+                                }
+                              })
+                            }
+                          >
+                            {umschreibenLaeuft ? "Wird umgeschrieben …" : "Umschreiben"}
+                          </button>
+                          <button className="btn-secondary" style={{ fontSize: 12, padding: "4px 10px" }} onClick={() => setUmschreibeRezeptId(null)}>
+                            Abbrechen
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 6, background: "var(--surface-alt)", borderRadius: "var(--radius)", padding: 10 }}>
+                        <strong style={{ fontSize: 13 }}>Vorschlag: {umschreibeVorschau.name}</strong>
+                        <div>
+                          <strong style={{ fontSize: 12 }}>Zutaten</strong>
+                          <pre style={{ whiteSpace: "pre-wrap", fontFamily: "inherit", fontSize: 13, margin: "4px 0" }}>{umschreibeVorschau.zutaten}</pre>
+                        </div>
+                        {umschreibeVorschau.zubereitung && (
+                          <div>
+                            <strong style={{ fontSize: 12 }}>Zubereitung</strong>
+                            <p style={{ fontSize: 13, margin: "4px 0", whiteSpace: "pre-wrap" }}>{umschreibeVorschau.zubereitung}</p>
+                          </div>
+                        )}
+                        <p style={{ fontSize: 12, color: "var(--text-muted)", margin: 0 }}>Bitte prüfen und bei Bedarf korrigieren, bevor du speicherst.</p>
+                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                          <button
+                            className="btn"
+                            style={{ fontSize: 12, padding: "4px 10px" }}
+                            onClick={() =>
+                              startTransition(async () => {
+                                await addRezept(
+                                  umschreibeVorschau.name,
+                                  umschreibeVorschau.zutaten,
+                                  umschreibeVorschau.zubereitung || undefined,
+                                  umschreibeVorschau.portionen || r.portionenBasis
+                                );
+                                setUmschreibeRezeptId(null);
+                                setUmschreibeVorschau(null);
+                              })
+                            }
+                          >
+                            Als neues Rezept speichern
+                          </button>
+                          <button
+                            className="btn-secondary"
+                            style={{ fontSize: 12, padding: "4px 10px" }}
+                            onClick={() =>
+                              startTransition(async () => {
+                                await updateRezept(r.id, {
+                                  name: umschreibeVorschau.name,
+                                  zutaten: umschreibeVorschau.zutaten,
+                                  zubereitung: umschreibeVorschau.zubereitung || undefined,
+                                });
+                                setUmschreibeRezeptId(null);
+                                setUmschreibeVorschau(null);
+                              })
+                            }
+                          >
+                            Dieses Rezept überschreiben
+                          </button>
+                          <button className="btn-secondary" style={{ fontSize: 12, padding: "4px 10px" }} onClick={() => setUmschreibeRezeptId(null)}>
+                            Verwerfen
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
                 {istEltern && (
@@ -621,6 +776,31 @@ export default function EssensplanClient({
               </div>
             </div>
             {erkennungLaeuft && <p style={{ fontSize: 13, color: "var(--text-muted)", margin: 0 }}>Foto wird erkannt …</p>}
+            <button
+              className="btn-secondary"
+              style={{ fontSize: 13, alignSelf: "flex-start" }}
+              disabled={saisonLaeuft}
+              onClick={() =>
+                startTransition(async () => {
+                  setSaisonLaeuft(true);
+                  try {
+                    const ergebnis = await schlageSaisonaleIdeeVor();
+                    if (!ergebnis.ok) {
+                      alert(ergebnis.fehler);
+                      return;
+                    }
+                    setNeuName(ergebnis.rezept.name);
+                    setNeuZutaten(ergebnis.rezept.zutaten);
+                    setNeuZubereitung(ergebnis.rezept.zubereitung);
+                    if (ergebnis.rezept.portionen) setNeuPortionenBasis(String(ergebnis.rezept.portionen));
+                  } finally {
+                    setSaisonLaeuft(false);
+                  }
+                })
+              }
+            >
+              {saisonLaeuft ? "Idee wird gesucht …" : "🍂 Saisonale Idee vorschlagen"}
+            </button>
             <p style={{ fontSize: 12, color: "var(--text-muted)", margin: 0 }}>
               Ergebnis bitte immer prüfen und bei Bedarf korrigieren, bevor du speicherst.
             </p>

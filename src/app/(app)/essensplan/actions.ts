@@ -4,7 +4,14 @@ import { prisma } from "@/lib/prisma";
 import { requireParent } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import { autoKategorieId, findeOffenenArtikel, findeOffenenUnbestaetigtenArtikel, mergeMenge } from "../einkaufsliste/actions";
-import { erkenneRezeptAusBild, erkenneRezeptAusSprache, type ErkanntesRezept } from "@/lib/rezeptErkennung";
+import {
+  erkenneRezeptAusBild,
+  erkenneRezeptAusSprache,
+  schreibeRezeptUm,
+  schlageSaisonalesRezeptVor,
+  verdichteZubereitung,
+  type ErkanntesRezept,
+} from "@/lib/rezeptErkennung";
 
 function getSamstagWocheStart(date: Date): Date {
   // Essensplan-Woche läuft Samstag–Samstag.
@@ -114,6 +121,108 @@ export async function erkenneRezeptAusText(
   } catch (err) {
     console.error("Rezept-Sprach-Erkennung fehlgeschlagen:", err);
     const fehler = err instanceof Error ? err.message : "Unbekannter Fehler bei der Spracherkennung.";
+    return { ok: false, fehler };
+  }
+}
+
+// Fix-Batch 64 (Florians KI-Vorschlag "Saisonale Rezeptideen"): ermittelt die aktuelle
+// Jahreszeit, holt die letzten Vorschläge derselben Saison zur Wiederholungs-Vermeidung und
+// speichert den neuen Vorschlagsnamen danach ab (Historie wird auf die letzten 5 pro Saison
+// begrenzt, ältere Einträge werden gelöscht).
+function aktuelleSaison(datum = new Date()): string {
+  const monat = datum.getMonth() + 1;
+  if (monat >= 3 && monat <= 5) return "Frühling";
+  if (monat >= 6 && monat <= 8) return "Sommer";
+  if (monat >= 9 && monat <= 11) return "Herbst";
+  return "Winter";
+}
+
+export async function schlageSaisonaleIdeeVor(): Promise<{ ok: true; rezept: ErkanntesRezept } | { ok: false; fehler: string }> {
+  await requireParent();
+  try {
+    const saison = aktuelleSaison();
+    const bisherige = await prisma.saisonVorschlag.findMany({
+      where: { saison },
+      orderBy: { createdAt: "desc" },
+      take: 5,
+    });
+    const rezept = await schlageSaisonalesRezeptVor(saison, bisherige.map((b) => b.name));
+    if (rezept.name) {
+      await prisma.saisonVorschlag.create({ data: { saison, name: rezept.name } });
+      const alle = await prisma.saisonVorschlag.findMany({ where: { saison }, orderBy: { createdAt: "desc" } });
+      const zuLoeschen = alle.slice(5).map((a) => a.id);
+      if (zuLoeschen.length > 0) await prisma.saisonVorschlag.deleteMany({ where: { id: { in: zuLoeschen } } });
+    }
+    return { ok: true, rezept };
+  } catch (err) {
+    console.error("Saisonaler Rezeptvorschlag fehlgeschlagen:", err);
+    const fehler = err instanceof Error ? err.message : "Unbekannter Fehler beim Erstellen des Vorschlags.";
+    return { ok: false, fehler };
+  }
+}
+
+// Fix-Batch 64 (Florians KI-Vorschlag "Kochanleitungen verdichten"): reine Vorschau, ersetzt
+// die Zubereitung erst nach ausdrücklicher Bestätigung durch die Eltern.
+export async function verdichteZubereitungVorschau(
+  zubereitung: string
+): Promise<{ ok: true; zubereitung: string } | { ok: false; fehler: string }> {
+  await requireParent();
+  try {
+    const ergebnis = await verdichteZubereitung(zubereitung);
+    return { ok: true, zubereitung: ergebnis };
+  } catch (err) {
+    console.error("Verdichten der Zubereitung fehlgeschlagen:", err);
+    const fehler = err instanceof Error ? err.message : "Unbekannter Fehler beim Verdichten.";
+    return { ok: false, fehler };
+  }
+}
+
+// Fix-Batch 64 (Florians KI-Vorschlag "Ausgewogenheits-Check"): rein regelbasiert (keine
+// KI nötig) — zählt Fleisch-/Fisch-Gerichte der aktuell geplanten Woche anhand von
+// Schlüsselwörtern in den Zutaten. Nur ein grober Hinweis, keine exakte Ernährungsanalyse.
+const FLEISCH_FISCH_STICHWORTE = [
+  "hähnchen", "huhn", "pute", "rind", "schwein", "hack", "speck", "wurst", "schinken",
+  "lamm", "ente", "gans", "fisch", "lachs", "thunfisch", "garnele", "scampi", "salami",
+  "leberkäse", "bacon", "steak", "schnitzel", "gulasch", "kotelett",
+];
+
+export async function pruefeAusgewogenheitDerWoche(wocheStartIso: string): Promise<{ fleischGerichte: number; gesamtGerichte: number; hinweis: string | null }> {
+  await requireParent();
+  const wocheStart = new Date(wocheStartIso);
+  const eintraege = await prisma.essensplanEintrag.findMany({ where: { wocheStart }, include: { rezept: true } });
+  const gesamtGerichte = eintraege.length;
+  const fleischGerichte = eintraege.filter((e) => {
+    const text = `${e.rezept.name} ${e.rezept.zutaten}`.toLowerCase();
+    return FLEISCH_FISCH_STICHWORTE.some((w) => text.includes(w));
+  }).length;
+  let hinweis: string | null = null;
+  if (gesamtGerichte >= 4 && fleischGerichte === gesamtGerichte) {
+    hinweis = "Diese Woche sind alle geplanten Gerichte fleisch-/fischhaltig — evtl. ein vegetarischer Tag dazwischen?";
+  } else if (gesamtGerichte >= 4 && fleischGerichte === 0) {
+    hinweis = "Diese Woche ist bisher komplett vegetarisch geplant.";
+  }
+  return { fleischGerichte, gesamtGerichte, hinweis };
+}
+
+// Fix-Batch 63 (Florians KI-Vorschlag "Rezept-Umschreibung"): liefert nur eine Vorschau —
+// ob daraus ein neues Rezept wird oder das bestehende überschrieben wird, entscheidet die
+// Person danach explizit in der App (siehe EssensplanClient).
+export async function schreibeRezeptUmVorschau(
+  rezeptId: string,
+  anweisung: string
+): Promise<{ ok: true; rezept: ErkanntesRezept } | { ok: false; fehler: string }> {
+  await requireParent();
+  try {
+    const rezept = await prisma.rezept.findUnique({ where: { id: rezeptId } });
+    if (!rezept) return { ok: false, fehler: "Rezept nicht gefunden." };
+    const ergebnis = await schreibeRezeptUm(
+      { name: rezept.name, zutaten: rezept.zutaten, zubereitung: rezept.zubereitung ?? "" },
+      anweisung
+    );
+    return { ok: true, rezept: ergebnis };
+  } catch (err) {
+    console.error("Rezept-Umschreibung fehlgeschlagen:", err);
+    const fehler = err instanceof Error ? err.message : "Unbekannter Fehler beim Umschreiben.";
     return { ok: false, fehler };
   }
 }
