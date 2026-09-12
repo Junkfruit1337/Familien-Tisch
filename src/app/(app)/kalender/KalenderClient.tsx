@@ -109,10 +109,39 @@ export default function KalenderClient({
 
   const gefiltert = useMemo(() => {
     const jetzt = new Date();
-    return termine
+    const heuteMitternacht = new Date(jetzt.toDateString());
+    const liste = termine
       .filter(passtFilter)
-      .filter((t) => !nurZukunft || ausgewaehlterTag || new Date(t.start) >= new Date(jetzt.toDateString()))
+      .filter((t) => !nurZukunft || ausgewaehlterTag || new Date(t.start) >= heuteMitternacht)
       .filter((t) => !ausgewaehlterTag || isoDatum(t.start) === ausgewaehlterTag);
+
+    // Geburtstage werden serverseitig für mehrere Jahre (letztes bis +5) vorausberechnet, damit
+    // sie im Monats-/Wochen-/Tag-Raster an ihrem jeweiligen Datum erscheinen — in der flachen
+    // "Liste"-Ansicht (kein einzelner Tag ausgewählt) würde das sonst dieselbe Person mit
+    // bis zu 7 Zeilen gleichzeitig auflisten (Ticket "Geburtstage werden mehrfach angezeigt").
+    // Hier deshalb pro Person nur den nächsten (oder, falls keiner mehr aussteht, jüngsten
+    // vergangenen) Termin behalten — aber nur, wenn kein einzelner Tag ausgewählt ist (sonst
+    // soll genau der Geburtstag DIESES Tages erscheinen, egal ob "repräsentativ" oder nicht).
+    if (ausgewaehlterTag) return liste;
+    const naechsterGeburtstagProPerson = new Map<string, Termin>();
+    for (const t of liste) {
+      if (t.typ !== "geburtstag") continue;
+      const key = t.personen[0]?.name ?? t.id;
+      const bisher = naechsterGeburtstagProPerson.get(key);
+      if (!bisher) {
+        naechsterGeburtstagProPerson.set(key, t);
+        continue;
+      }
+      const istZukunft = (x: Termin) => new Date(x.start) >= heuteMitternacht;
+      if (istZukunft(t) && (!istZukunft(bisher) || new Date(t.start) < new Date(bisher.start))) {
+        naechsterGeburtstagProPerson.set(key, t);
+      } else if (!istZukunft(t) && !istZukunft(bisher) && new Date(t.start) > new Date(bisher.start)) {
+        naechsterGeburtstagProPerson.set(key, t);
+      }
+    }
+    const behalteneGeburtstagIds = new Set(Array.from(naechsterGeburtstagProPerson.values()).map((t) => t.id));
+
+    return liste.filter((t) => t.typ !== "geburtstag" || behalteneGeburtstagIds.has(t.id));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [termine, filter, nurZukunft, ausgewaehlterTag]);
 

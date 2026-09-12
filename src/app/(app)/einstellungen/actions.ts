@@ -122,7 +122,12 @@ export async function listHausprobleme() {
   return prisma.hausproblem.findMany({ include: { erstelltVon: true }, orderBy: { createdAt: "desc" } });
 }
 
-export async function erstelleHausproblem(data: { titel: string; beschreibung: string; zustaendigkeit: "VERMIETER" | "FAMILIE" }) {
+export async function erstelleHausproblem(data: {
+  titel: string;
+  beschreibung: string;
+  zustaendigkeit: "VERMIETER" | "FAMILIE";
+  fotos?: string[];
+}) {
   const person = await requirePerson();
   if (!data.titel.trim() || !data.beschreibung.trim()) throw new Error("Titel und Beschreibung dürfen nicht leer sein.");
   await prisma.hausproblem.create({
@@ -130,10 +135,25 @@ export async function erstelleHausproblem(data: { titel: string; beschreibung: s
       titel: data.titel.trim(),
       beschreibung: data.beschreibung.trim(),
       zustaendigkeit: data.zustaendigkeit,
+      fotos: data.fotos ?? [],
       erstelltVonId: person.id,
     },
   });
   revalidatePath("/einstellungen");
+}
+
+// Spracheingabe fürs Hausreparatur-Formular — nutzt bewusst dieselbe Erkennungsfunktion wie
+// Tickets (identisches {titel, beschreibung}-Format), keine eigene Funktion nötig.
+export async function erkenneHausproblemAusText(text: string): Promise<{ ok: true; titel: string; beschreibung: string } | { ok: false; fehler: string }> {
+  await requirePerson();
+  try {
+    const ergebnis = await erkenneTicketAusSprache(text);
+    return { ok: true, titel: ergebnis.titel, beschreibung: ergebnis.beschreibung };
+  } catch (err) {
+    console.error("Spracheingabe (Hausproblem) fehlgeschlagen:", err);
+    const fehler = err instanceof Error ? err.message : "Unbekannter Fehler bei der Spracherkennung.";
+    return { ok: false, fehler };
+  }
 }
 
 export async function updateHausproblem(

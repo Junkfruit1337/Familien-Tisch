@@ -175,6 +175,7 @@ model EinkaufsArtikel {
   name         String
   menge        String?
   notiz        String? // z.B. "Körnerbrot" bei Artikel "Brot" (Fix-Batch 33 Nachtrag)
+  iconOverride String? // manuell gewähltes Icon statt der Automatik (Fix-Batch 35 Nachtrag)
   kategorieId  String?
   kategorie    EinkaufsKategorie? @relation(fields: [kategorieId], references: [id])
   erledigt     Boolean            @default(false)
@@ -548,6 +549,7 @@ model Hausproblem {
   status         HausproblemStatus         @default(GEMELDET)
   zustaendigkeit HausproblemZustaendigkeit
   notizen        String?
+  fotos          String[]                  @default([])
   aufgabeId      String?
   erstelltVonId  String
   erstelltVon    Person                    @relation(fields: [erstelltVonId], references: [id])

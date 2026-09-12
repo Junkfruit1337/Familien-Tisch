@@ -29,7 +29,16 @@ import Spracheingabe from "@/components/Spracheingabe";
 import SeitenTitel from "@/components/SeitenTitel";
 import { BEREICH_FARBEN } from "@/lib/bereichFarben";
 
-type Artikel = { id: string; name: string; menge: string | null; notiz: string | null; erledigt: boolean; kategorieId: string | null; kategorieName: string };
+type Artikel = {
+  id: string;
+  name: string;
+  menge: string | null;
+  notiz: string | null;
+  iconOverride: string | null;
+  erledigt: boolean;
+  kategorieId: string | null;
+  kategorieName: string;
+};
 type Wunsch = { id: string; artikelName: string; menge: string | null; notiz: string | null; status: string; kindName: string; entschiedenAm: string | null };
 type Kategorie = { id: string; name: string };
 type Quelle = { id: string; beschreibung: string; menge: string | null; zeitpunkt: string };
@@ -72,25 +81,28 @@ function ArtikelKachel({
   name,
   menge,
   notiz,
+  iconOverride,
   hintergrund,
   textfarbe,
   durchgestrichen,
   deaktiviert,
   onTap,
   eckeAktion,
-  gross,
 }: {
   name: string;
   menge?: string | null;
   notiz?: string | null;
+  iconOverride?: string | null;
   hintergrund: string;
   textfarbe: string;
   durchgestrichen?: boolean;
   deaktiviert?: boolean;
   onTap?: () => void;
   eckeAktion?: ReactNode;
-  gross?: boolean;
 }) {
+  // Fix-Batch 35 Nachtrag (Ticket "Icon-Größe..."): Kacheln bewusst kompakt gehalten (auch im
+  // Einkaufsmodus NICHT vergrößert, im Gegenteil das war vorher der Fehler) — Florian will beim
+  // Einkaufen möglichst viele Artikel auf einen Blick sehen, nicht wenige große.
   return (
     <div
       onClick={deaktiviert ? undefined : onTap}
@@ -98,27 +110,27 @@ function ArtikelKachel({
         position: "relative",
         background: hintergrund,
         color: textfarbe,
-        borderRadius: 12,
-        padding: "10px 6px",
+        borderRadius: 10,
+        padding: "6px 4px",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
-        gap: 2,
+        gap: 1,
         textAlign: "center",
         aspectRatio: "1",
         cursor: deaktiviert || !onTap ? "default" : "pointer",
       }}
     >
       {eckeAktion && (
-        <div style={{ position: "absolute", top: 2, right: 2 }} onClick={(e) => e.stopPropagation()}>
+        <div style={{ position: "absolute", top: 1, right: 1 }} onClick={(e) => e.stopPropagation()}>
           {eckeAktion}
         </div>
       )}
-      <span style={{ fontSize: gross ? 30 : 22, lineHeight: 1 }}>{erkenneArtikelIcon(name)}</span>
-      <span style={{ fontWeight: 600, fontSize: gross ? 15 : 12, textDecoration: durchgestrichen ? "line-through" : "none" }}>{name}</span>
-      {menge && <span style={{ fontSize: gross ? 12 : 10, opacity: 0.85 }}>{menge}</span>}
-      {notiz && <span style={{ fontSize: gross ? 11 : 9, opacity: 0.75, fontStyle: "italic" }}>{notiz}</span>}
+      <span style={{ fontSize: 17, lineHeight: 1 }}>{iconOverride || erkenneArtikelIcon(name)}</span>
+      <span style={{ fontWeight: 600, fontSize: 10, textDecoration: durchgestrichen ? "line-through" : "none", lineHeight: 1.15 }}>{name}</span>
+      {menge && <span style={{ fontSize: 8, opacity: 0.85 }}>{menge}</span>}
+      {notiz && <span style={{ fontSize: 8, opacity: 0.75, fontStyle: "italic" }}>{notiz}</span>}
     </div>
   );
 }
@@ -177,6 +189,7 @@ export default function EinkaufslisteClient({
   const [bearbeiteName, setBearbeiteName] = useState("");
   const [bearbeiteMenge, setBearbeiteMenge] = useState("");
   const [bearbeiteNotiz, setBearbeiteNotiz] = useState("");
+  const [bearbeiteIcon, setBearbeiteIcon] = useState("");
   const [wunschKategorie, setWunschKategorie] = useState<Record<string, string>>({});
   const [wunschBearbeitenId, setWunschBearbeitenId] = useState<string | null>(null);
   const [wunschBearbeitenName, setWunschBearbeitenName] = useState("");
@@ -288,12 +301,18 @@ export default function EinkaufslisteClient({
     setBearbeiteName(a.name);
     setBearbeiteMenge(a.menge ?? "");
     setBearbeiteNotiz(a.notiz ?? "");
+    setBearbeiteIcon(a.iconOverride ?? "");
   }
 
   function speichereBearbeiten() {
     if (!bearbeiteId) return;
     startTransition(async () => {
-      await updateArtikel(bearbeiteId, { name: bearbeiteName, menge: bearbeiteMenge || undefined, notiz: bearbeiteNotiz || undefined });
+      await updateArtikel(bearbeiteId, {
+        name: bearbeiteName,
+        menge: bearbeiteMenge || undefined,
+        notiz: bearbeiteNotiz || undefined,
+        iconOverride: bearbeiteIcon,
+      });
       setBearbeiteId(null);
     });
   }
@@ -691,7 +710,7 @@ export default function EinkaufslisteClient({
             <p style={{ fontSize: 12, color: "var(--text-muted)", margin: 0 }}>
               Häufig gekaufte Artikel, die gerade nicht auf der Liste stehen — antippen zum Hinzufügen.
             </p>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(88px, 1fr))", gap: 10 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(66px, 1fr))", gap: 10 }}>
               {vorschlaege.map((v) => (
                 <ArtikelKachel
                   key={v.name}
@@ -791,8 +810,8 @@ export default function EinkaufslisteClient({
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: `repeat(auto-fill, minmax(${einkaufsmodus ? 110 : 88}px, 1fr))`,
-              gap: einkaufsmodus ? 14 : 10,
+              gridTemplateColumns: "repeat(auto-fill, minmax(66px, 1fr))",
+              gap: 8,
               marginTop: 8,
             }}
           >
@@ -802,10 +821,10 @@ export default function EinkaufslisteClient({
                 name={a.name}
                 menge={a.menge}
                 notiz={a.notiz}
+                iconOverride={a.iconOverride}
                 hintergrund="var(--accent)"
                 textfarbe="var(--accent-contrast)"
                 deaktiviert={!istEltern}
-                gross={einkaufsmodus}
                 onTap={() => startTransition(() => toggleArtikel(a.id))}
                 eckeAktion={
                   istEltern && !einkaufsmodus ? (
@@ -827,12 +846,13 @@ export default function EinkaufslisteClient({
       {erledigt.length > 0 && (
         <details>
           <summary style={{ cursor: "pointer", color: "var(--text-muted)" }}>Bereits eingekauft ({erledigt.length})</summary>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(88px, 1fr))", gap: 10, marginTop: 8 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(66px, 1fr))", gap: 10, marginTop: 8 }}>
             {erledigt.map((a) => (
               <ArtikelKachel
                 key={a.id}
                 name={a.name}
                 notiz={a.notiz}
+                iconOverride={a.iconOverride}
                 hintergrund="var(--border)"
                 textfarbe="var(--text-muted)"
                 durchgestrichen
@@ -855,6 +875,22 @@ export default function EinkaufslisteClient({
                 <input value={bearbeiteName} onChange={(e) => setBearbeiteName(e.target.value)} placeholder="Name" />
                 <input value={bearbeiteMenge} onChange={(e) => setBearbeiteMenge(e.target.value)} placeholder="Menge" />
                 <input value={bearbeiteNotiz} onChange={(e) => setBearbeiteNotiz(e.target.value)} placeholder="Notizen (optional)" />
+                <label style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: -6 }}>
+                  Icon (aktuell: {bearbeiteIcon || erkenneArtikelIcon(bearbeiteName)}) — nicht zufrieden? Eigenes Emoji eintragen
+                </label>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <input
+                    value={bearbeiteIcon}
+                    onChange={(e) => setBearbeiteIcon(e.target.value)}
+                    placeholder="z. B. 🥕"
+                    style={{ flex: 1 }}
+                  />
+                  {bearbeiteIcon && (
+                    <button className="btn-secondary" style={{ fontSize: 12, padding: "4px 10px" }} onClick={() => setBearbeiteIcon("")}>
+                      Automatisch
+                    </button>
+                  )}
+                </div>
                 <label style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: -6 }}>Kategorie</label>
                 <select
                   value={a.kategorieId ?? ""}

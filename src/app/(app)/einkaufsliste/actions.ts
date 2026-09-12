@@ -228,11 +228,18 @@ export async function addArtikel(data: { name: string; menge?: string; notiz?: s
 }
 
 // Eltern: Namen/Menge/Notiz eines bestehenden Artikels nachträglich korrigieren.
-export async function updateArtikel(id: string, data: { name?: string; menge?: string; notiz?: string }) {
+// iconOverride: manuell gewähltes Icon statt der Automatik (Fix-Batch 35 Nachtrag, Ticket
+// "Icon-Größe und Regeneration") — leerer String setzt zurück auf automatische Erkennung.
+export async function updateArtikel(id: string, data: { name?: string; menge?: string; notiz?: string; iconOverride?: string }) {
   await requireParent();
   await prisma.einkaufsArtikel.update({
     where: { id },
-    data: { name: data.name, menge: data.menge, notiz: data.notiz !== undefined ? data.notiz || null : undefined },
+    data: {
+      name: data.name,
+      menge: data.menge,
+      notiz: data.notiz !== undefined ? data.notiz || null : undefined,
+      iconOverride: data.iconOverride !== undefined ? data.iconOverride || null : undefined,
+    },
   });
   revalidatePath("/einkaufsliste");
 }

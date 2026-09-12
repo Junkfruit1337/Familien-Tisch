@@ -15,6 +15,7 @@ import {
   updateHausproblem,
   loescheHausproblem,
   wandleHausproblemInAufgabeUm,
+  erkenneHausproblemAusText,
 } from "./actions";
 import { addKategorie, setzeKategorieReihenfolge } from "../einkaufsliste/actions";
 import { addFach, updateFach, deleteFach, pruefeFachDuplikat, setSchulProfil } from "../schule/actions";
@@ -115,6 +116,7 @@ type Hausproblem = {
   status: string;
   zustaendigkeit: string;
   notizen: string | null;
+  fotos: string[];
   aufgabeId: string | null;
   erstellerName: string;
   createdAt: string;
@@ -178,6 +180,8 @@ export default function EinstellungenClient({
   const [neuesHausproblemTitel, setNeuesHausproblemTitel] = useState("");
   const [neuesHausproblemBeschreibung, setNeuesHausproblemBeschreibung] = useState("");
   const [neuesHausproblemZustaendigkeit, setNeuesHausproblemZustaendigkeit] = useState<"VERMIETER" | "FAMILIE">("VERMIETER");
+  const [neuesHausproblemFotos, setNeuesHausproblemFotos] = useState<string[]>([]);
+  const [hausproblemSpracheVerarbeitung, setHausproblemSpracheVerarbeitung] = useState(false);
   const [hausproblemNotizEntwuerfe, setHausproblemNotizEntwuerfe] = useState<Record<string, string>>({});
   const [hausproblemAufgabePersonId, setHausproblemAufgabePersonId] = useState<Record<string, string>>({});
   const [kategoriePositionEntwuerfe, setKategoriePositionEntwuerfe] = useState<Record<string, string>>({});
@@ -554,6 +558,20 @@ export default function EinstellungenClient({
               </span>
             </div>
             <p style={{ margin: 0, fontSize: 13 }}>{h.beschreibung}</p>
+            {h.fotos.length > 0 && (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {h.fotos.map((foto, i) => (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    key={i}
+                    src={foto}
+                    alt="Hausproblem-Foto"
+                    style={{ width: 60, height: 60, objectFit: "cover", borderRadius: 8, cursor: "pointer" }}
+                    onClick={() => setGrossesTicketBild(foto)}
+                  />
+                ))}
+              </div>
+            )}
             <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>
               {h.zustaendigkeit === "VERMIETER" ? "🏢 Vermieter zuständig" : "🔧 Familie erledigt selbst"} · Gemeldet von {h.erstellerName} am{" "}
               {new Date(h.createdAt).toLocaleDateString("de-DE")}
@@ -645,6 +663,24 @@ export default function EinstellungenClient({
         ))}
         <div className="card" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           <strong style={{ fontSize: 13 }}>Neues Problem melden</strong>
+          <Spracheingabe
+            onErgebnis={async (text) => {
+              setHausproblemSpracheVerarbeitung(true);
+              try {
+                const ergebnis = await erkenneHausproblemAusText(text);
+                if (!ergebnis.ok) {
+                  alert(ergebnis.fehler);
+                  return;
+                }
+                setNeuesHausproblemTitel(ergebnis.titel);
+                setNeuesHausproblemBeschreibung(ergebnis.beschreibung);
+              } finally {
+                setHausproblemSpracheVerarbeitung(false);
+              }
+            }}
+            disabled={hausproblemSpracheVerarbeitung}
+          />
+          {hausproblemSpracheVerarbeitung && <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>Spracheingabe wird verarbeitet …</p>}
           <input placeholder="Titel (z. B. Wasserhahn tropft)" value={neuesHausproblemTitel} onChange={(e) => setNeuesHausproblemTitel(e.target.value)} />
           <textarea
             placeholder="Beschreibung"
@@ -652,6 +688,63 @@ export default function EinstellungenClient({
             value={neuesHausproblemBeschreibung}
             onChange={(e) => setNeuesHausproblemBeschreibung(e.target.value)}
           />
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <label
+              className="btn-secondary"
+              style={{ fontSize: 13, padding: "8px 12px", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}
+            >
+              📷 Foto
+              <input
+                type="file"
+                accept="image/*"
+                capture="environment"
+                style={{ display: "none" }}
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  e.target.value = "";
+                  const base64 = await ticketFotoAufBase64(file);
+                  setNeuesHausproblemFotos((prev) => [...prev, base64]);
+                }}
+              />
+            </label>
+            <label
+              className="btn-secondary"
+              style={{ fontSize: 13, padding: "8px 12px", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}
+            >
+              📁 Aus Galerie
+              <input
+                type="file"
+                accept="image/*"
+                multiple
+                style={{ display: "none" }}
+                onChange={async (e) => {
+                  const files = Array.from(e.target.files ?? []);
+                  if (files.length === 0) return;
+                  e.target.value = "";
+                  const neue = await Promise.all(files.map((f) => ticketFotoAufBase64(f)));
+                  setNeuesHausproblemFotos((prev) => [...prev, ...neue]);
+                }}
+              />
+            </label>
+          </div>
+          {neuesHausproblemFotos.length > 0 && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              {neuesHausproblemFotos.map((foto, i) => (
+                <div key={i} style={{ position: "relative" }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={foto} alt="Vorschau" style={{ width: 60, height: 60, objectFit: "cover", borderRadius: 8 }} />
+                  <button
+                    className="btn-secondary"
+                    style={{ position: "absolute", top: -6, right: -6, width: 20, height: 20, padding: 0, fontSize: 11, borderRadius: 999, lineHeight: 1 }}
+                    onClick={() => setNeuesHausproblemFotos((prev) => prev.filter((_, idx) => idx !== i))}
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
           <div style={{ display: "flex", gap: 6 }}>
             <button
               type="button"
@@ -679,9 +772,11 @@ export default function EinstellungenClient({
                   titel: neuesHausproblemTitel,
                   beschreibung: neuesHausproblemBeschreibung,
                   zustaendigkeit: neuesHausproblemZustaendigkeit,
+                  fotos: neuesHausproblemFotos,
                 });
                 setNeuesHausproblemTitel("");
                 setNeuesHausproblemBeschreibung("");
+                setNeuesHausproblemFotos([]);
               })
             }
           >

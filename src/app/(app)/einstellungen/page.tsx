@@ -89,6 +89,7 @@ export default async function EinstellungenPage() {
         status: h.status,
         zustaendigkeit: h.zustaendigkeit,
         notizen: h.notizen,
+        fotos: h.fotos,
         aufgabeId: h.aufgabeId,
         erstellerName: h.erstelltVon.name,
         createdAt: h.createdAt.toISOString(),

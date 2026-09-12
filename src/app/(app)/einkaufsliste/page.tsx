@@ -23,6 +23,7 @@ export default async function EinkaufslistePage() {
         name: a.name,
         menge: a.menge,
         notiz: a.notiz,
+        iconOverride: a.iconOverride,
         erledigt: a.erledigt,
         kategorieId: a.kategorieId,
         kategorieName: a.kategorie?.name ?? "Sonstiges",
