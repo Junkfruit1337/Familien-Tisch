@@ -22,6 +22,7 @@ import Spracheingabe from "@/components/Spracheingabe";
 import { erkenneSparzielIcon } from "@/lib/sparzielIcon";
 import SeitenTitel from "@/components/SeitenTitel";
 import NotengewichtungSektion from "@/components/NotengewichtungSektion";
+import LernHilfe from "@/components/LernHilfe";
 import { BEREICH_FARBEN } from "@/lib/bereichFarben";
 
 type Note = {
@@ -1090,6 +1091,7 @@ export default function SchuleClient({
           Noten eines Kindes betrachtet, will die Gewichtung direkt hier anpassen können,
           nicht in einem separaten, leicht zu übersehenden Einstellungen-Unterpunkt. */}
       {istEltern && <NotengewichtungSektion kindId={kind.id} kindName={kind.name} gewichtung={kind.gewichtung} />}
+      {!istEltern && kind.id === eigeneId && <LernHilfe />}
 
       <details>
         <summary style={{ cursor: "pointer", color: "var(--text-muted)" }}>Verlauf Taschengeld</summary>
