@@ -9,9 +9,9 @@ import {
 import KalenderClient from "./KalenderClient";
 
 const SCHUL_ART_LABEL: Record<string, string> = {
-  KLASSENARBEIT: "Klassenarbeit",
-  HAUSAUFGABEN_KONTROLLE: "HÜ-Kontrolle",
-  EPOCHALNOTE: "Epochalnote",
+  KLASSENARBEIT: "Arbeit",
+  HAUSAUFGABEN_KONTROLLE: "HÜ",
+  EPOCHALNOTE: "Epo",
 };
 
 export default async function KalenderPage() {

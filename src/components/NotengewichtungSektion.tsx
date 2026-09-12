@@ -4,9 +4,9 @@ import { useState, useTransition } from "react";
 import { setNotenGewichtung, uebertrageGewichtungAufFaecher, uebertrageGewichtungAufKinder } from "@/app/(app)/schule/actions";
 
 const ART_LABEL: Record<string, string> = {
-  KLASSENARBEIT: "Klassenarbeit",
-  HAUSAUFGABEN_KONTROLLE: "Hausaufgaben-Kontrolle",
-  EPOCHALNOTE: "Epochalnote",
+  KLASSENARBEIT: "Arbeit",
+  HAUSAUFGABEN_KONTROLLE: "HÜ",
+  EPOCHALNOTE: "Epo",
 };
 
 type Gewichtung = { fachId: string; fachName: string; gewichtungen: { art: string; gewichtung: number }[] };
@@ -38,8 +38,8 @@ export default function NotengewichtungSektion({
       <summary style={{ cursor: "pointer" }}>Notengewichtung ({kindName})</summary>
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         <p style={{ fontSize: 13, color: "var(--text-muted)", margin: 0 }}>
-          Legt fest, wie stark eine neue Note dieser Art in den Fach-Durchschnitt einfließt (z. B. Klassenarbeit = 2, Hausaufgaben-Kontrolle = 1).
-          Wirkt sich nur auf künftig eingetragene Noten aus.
+          Legt fest, wie stark eine Note dieser Art in den Fach-Durchschnitt einfließt (z. B. Arbeit = 2, HÜ = 1).
+          Eine Änderung wirkt sich sofort auf alle Noten des laufenden Schuljahres aus (auch bereits eingetragene) — ältere Schuljahre bleiben unverändert.
         </p>
         {gewichtung.map((g) => (
           <div key={g.fachId} style={{ borderTop: "1px solid var(--border)", paddingTop: 8 }}>

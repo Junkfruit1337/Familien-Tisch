@@ -64,9 +64,9 @@ type SchulEintrag = {
 };
 
 const ART_LABEL: Record<string, string> = {
-  KLASSENARBEIT: "Klassenarbeit",
-  HAUSAUFGABEN_KONTROLLE: "Hausaufgaben-Kontrolle",
-  EPOCHALNOTE: "Epochalnote",
+  KLASSENARBEIT: "Arbeit",
+  HAUSAUFGABEN_KONTROLLE: "HÜ",
+  EPOCHALNOTE: "Epo",
 };
 
 const FERIEN_LABEL: Record<string, string> = {
@@ -173,6 +173,13 @@ function BildModal({ src, onClose }: { src: string; onClose: () => void }) {
   );
 }
 
+// Klassenstufe + Klasse kombiniert anzeigen (z. B. "6c" statt nur "c") — Florians
+// Korrektur: vorher wurde bei vorhandenem Klassen-Buchstaben die Klassenstufe verschluckt.
+function klasseAnzeige(klassenstufe: number | null, klasse: string | null): string | null {
+  if (!klassenstufe && !klasse) return null;
+  return `Klasse ${klassenstufe ?? ""}${klasse ?? ""}`;
+}
+
 function tageBisText(datumIso: string): { tageBis: number; text: string } {
   const heute = new Date();
   heute.setHours(0, 0, 0, 0);
@@ -253,10 +260,12 @@ function SchulEintraegeSektion({
   return (
     <div className="card" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <strong>🎓 Klassenarbeiten &amp; Hausaufgaben-Kontrollen</strong>
-        <button className="btn-secondary" style={{ fontSize: 12 }} onClick={() => setZeigeForm((v) => !v)}>
-          {zeigeForm ? "Abbrechen" : "+ Eintrag"}
-        </button>
+        <strong>🎓 Arbeiten &amp; HÜs</strong>
+        {!istEltern && (
+          <button className="btn-secondary" style={{ fontSize: 12 }} onClick={() => setZeigeForm((v) => !v)}>
+            {zeigeForm ? "Abbrechen" : "+ Eintrag"}
+          </button>
+        )}
       </div>
 
       {istEltern && kinder.length > 1 && (
@@ -281,24 +290,11 @@ function SchulEintraegeSektion({
         </div>
       )}
 
-      {zeigeForm && (
+      {!istEltern && zeigeForm && (
         <div style={{ display: "flex", flexDirection: "column", gap: 8, borderTop: "1px solid var(--border)", paddingTop: 10 }}>
           <Spracheingabe onErgebnis={spracheErkannt} disabled={spracheVerarbeitung} />
           {spracheVerarbeitung && <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>Spracheingabe wird verarbeitet …</p>}
 
-          {istEltern && (
-            <div>
-              <div style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 4 }}>Für wen?</div>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                {kinder.map((k) => (
-                  <label key={k.id} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 14 }}>
-                    <input type="checkbox" checked={ausgewaehlteKinder.includes(k.id)} onChange={() => toggleKind(k.id)} />
-                    {k.name}
-                  </label>
-                ))}
-              </div>
-            </div>
-          )}
           <select value={fachName} onChange={(e) => setFachName(e.target.value)}>
             <option value="">Fach wählen (optional)</option>
             {faecherOptionen.map((f) => (
@@ -309,8 +305,8 @@ function SchulEintraegeSektion({
           </select>
           <input placeholder="Thema (z. B. Bruchrechnung)" value={thema} onChange={(e) => setThema(e.target.value)} />
           <select value={art} onChange={(e) => setArt(e.target.value)}>
-            <option value="KLASSENARBEIT">Klassenarbeit</option>
-            <option value="HAUSAUFGABEN_KONTROLLE">Hausaufgaben-Kontrolle</option>
+            <option value="KLASSENARBEIT">Arbeit</option>
+            <option value="HAUSAUFGABEN_KONTROLLE">HÜ</option>
           </select>
           <input type="date" value={datum} onChange={(e) => setDatum(e.target.value)} />
 
@@ -325,12 +321,10 @@ function SchulEintraegeSektion({
                   fachName: fachName || undefined,
                   art,
                   datum,
-                  personIds: istEltern ? ausgewaehlteKinder : undefined,
                 });
                 setThema("");
                 setFachName("");
                 setDatum("");
-                setAusgewaehlteKinder(istEltern ? [] : [eigeneId]);
                 setZeigeForm(false);
               })
             }
@@ -473,7 +467,9 @@ export default function SchuleClient({
 
   if (!kind) return <p>Noch keine Kinder angelegt.</p>;
 
-  const offeneNoten = istEltern ? kinder.flatMap((k) => k.noten.filter((n) => n.status === "OFFEN").map((n) => ({ ...n, kindName: k.name }))) : [];
+  // Fix-Batch 51: "Noten zur Genehmigung" folgt jetzt der Kind-Auswahl oben (vorher wurden
+  // hier immer ALLE Kinder gepoolt angezeigt, unabhängig vom ausgewählten Reiter).
+  const offeneNoten = istEltern ? kind.noten.filter((n) => n.status === "OFFEN").map((n) => ({ ...n, kindName: kind.name })) : [];
 
   async function spracheErkannt(text: string) {
     setSpracheVerarbeitung(true);
@@ -517,7 +513,7 @@ export default function SchuleClient({
       <SeitenTitel icon="🎓" farbe={BEREICH_FARBEN.schule}>Schule &amp; Taschengeld</SeitenTitel>
       {(kind.klasse || kind.klassenstufe) && (
         <p style={{ margin: "-8px 0 0", fontSize: 13, color: "var(--text-muted)" }}>
-          {kind.klasse ? `Klasse ${kind.klasse}` : `${kind.klassenstufe}. Klasse`}
+          {klasseAnzeige(kind.klassenstufe, kind.klasse)}
           {kind.bundesland ? ` · ${kind.bundesland}` : ""}
         </p>
       )}
@@ -542,7 +538,7 @@ export default function SchuleClient({
               onClick={() => setAusgewaehlt(k.id)}
             >
               {k.name}
-              {k.klasse ? ` (${k.klasse})` : ""}
+              {k.klasse || k.klassenstufe ? ` (${k.klassenstufe ?? ""}${k.klasse ?? ""})` : ""}
             </button>
           ))}
         </div>
@@ -920,82 +916,99 @@ export default function SchuleClient({
                       </div>
                     </div>
                   ) : (
-                    <div key={n.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, borderTop: "1px solid var(--border)", paddingTop: 8 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <details key={n.id} style={{ borderTop: "1px solid var(--border)", paddingTop: 8 }}>
+                      <summary
+                        style={{
+                          cursor: "pointer",
+                          listStyle: "none",
+                          display: "grid",
+                          gridTemplateColumns: "28px 1fr auto",
+                          alignItems: "center",
+                          gap: 8,
+                        }}
+                      >
+                        <span style={{ fontWeight: 700, fontSize: 16 }}>{n.note}</span>
+                        <span style={{ fontSize: 13, color: "var(--text-muted)" }}>
+                          {ART_LABEL[n.art]} · {new Date(n.datum).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" })}
+                          {n.fotoBase64 ? " · 📷" : ""}
+                        </span>
+                        <span className={`pill pill-${n.status.toLowerCase()}`}>{n.status}</span>
+                      </summary>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8, paddingLeft: 2 }}>
                         {n.fotoBase64 && (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img
                             src={n.fotoBase64}
                             alt="Notenzettel"
-                            style={{ width: 36, height: 36, objectFit: "cover", borderRadius: 6, cursor: "pointer" }}
+                            style={{ width: 72, height: 72, objectFit: "cover", borderRadius: 8, cursor: "pointer" }}
                             onClick={() => setGrossesBild(n.fotoBase64)}
                           />
                         )}
-                        <div>
-                          <div style={{ fontWeight: 600 }}>
-                            Note {n.note} <span className={`pill pill-${n.status.toLowerCase()}`}>{n.status}</span>
-                          </div>
-                          <div style={{ fontSize: 13, color: "var(--text-muted)" }}>
-                            {ART_LABEL[n.art]} · {new Date(n.datum).toLocaleDateString("de-DE")}
-                            {n.gewichtung !== 1 && ` · Gewichtung ${n.gewichtung}`}
-                            {n.notiz && ` · „${n.notiz}"`}
-                          </div>
-                          {istEltern && <HistorieVerlauf entityTyp="NOTE" entityId={n.id} />}
+                        <div style={{ fontSize: 13, color: "var(--text-muted)" }}>
+                          {n.gewichtung !== 1 && <div>Gewichtung {n.gewichtung}</div>}
+                          {n.notiz && <div>Thema: „{n.notiz}"</div>}
+                        </div>
+                        {istEltern && <HistorieVerlauf entityTyp="NOTE" entityId={n.id} />}
+                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                          {n.status === "ABGELEHNT" && kind.id === eigeneId && (
+                            <button
+                              className="btn-secondary"
+                              style={{ fontSize: 12 }}
+                              onClick={() => {
+                                setNeueinreichungId(n.id);
+                                setNeueinreichungNote(n.note);
+                                setNeueinreichungNotiz(n.notiz ?? "");
+                              }}
+                            >
+                              Erneut einreichen
+                            </button>
+                          )}
+                          {n.status === "OFFEN" && !istEltern && kind.id === eigeneId && (
+                            <>
+                              <button
+                                className="btn-secondary"
+                                style={{ fontSize: 12 }}
+                                onClick={() => {
+                                  setKorrekturId(n.id);
+                                  setKorrekturNote(n.note);
+                                  setKorrekturNotiz(n.notiz ?? "");
+                                }}
+                              >
+                                ✎ Bearbeiten
+                              </button>
+                              <button
+                                className="btn-secondary"
+                                style={{ fontSize: 12 }}
+                                onClick={() => {
+                                  if (confirm("Diese noch offene Note wirklich löschen?")) {
+                                    startTransition(async () => {
+                                      try {
+                                        await loescheNote(n.id);
+                                      } catch (e: any) {
+                                        alert(e.message);
+                                      }
+                                    });
+                                  }
+                                }}
+                              >
+                                🗑 Löschen
+                              </button>
+                            </>
+                          )}
+                          {istEltern && (
+                            <button
+                              className="btn-secondary"
+                              style={{ fontSize: 12 }}
+                              onClick={() => {
+                                if (confirm("Diese Note wirklich löschen?")) startTransition(() => loescheNote(n.id));
+                              }}
+                            >
+                              🗑 Löschen
+                            </button>
+                          )}
                         </div>
                       </div>
-                      <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-                        {n.status === "ABGELEHNT" && kind.id === eigeneId && (
-                          <button
-                            className="btn-secondary"
-                            style={{ fontSize: 12 }}
-                            onClick={() => {
-                              setNeueinreichungId(n.id);
-                              setNeueinreichungNote(n.note);
-                              setNeueinreichungNotiz(n.notiz ?? "");
-                            }}
-                          >
-                            Erneut einreichen
-                          </button>
-                        )}
-                        {n.status === "OFFEN" && !istEltern && kind.id === eigeneId && (
-                          <>
-                            <button
-                              className="btn-secondary"
-                              style={{ fontSize: 12 }}
-                              onClick={() => {
-                                setKorrekturId(n.id);
-                                setKorrekturNote(n.note);
-                                setKorrekturNotiz(n.notiz ?? "");
-                              }}
-                            >
-                              ✎
-                            </button>
-                            <button
-                              className="btn-secondary"
-                              style={{ fontSize: 12 }}
-                              onClick={() => {
-                                if (confirm("Diese noch offene Note wirklich löschen?")) {
-                                  startTransition(async () => {
-                                    try {
-                                      await loescheNote(n.id);
-                                    } catch (e: any) {
-                                      alert(e.message);
-                                    }
-                                  });
-                                }
-                              }}
-                            >
-                              🗑
-                            </button>
-                          </>
-                        )}
-                        {istEltern && (
-                          <button className="btn-secondary" style={{ fontSize: 12 }} onClick={() => startTransition(() => loescheNote(n.id))}>
-                            Löschen
-                          </button>
-                        )}
-                      </div>
-                    </div>
+                    </details>
                   )
                 )}
               </div>

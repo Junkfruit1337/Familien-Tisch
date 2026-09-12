@@ -18,7 +18,7 @@ function betragFuerNote(note: number): number {
 const ART_KURZ: Record<string, string> = {
   KLASSENARBEIT: "Arbeit",
   HAUSAUFGABEN_KONTROLLE: "HÜ",
-  EPOCHALNOTE: "EPO",
+  EPOCHALNOTE: "Epo",
 };
 
 export async function listKinder() {
@@ -33,6 +33,11 @@ export async function listKinder() {
 function aktuellesSchuljahr(datum: Date = new Date()): string {
   const jahr = datum.getMonth() >= 7 ? datum.getFullYear() : datum.getFullYear() - 1;
   return `${jahr}/${jahr + 1}`;
+}
+
+function aktuellesSchuljahrStart(datum: Date = new Date()): Date {
+  const jahr = datum.getMonth() >= 7 ? datum.getFullYear() : datum.getFullYear() - 1;
+  return new Date(jahr, 7, 1);
 }
 
 // Bundesland/Klassenstufe/Klasse (Fix-Batch 27) — vom Kind selbst oder von Eltern editierbar.
@@ -429,6 +434,18 @@ export async function listNotenGewichtung(kindId: string) {
   }));
 }
 
+// Rückwirkende Anwendung innerhalb des laufenden Schuljahres (Florians Korrektur,
+// Fix-Batch 51): eine geänderte Gewichtung galt bisher nur für künftig NEU eingetragene
+// Noten, da `gewichtung` beim Anlegen fest auf die Note geschrieben wird (einreichenNote).
+// Ältere Schuljahre bleiben bewusst unangetastet — nur Noten ab dem 1. August des laufenden
+// Schuljahres werden nachträglich auf den neuen Wert gesetzt.
+async function wendeGewichtungRueckwirkendAn(kindId: string, fachId: string, art: string, gewichtung: number) {
+  await prisma.note.updateMany({
+    where: { kindId, fachId, art: art as any, datum: { gte: aktuellesSchuljahrStart() } },
+    data: { gewichtung },
+  });
+}
+
 export async function setNotenGewichtung(kindId: string, fachId: string, art: string, gewichtung: number) {
   await requireParent();
   await prisma.notenGewichtung.upsert({
@@ -436,7 +453,9 @@ export async function setNotenGewichtung(kindId: string, fachId: string, art: st
     update: { gewichtung },
     create: { kindId, fachId, art: art as any, gewichtung },
   });
+  await wendeGewichtungRueckwirkendAn(kindId, fachId, art, gewichtung);
   revalidatePath("/einstellungen");
+  revalidatePath("/schule");
 }
 
 export async function uebertrageGewichtungAufFaecher(kindId: string, art: string, gewichtung: number, zielFachIds: string[]) {
@@ -450,7 +469,9 @@ export async function uebertrageGewichtungAufFaecher(kindId: string, art: string
       })
     )
   );
+  await Promise.all(zielFachIds.map((fachId) => wendeGewichtungRueckwirkendAn(kindId, fachId, art, gewichtung)));
   revalidatePath("/einstellungen");
+  revalidatePath("/schule");
 }
 
 export async function uebertrageGewichtungAufKinder(fachName: string, art: string, gewichtung: number, zielKindIds: string[]) {
@@ -465,7 +486,9 @@ export async function uebertrageGewichtungAufKinder(fachName: string, art: strin
       })
     )
   );
+  await Promise.all(faecher.map((f) => wendeGewichtungRueckwirkendAn(f.kindId, f.id, art, gewichtung)));
   revalidatePath("/einstellungen");
+  revalidatePath("/schule");
 }
 
 // ---------- Klassenarbeiten & Hausaufgaben-Kontrollen (SchulEintrag) ----------
@@ -509,8 +532,10 @@ export async function erkenneSchulEintragAusText(
 // eigenes Fach mit eigener ID hat.
 export async function createSchulEintrag(data: { thema: string; fachName?: string; art: string; datum: string; personIds?: string[] }) {
   const person = await requirePerson();
-  const istEltern = person.rolle === "ELTERN";
-  const zielIds = istEltern ? (data.personIds && data.personIds.length > 0 ? data.personIds : [person.id]) : [person.id];
+  // Fix-Batch 51 (Florians Korrektur): nur noch das Kind selbst darf Klassenarbeiten/HÜ-
+  // Kontrollen ankündigen, und ausschließlich für sich selbst — nicht mehr Eltern für Kinder.
+  if (person.rolle !== "KIND") throw new Error("Nur Kinder können Klassenarbeiten/HÜ-Kontrollen für sich selbst eintragen.");
+  const zielIds = [person.id];
 
   const rows = await Promise.all(
     zielIds.map(async (personId) => {

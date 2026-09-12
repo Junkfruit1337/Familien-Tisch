@@ -6,9 +6,9 @@ import SeitenTitel from "@/components/SeitenTitel";
 import { BEREICH_FARBEN } from "@/lib/bereichFarben";
 
 const ART_LABEL: Record<string, string> = {
-  KLASSENARBEIT: "Klassenarbeit",
-  HAUSAUFGABEN_KONTROLLE: "Hausaufgaben-Kontrolle",
-  EPOCHALNOTE: "Epochalnote",
+  KLASSENARBEIT: "Arbeit",
+  HAUSAUFGABEN_KONTROLLE: "HÜ",
+  EPOCHALNOTE: "Epo",
 };
 
 const TICKET_STATUS_LABEL: Record<string, string> = {
