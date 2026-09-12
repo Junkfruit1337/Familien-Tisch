@@ -90,7 +90,7 @@ export default function AppShell({ person, children }: { person: Person; childre
         </div>
       </header>
 
-      <main style={{ flex: 1, padding: 16, paddingBottom: 96, maxWidth: 720, margin: "0 auto", width: "100%" }}>
+      <main style={{ flex: 1, padding: 16, paddingBottom: "calc(96px + env(safe-area-inset-bottom))", maxWidth: 720, margin: "0 auto", width: "100%" }}>
         {children}
       </main>
 

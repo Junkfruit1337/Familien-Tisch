@@ -19,6 +19,10 @@ export const viewport: Viewport = {
   themeColor: "#a97155",
   width: "device-width",
   initialScale: 1,
+  // Fix-Batch 68: ohne viewportFit "cover" liefert env(safe-area-inset-bottom) auf iPhones
+  // mit Home-Indicator (kein Home-Button) 0px, egal was im CSS steht — die untere
+  // Navigationsleiste rutscht dann unter den Indikator und die Beschriftung wird abgeschnitten.
+  viewportFit: "cover",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
