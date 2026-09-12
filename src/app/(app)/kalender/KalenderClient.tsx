@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { createTermin, updateTermin, deleteTermin, erkenneTerminAusText } from "./actions";
+import { createTermin, updateTermin, deleteTermin, erkenneTerminAusText, pruefeTerminKonflikt } from "./actions";
 import { erkenneTerminKategorie, TERMIN_KATEGORIE_LABEL } from "@/lib/terminkategorisierung";
 import HistorieVerlauf from "@/components/HistorieVerlauf";
 import Spracheingabe from "@/components/Spracheingabe";
@@ -237,6 +237,15 @@ export default function KalenderClient({
       if (bearbeitenId) {
         await updateTermin(bearbeitenId, { titel, start: startWert });
       } else {
+        // Fix-Batch 63 (Terminkonflikt-Check): vor dem Anlegen prüfen, ob am selben Tag für
+        // dieselbe(n) Person(en) schon ein Termin oder eine Klassenarbeit/HÜ-Kontrolle steht
+        // — rein informativ, verhindert das Anlegen nicht.
+        if (personIds.length > 0) {
+          const hinweise = await pruefeTerminKonflikt(startWert, personIds);
+          if (hinweise.length > 0 && !confirm(`Achtung, an diesem Tag steht schon etwas an:\n\n${hinweise.join("\n")}\n\nTrotzdem anlegen?`)) {
+            return;
+          }
+        }
         await createTermin({
           titel,
           start: startWert,

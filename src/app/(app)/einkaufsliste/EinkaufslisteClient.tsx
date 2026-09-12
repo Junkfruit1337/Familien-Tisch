@@ -100,7 +100,7 @@ function ArtikelKachel({
   name,
   menge,
   notiz,
-  iconOverride,
+  icon,
   hintergrund,
   textfarbe,
   durchgestrichen,
@@ -111,7 +111,7 @@ function ArtikelKachel({
   name: string;
   menge?: string | null;
   notiz?: string | null;
-  iconOverride?: string | null;
+  icon: string;
   hintergrund: string;
   textfarbe: string;
   durchgestrichen?: boolean;
@@ -146,7 +146,7 @@ function ArtikelKachel({
           {eckeAktion}
         </div>
       )}
-      <span style={{ fontSize: 17, lineHeight: 1 }}>{iconOverride || erkenneArtikelIcon(name)}</span>
+      <span style={{ fontSize: 17, lineHeight: 1 }}>{icon}</span>
       <span style={{ fontWeight: 600, fontSize: 10, textDecoration: durchgestrichen ? "line-through" : "none", lineHeight: 1.15 }}>{name}</span>
       {menge && <span style={{ fontSize: 9, opacity: 0.85 }}>{menge}</span>}
       {notiz && <span style={{ fontSize: 9, opacity: 0.75, fontStyle: "italic" }}>{notiz}</span>}
@@ -190,6 +190,7 @@ export default function EinkaufslisteClient({
   vorschlaege,
   unbestaetigt: initialUnbestaetigt,
   rezepte,
+  gelernteIcons,
 }: {
   istEltern: boolean;
   artikel: Artikel[];
@@ -198,7 +199,15 @@ export default function EinkaufslisteClient({
   vorschlaege: Vorschlag[];
   unbestaetigt: Unbestaetigt[];
   rezepte: RezeptKurz[];
+  gelernteIcons: Record<string, string>;
 }) {
+  // Fix-Batch 63 (Icon-Lerndatenbank): Priorität iconOverride (dieser eine Artikel) >
+  // gelerntes Icon (global für diesen Namen, aus einer früheren Korrektur) > Stichwort-
+  // Erkennung als letzter Fallback.
+  function iconFuer(name: string, iconOverride?: string | null): string {
+    return iconOverride || gelernteIcons[name.trim().toLowerCase()] || erkenneArtikelIcon(name);
+  }
+
   const [pending, startTransition] = useTransition();
   const [name, setName] = useState("");
   const [menge, setMenge] = useState("");
@@ -790,6 +799,7 @@ export default function EinkaufslisteClient({
                   key={v.name}
                   name={v.name}
                   menge={v.menge}
+                  icon={iconFuer(v.name)}
                   hintergrund="var(--success)"
                   textfarbe="#fff"
                   onTap={() => startTransition(async () => { await addArtikel({ name: v.name, menge: v.menge || undefined }); })}
@@ -925,7 +935,7 @@ export default function EinkaufslisteClient({
                 name={a.name}
                 menge={a.menge}
                 notiz={a.notiz}
-                iconOverride={a.iconOverride}
+                icon={iconFuer(a.name, a.iconOverride)}
                 hintergrund="var(--accent)"
                 textfarbe="var(--accent-contrast)"
                 deaktiviert={!istEltern}
@@ -956,7 +966,7 @@ export default function EinkaufslisteClient({
                 key={a.id}
                 name={a.name}
                 notiz={a.notiz}
-                iconOverride={a.iconOverride}
+                icon={iconFuer(a.name, a.iconOverride)}
                 hintergrund="var(--border)"
                 textfarbe="var(--text-muted)"
                 durchgestrichen
@@ -980,7 +990,7 @@ export default function EinkaufslisteClient({
                 <input value={bearbeiteMenge} onChange={(e) => setBearbeiteMenge(e.target.value)} placeholder="Menge" />
                 <input value={bearbeiteNotiz} onChange={(e) => setBearbeiteNotiz(e.target.value)} placeholder="Notizen (optional)" />
                 <label style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: -6 }}>
-                  Icon (aktuell: {bearbeiteIcon || erkenneArtikelIcon(bearbeiteName)}) — nicht zufrieden? Eigenes Emoji eintragen
+                  Icon (aktuell: {iconFuer(bearbeiteName, bearbeiteIcon)}) — nicht zufrieden? Eigenes Emoji eintragen. Wird für „{bearbeiteName}" gemerkt und beim nächsten Mal automatisch verwendet.
                 </label>
                 <div style={{ display: "flex", gap: 8 }}>
                   <input

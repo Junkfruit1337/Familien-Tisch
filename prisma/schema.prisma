@@ -217,6 +217,17 @@ model VorschlagDismiss {
   anzahl Int    @default(1)
 }
 
+// Fix-Batch 63 (Florians KI-Vorschlag "Icon-Lerndatenbank"): wenn jemand ein Icon manuell
+// korrigiert (iconOverride), merkt sich die App das global für diesen Artikelnamen, damit
+// künftige neue Artikel mit demselben Namen automatisch das korrigierte Icon bekommen statt
+// wieder auf die (ggf. falsche) Stichwort-Erkennung zurückzufallen.
+model GelernteArtikelIcons {
+  id        String   @id @default(cuid())
+  name      String   @unique // kleingeschriebener, getrimmter Artikelname
+  icon      String
+  updatedAt DateTime @updatedAt
+}
+
 enum WunschStatus {
   OFFEN
   GENEHMIGT

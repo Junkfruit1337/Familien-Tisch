@@ -232,7 +232,7 @@ export async function addArtikel(data: { name: string; menge?: string; notiz?: s
 // "Icon-Größe und Regeneration") — leerer String setzt zurück auf automatische Erkennung.
 export async function updateArtikel(id: string, data: { name?: string; menge?: string; notiz?: string; iconOverride?: string }) {
   await requireParent();
-  await prisma.einkaufsArtikel.update({
+  const artikel = await prisma.einkaufsArtikel.update({
     where: { id },
     data: {
       name: data.name,
@@ -241,7 +241,26 @@ export async function updateArtikel(id: string, data: { name?: string; menge?: s
       iconOverride: data.iconOverride !== undefined ? data.iconOverride || null : undefined,
     },
   });
+  // Fix-Batch 63 (Icon-Lerndatenbank): ein manuell gesetztes/korrigiertes Icon merkt sich die
+  // App global für diesen Artikelnamen — beim Zurücksetzen auf "Automatisch" (leerer String)
+  // wird die gelernte Zuordnung bewusst NICHT gelöscht, da ein einzelnes Zurücksetzen nicht
+  // heißt, dass das gelernte Icon insgesamt falsch war.
+  if (data.iconOverride) {
+    await prisma.gelernteArtikelIcons.upsert({
+      where: { name: artikel.name.trim().toLowerCase() },
+      update: { icon: data.iconOverride },
+      create: { name: artikel.name.trim().toLowerCase(), icon: data.iconOverride },
+    });
+  }
   revalidatePath("/einkaufsliste");
+}
+
+// Fix-Batch 63: globale Icon-Lerndatenbank fürs Frontend — wird einmal geladen und deckt die
+// Icon-Anzeige bei Artikeln ohne eigenes iconOverride ab (Priorität: iconOverride > gelernt >
+// Stichwort-Erkennung).
+export async function listGelernteIcons(): Promise<Record<string, string>> {
+  const eintraege = await prisma.gelernteArtikelIcons.findMany();
+  return Object.fromEntries(eintraege.map((e) => [e.name, e.icon]));
 }
 
 // Eltern: Artikel manuell in eine andere Kategorie verschieben (übersteuert die Auto-Erkennung dauerhaft).

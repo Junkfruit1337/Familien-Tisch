@@ -2,9 +2,34 @@
 
 import { requirePerson } from "@/lib/auth";
 import { getWochenplan } from "../essensplan/actions";
-import { listAnstehendeSchulEintraege } from "../schule/actions";
+import { listAnstehendeSchulEintraege, listKinder, kontostand, listTaschengeld, getSparziel } from "../schule/actions";
 import { prisma } from "@/lib/prisma";
 import { sendePushAnEltern, sendePushAnPerson } from "@/lib/push";
+
+// Fix-Batch 63 (Florians Vorschlag "KI-Einschätzung fürs Sparziel", nur für Eltern im
+// Dashboard): bewusst eine einfache, deterministische Hochrechnung statt eines echten
+// KI-Aufrufs — schneller, kostenlos und genauso nachvollziehbar wie eine KI-Formulierung es
+// wäre. Nutzt den Sparrhythmus der letzten 8 Wochen aus dem ohnehin vorhandenen
+// Taschengeld-Verlauf.
+async function berechneSparzielEinschaetzung(kindId: string, kindName: string) {
+  const sparziel = await getSparziel(kindId);
+  if (!sparziel) return null;
+  const [stand, transaktionen] = await Promise.all([kontostand(kindId), listTaschengeld(kindId)]);
+  const rest = sparziel.zielbetrag - stand;
+  if (rest <= 0) return { kindId, kindName, bezeichnung: sparziel.bezeichnung, text: `${kindName} hat "${sparziel.bezeichnung}" bereits erreicht! 🎉` };
+
+  const achtWochenHer = new Date();
+  achtWochenHer.setDate(achtWochenHer.getDate() - 56);
+  const juengere = transaktionen.filter((t) => t.createdAt >= achtWochenHer);
+  const netto = juengere.reduce((s, t) => s + (t.typ === "GUTSCHRIFT" ? t.betrag : -t.betrag), 0);
+  const proWoche = netto / 8;
+
+  const text =
+    proWoche > 0
+      ? `${kindName}: noch ${rest.toFixed(2)} € bis "${sparziel.bezeichnung}" — bei ${proWoche.toFixed(2)} €/Woche zuletzt noch ca. ${Math.ceil(rest / proWoche)} Woche(n).`
+      : `${kindName}: noch ${rest.toFixed(2)} € bis "${sparziel.bezeichnung}" — zuletzt kaum Fortschritt gespart.`;
+  return { kindId, kindName, bezeichnung: sparziel.bezeichnung, text };
+}
 
 function lerntipp(tageBis: number): string {
   if (tageBis <= 0) return "Heute ist es so weit — nochmal kurz die Zusammenfassung durchlesen!";
@@ -96,6 +121,14 @@ export async function getDashboardDaten() {
       ? await prisma.einkaufsWunsch.findMany({ where: { status: "OFFEN" }, include: { kind: true }, orderBy: { createdAt: "desc" } })
       : [];
 
+  // Fix-Batch 63: Sparziel-Einschätzung nur für Eltern (Florians Vorgabe).
+  const sparzielEinschaetzungen =
+    person.rolle === "ELTERN"
+      ? (
+          await Promise.all((await listKinder()).map((k) => berechneSparzielEinschaetzung(k.id, k.name)))
+        ).filter((x): x is NonNullable<typeof x> => x !== null)
+      : [];
+
   // Fix-Batch 49: eigene noch nicht abgeschlossene Tickets auf dem Dashboard anzeigen
   // (für alle, nicht nur Eltern) — Klick führt zum Ticket-Bereich in den Einstellungen.
   const meineOffenenTickets = await prisma.ticket.findMany({
@@ -138,6 +171,7 @@ export async function getDashboardDaten() {
       createdAt: w.createdAt.toISOString(),
     })),
     meineOffenenTickets: meineOffenenTickets.map((t) => ({ id: t.id, titel: t.titel, status: t.status })),
+    sparzielEinschaetzungen,
   };
 }
 

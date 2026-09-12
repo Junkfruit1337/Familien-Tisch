@@ -26,6 +26,7 @@ type Daten = {
   offeneNoten: { id: string; kindName: string; fachName: string; art: string; note: number; datum: string; notiz: string | null; fotoBase64: string | null }[];
   offeneWuensche: { id: string; kindName: string; artikelName: string; menge: string | null; createdAt: string }[];
   meineOffenenTickets: { id: string; titel: string; status: string }[];
+  sparzielEinschaetzungen: { kindId: string; kindName: string; bezeichnung: string; text: string }[];
 };
 
 export default function DashboardClient({ daten, istEltern }: { daten: Daten; istEltern: boolean }) {
@@ -157,6 +158,19 @@ export default function DashboardClient({ daten, istEltern }: { daten: Daten; is
           </div>
         ))}
       </div>
+
+      {istEltern && daten.sparzielEinschaetzungen.length > 0 && (
+        <div className="card">
+          <strong>🎯 Sparziele der Kinder</strong>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 8 }}>
+            {daten.sparzielEinschaetzungen.map((s) => (
+              <p key={s.kindId} style={{ margin: 0, fontSize: "var(--font-sm)" }}>
+                {s.text}
+              </p>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

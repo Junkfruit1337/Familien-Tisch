@@ -157,6 +157,40 @@ export async function erkenneTerminAusText(
   }
 }
 
+// Fix-Batch 63 (Florians KI-Vorschlag "Terminkonflikt-Check"): rein datenbasiert, keine KI
+// nötig — prüft, ob am selben Tag für dieselbe(n) Person(en) schon ein Termin oder eine
+// Klassenarbeit/HÜ-Kontrolle eingetragen ist, damit man z. B. nicht versehentlich einen
+// Ausflug auf den Tag einer Arbeit legt. Rein informativ (siehe Bestätigungsdialog im
+// Formular) — verhindert das Anlegen nicht, warnt nur vorher.
+export async function pruefeTerminKonflikt(datumIso: string, personIds: string[]): Promise<string[]> {
+  await requirePerson();
+  if (personIds.length === 0) return [];
+  const tag = new Date(datumIso);
+  const tagStart = new Date(tag.getFullYear(), tag.getMonth(), tag.getDate());
+  const tagEnde = new Date(tagStart);
+  tagEnde.setDate(tagEnde.getDate() + 1);
+
+  const [schulEintraege, termine] = await Promise.all([
+    prisma.schulEintrag.findMany({
+      where: { personId: { in: personIds }, datum: { gte: tagStart, lt: tagEnde } },
+      include: { person: true },
+    }),
+    prisma.termin.findMany({
+      where: { personId: { in: personIds }, start: { gte: tagStart, lt: tagEnde } },
+      include: { person: true },
+    }),
+  ]);
+
+  const hinweise: string[] = [];
+  for (const s of schulEintraege) {
+    hinweise.push(`${s.person.name}: an diesem Tag steht schon "${s.titel}" (Klassenarbeit/HÜ-Kontrolle) an.`);
+  }
+  for (const t of termine) {
+    hinweise.push(`${t.person?.name ?? "Familie"}: an diesem Tag ist schon "${t.titel}" eingetragen.`);
+  }
+  return hinweise;
+}
+
 // personIds: leer = Familie (alle). Für mehrere ausgewählte Personen wird pro Person eine
 // eigene Zeile (bzw. eigene Serie) angelegt — analog dem bereits bestehenden Muster bei
 // Schul-Einträgen (createSchulEintrag), damit jede Person ihre Zuweisung unabhängig
