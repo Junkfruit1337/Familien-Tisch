@@ -6,6 +6,7 @@ import { erkenneTerminKategorie, TERMIN_KATEGORIE_LABEL } from "@/lib/terminkate
 import HistorieVerlauf from "@/components/HistorieVerlauf";
 import Spracheingabe from "@/components/Spracheingabe";
 import SeitenTitel from "@/components/SeitenTitel";
+import PersonChip from "@/components/PersonChip";
 import { BEREICH_FARBEN } from "@/lib/bereichFarben";
 
 type PersonKurz = { id: string; name: string; farbe: string };
@@ -467,22 +468,24 @@ export default function KalenderClient({
             <button
               key={p.id}
               className="btn-secondary"
-              style={{ background: filter.includes(p.id) ? p.farbe : undefined, color: filter.includes(p.id) ? "#fff" : undefined }}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                background: filter.includes(p.id) ? p.farbe : undefined,
+                color: filter.includes(p.id) ? "#fff" : undefined,
+                borderColor: filter.includes(p.id) ? p.farbe : undefined,
+              }}
               onClick={() => setFilter((prev) => (prev.includes(p.id) ? prev.filter((id) => id !== p.id) : [...prev, p.id]))}
             >
+              {!filter.includes(p.id) && <PersonChip name={p.name} farbe={p.farbe} size={16} />}
               {p.name}
             </button>
           ))}
-          {ansicht === "liste" && (
-            <label style={{ marginLeft: "auto", display: "flex", gap: 6, alignItems: "center", fontSize: 13, color: "var(--text-muted)" }}>
-              <input type="checkbox" checked={nurZukunft} onChange={(e) => setNurZukunft(e.target.checked)} style={{ width: "auto" }} />
-              Vergangene ausblenden
-            </label>
-          )}
         </div>
       )}
-      {!istEltern && ansicht === "liste" && (
-        <label style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 13, color: "var(--text-muted)" }}>
+      {ansicht === "liste" && (
+        <label style={{ display: "flex", gap: 6, alignItems: "center", fontSize: "var(--font-sm)", color: "var(--text-muted)" }}>
           <input type="checkbox" checked={nurZukunft} onChange={(e) => setNurZukunft(e.target.checked)} style={{ width: "auto" }} />
           Vergangene ausblenden
         </label>
@@ -600,27 +603,41 @@ export default function KalenderClient({
             </button>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {tagesEintraege.length === 0 && <p style={{ color: "var(--text-muted)", fontSize: 13 }}>Keine Einträge.</p>}
+            {tagesEintraege.length === 0 && (
+              <div className="empty-state">
+                <span className="empty-state-icon">📭</span>
+                <span>Keine Einträge.</span>
+              </div>
+            )}
             {tagesEintraege.map(renderEintrag)}
           </div>
         </div>
       )}
 
       {ausgewaehlterTag && ansicht === "monat" && (
-        <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "var(--font-sm)" }}>
           <span>
             Zeige nur:{" "}
             {new Date(ausgewaehlterTag + "T00:00:00").toLocaleDateString("de-DE", { weekday: "long", day: "2-digit", month: "2-digit" })}
           </span>
-          <button className="btn-secondary" style={{ padding: "2px 10px", fontSize: 12 }} onClick={() => setAusgewaehlterTag(null)}>
+          <button className="btn-secondary" style={{ padding: "2px 10px", fontSize: "var(--font-xs)" }} onClick={() => setAusgewaehlterTag(null)}>
             Filter aufheben
           </button>
         </div>
       )}
 
-      {(ansicht === "monat" || ansicht === "liste") && (
+      {/* Redesign: im Monat-Raster wird die Liste NUR noch gezeigt, wenn ein Tag ausgewählt
+          wurde — vorher erschien hier zusätzlich IMMER die komplette gefilterte Terminliste
+          unter dem Raster, obwohl die eigene "Liste"-Ansicht genau das schon bietet
+          (Kasten-Dopplung, siehe Redesign-Audit). */}
+      {((ansicht === "monat" && ausgewaehlterTag) || ansicht === "liste") && (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {gefiltert.length === 0 && <p style={{ color: "var(--text-muted)" }}>Keine Termine.</p>}
+          {gefiltert.length === 0 && (
+            <div className="empty-state">
+              <span className="empty-state-icon">📭</span>
+              <span>Keine Termine.</span>
+            </div>
+          )}
           {gefiltert.map(renderEintrag)}
         </div>
       )}

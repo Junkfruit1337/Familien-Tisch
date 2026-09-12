@@ -14,6 +14,7 @@ import {
 } from "./actions";
 import HistorieVerlauf from "@/components/HistorieVerlauf";
 import SeitenTitel from "@/components/SeitenTitel";
+import PersonChip from "@/components/PersonChip";
 import { BEREICH_FARBEN } from "@/lib/bereichFarben";
 
 type Dienst = { id: string; bezeichnung: string; beschreibung: string | null };
@@ -65,21 +66,18 @@ export default function DienstplanClient({
   const [tausche, setTausche] = useState(initialTausche);
   const [badplan, setBadplan] = useState(initialBadplan);
 
-  const [zeigeTausch, setZeigeTausch] = useState(false);
   const [modus, setModus] = useState<Modus>("ABGEBEN");
   const [vonKindId, setVonKindId] = useState("");
   const [mitKindId, setMitKindId] = useState("");
   const [scope, setScope] = useState<"woche" | "tag" | "dauerhaft">("woche");
   const [tag, setTag] = useState("");
   const [badAuswahl, setBadAuswahl] = useState<{ zeitpunkt: "morgens" | "abends"; position: number } | null>(null);
-  const [zeigeBadDauerhaft, setZeigeBadDauerhaft] = useState(false);
   const [badDauerhaftZeitpunkt, setBadDauerhaftZeitpunkt] = useState<"morgens" | "abends">("morgens");
   const [badDauerhaftPosition, setBadDauerhaftPosition] = useState(1);
   const [badDauerhaftKindId, setBadDauerhaftKindId] = useState("");
 
   const [bearbeiteDienstId, setBearbeiteDienstId] = useState<string | null>(null);
   const [dienstText, setDienstText] = useState("");
-  const [zeigeDienstDetails, setZeigeDienstDetails] = useState(false);
 
 
   async function ladeWoche(neueWocheStartIso: string) {
@@ -153,10 +151,10 @@ export default function DienstplanClient({
       </div>
 
       {tausche.length > 0 && (
-        <div className="card" style={{ background: "#f0dfa8", color: "#6b5117", border: "none", display: "flex", flexDirection: "column", gap: 6 }}>
+        <div className="card" style={{ background: "var(--warning-soft)", color: "#6b5117", display: "flex", flexDirection: "column", gap: 6 }}>
           {tausche.map((t) => (
             <div key={t.id} style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 13 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "var(--font-sm)" }}>
                 <span>
                   {t.modus === "TAUSCH" ? "🔄" : "➡️"} {t.vonName} {t.modus === "TAUSCH" ? "↔" : "→"} {t.mitName}{" "}
                   {t.tag ? `am ${new Date(t.tag).toLocaleDateString("de-DE")}` : "(ganze Woche)"}{" "}
@@ -165,7 +163,7 @@ export default function DienstplanClient({
                 {istEltern && (
                   <button
                     className="btn-secondary"
-                    style={{ fontSize: 12, padding: "2px 8px", color: "#6b5117", borderColor: "#6b5117" }}
+                    style={{ fontSize: "var(--font-xs)", padding: "2px 8px", color: "#6b5117", borderColor: "#6b5117" }}
                     onClick={() => startTransition(() => hebeTauschAuf(t.id).then(() => ladeWoche(wocheStart)))}
                   >
                     aufheben
@@ -178,71 +176,69 @@ export default function DienstplanClient({
         </div>
       )}
 
-      <div style={{ display: "flex", justifyContent: "flex-end" }}>
-        <button className="btn-secondary" style={{ fontSize: 12 }} onClick={() => setZeigeDienstDetails((v) => !v)}>
-          {zeigeDienstDetails ? "Regeltexte ausblenden" : "Regeltexte anzeigen"}
-        </button>
-      </div>
-
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
         {woche.map((s) => (
           <div key={s.schichtNummer} className="card" style={{ flex: "1 0 200px" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-              <span style={{ width: 12, height: 12, borderRadius: "50%", background: s.kindFarbe, display: "inline-block" }} />
+              <PersonChip name={s.kindName} farbe={s.kindFarbe} size={24} />
               <strong>{s.kindName}</strong>
-              {s.getauscht && <span className="pill pill-offen">getauscht</span>}
+              {s.getauscht && <span className="pill pill-info">🔄 getauscht</span>}
             </div>
-            <ul style={{ margin: 0, paddingLeft: 18, fontSize: 14, display: "flex", flexDirection: "column", gap: 4 }}>
-              {s.dienste.map((d) => (
-                <li key={d.id}>
-                  {d.bezeichnung}
-                  {zeigeDienstDetails &&
-                    (bearbeiteDienstId === d.id ? (
-                      <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 4 }}>
-                        <textarea rows={2} value={dienstText} onChange={(e) => setDienstText(e.target.value)} style={{ fontSize: 13 }} />
-                        <div style={{ display: "flex", gap: 6 }}>
-                          <button
-                            className="btn"
-                            style={{ fontSize: 12, padding: "3px 8px" }}
-                            onClick={() =>
-                              startTransition(async () => {
-                                await updateDienstBeschreibung(d.id, dienstText);
-                                setBearbeiteDienstId(null);
-                                await ladeWoche(wocheStart);
-                              })
-                            }
-                          >
-                            Speichern
-                          </button>
-                          <button className="btn-secondary" style={{ fontSize: 12, padding: "3px 8px" }} onClick={() => setBearbeiteDienstId(null)}>
-                            Abbrechen
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <>
-                        {d.beschreibung && <div style={{ fontSize: 12, color: "var(--text-muted)" }}>{d.beschreibung}</div>}
-                        {istEltern && (
-                          <button
-                            className="btn-secondary"
-                            style={{ fontSize: 11, padding: "2px 6px", marginTop: 2 }}
-                            onClick={() => {
-                              setBearbeiteDienstId(d.id);
-                              setDienstText(d.beschreibung ?? "");
-                            }}
-                          >
-                            ✎ Regeltext
-                          </button>
-                        )}
-                      </>
-                    ))}
-                </li>
-              ))}
-            </ul>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {s.dienste.map((d) =>
+                bearbeiteDienstId === d.id ? (
+                  <div key={d.id} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                    <span style={{ fontSize: "var(--font-base)", fontWeight: 600 }}>{d.bezeichnung}</span>
+                    <textarea rows={2} value={dienstText} onChange={(e) => setDienstText(e.target.value)} style={{ fontSize: "var(--font-sm)" }} />
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <button
+                        className="btn"
+                        style={{ fontSize: "var(--font-xs)", padding: "3px 8px" }}
+                        onClick={() =>
+                          startTransition(async () => {
+                            await updateDienstBeschreibung(d.id, dienstText);
+                            setBearbeiteDienstId(null);
+                            await ladeWoche(wocheStart);
+                          })
+                        }
+                      >
+                        Speichern
+                      </button>
+                      <button className="btn-secondary" style={{ fontSize: "var(--font-xs)", padding: "3px 8px" }} onClick={() => setBearbeiteDienstId(null)}>
+                        Abbrechen
+                      </button>
+                    </div>
+                  </div>
+                ) : d.beschreibung || istEltern ? (
+                  <details key={d.id}>
+                    <summary style={{ fontSize: "var(--font-base)", fontWeight: 500 }}>{d.bezeichnung}</summary>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                      {d.beschreibung && <p style={{ margin: 0, fontSize: "var(--font-sm)", color: "var(--text-muted)" }}>{d.beschreibung}</p>}
+                      {istEltern && (
+                        <button
+                          className="btn-secondary"
+                          style={{ fontSize: "var(--font-xs)", padding: "3px 8px", alignSelf: "flex-start" }}
+                          onClick={() => {
+                            setBearbeiteDienstId(d.id);
+                            setDienstText(d.beschreibung ?? "");
+                          }}
+                        >
+                          ✎ Regeltext {d.beschreibung ? "bearbeiten" : "hinzufügen"}
+                        </button>
+                      )}
+                    </div>
+                  </details>
+                ) : (
+                  <span key={d.id} style={{ fontSize: "var(--font-base)" }}>
+                    {d.bezeichnung}
+                  </span>
+                )
+              )}
+            </div>
             <div style={{ display: "flex", gap: 3, marginTop: 10 }}>
               {s.tage.map((t, i) => (
                 <div key={t.datum} style={{ textAlign: "center", flex: 1 }} title={`${WOCHENTAGE_KURZ[i]}: ${t.kindName}`}>
-                  <div style={{ fontSize: 10, color: "var(--text-muted)" }}>{WOCHENTAGE_KURZ[i]}</div>
+                  <div style={{ fontSize: "var(--font-xs)", color: "var(--text-muted)" }}>{WOCHENTAGE_KURZ[i]}</div>
                   <div
                     style={{
                       width: 10,
@@ -263,185 +259,183 @@ export default function DienstplanClient({
       <div className="card">
         <strong>🛁 Bad-Reihenfolge</strong>
         {istEltern && (
-          <p style={{ margin: "4px 0 8px", fontSize: 12, color: "var(--text-muted)" }}>
+          <p style={{ margin: "4px 0 8px", fontSize: "var(--font-xs)", color: "var(--text-muted)" }}>
             Zum Tauschen: zwei Namen in derselben Zeile nacheinander anklicken.
           </p>
         )}
         {(["morgens", "abends"] as const).map((zeitpunkt) => (
           <div key={zeitpunkt} style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
-            <span style={{ fontSize: 13, color: "var(--text-muted)", width: 70 }}>{zeitpunkt === "morgens" ? "Morgens" : "Abends"}</span>
-            {badplan[zeitpunkt].map((b, i) =>
-              istEltern ? (
+            <span style={{ fontSize: "var(--font-sm)", color: "var(--text-muted)", width: 70 }}>{zeitpunkt === "morgens" ? "Morgens" : "Abends"}</span>
+            {badplan[zeitpunkt].map((b, i) => {
+              const ausgewaehlt = badAuswahl?.zeitpunkt === zeitpunkt && badAuswahl.position === b.position;
+              return istEltern ? (
                 <span key={b.position} style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   {i > 0 && <span style={{ color: "var(--text-muted)" }}>→</span>}
                   <button
                     className="btn-secondary"
                     onClick={() => badKlick(zeitpunkt, b.position)}
                     style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 6,
                       padding: "4px 10px",
-                      fontSize: 13,
-                      background: badAuswahl?.zeitpunkt === zeitpunkt && badAuswahl.position === b.position ? b.kindFarbe : undefined,
-                      color: badAuswahl?.zeitpunkt === zeitpunkt && badAuswahl.position === b.position ? "#fff" : undefined,
+                      fontSize: "var(--font-sm)",
+                      background: ausgewaehlt ? b.kindFarbe : undefined,
+                      color: ausgewaehlt ? "#fff" : undefined,
                       borderColor: b.kindFarbe,
                     }}
                   >
+                    {!ausgewaehlt && <PersonChip name={b.kindName} farbe={b.kindFarbe} size={16} />}
                     {b.kindName}
                   </button>
                 </span>
               ) : (
-                <span key={b.position} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
+                <span key={b.position} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "var(--font-sm)" }}>
                   {i > 0 && <span style={{ color: "var(--text-muted)" }}>→</span>}
-                  <span style={{ padding: "4px 10px", borderRadius: 8, border: `1px solid ${b.kindFarbe}` }}>{b.kindName}</span>
+                  <span style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 10px 4px 4px", borderRadius: "var(--radius-pill)", border: `1px solid ${b.kindFarbe}` }}>
+                    <PersonChip name={b.kindName} farbe={b.kindFarbe} size={18} />
+                    {b.kindName}
+                  </span>
                 </span>
-              )
-            )}
+              );
+            })}
           </div>
         ))}
         {istEltern && (
-          <div style={{ marginTop: 10 }}>
-            <button className="btn-secondary" style={{ fontSize: 12 }} onClick={() => setZeigeBadDauerhaft((v) => !v)}>
-              Position dauerhaft festlegen
-            </button>
-            {zeigeBadDauerhaft && (
-              <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 8 }}>
-                <div style={{ display: "flex", gap: 6 }}>
-                  <button
-                    type="button"
-                    className={badDauerhaftZeitpunkt === "morgens" ? "btn" : "btn-secondary"}
-                    style={{ flex: 1, fontSize: 13 }}
-                    onClick={() => setBadDauerhaftZeitpunkt("morgens")}
-                  >
-                    Morgens
-                  </button>
-                  <button
-                    type="button"
-                    className={badDauerhaftZeitpunkt === "abends" ? "btn" : "btn-secondary"}
-                    style={{ flex: 1, fontSize: 13 }}
-                    onClick={() => setBadDauerhaftZeitpunkt("abends")}
-                  >
-                    Abends
-                  </button>
-                </div>
-                <select value={badDauerhaftPosition} onChange={(e) => setBadDauerhaftPosition(Number(e.target.value))}>
-                  {[1, 2, 3].map((p) => (
-                    <option key={p} value={p}>
-                      Position {p}
-                    </option>
-                  ))}
-                </select>
-                <select value={badDauerhaftKindId} onChange={(e) => setBadDauerhaftKindId(e.target.value)}>
-                  <option value="">Wer soll das dauerhaft übernehmen?</option>
-                  {kinder.map((k) => (
-                    <option key={k.id} value={k.id}>
-                      {k.name}
-                    </option>
-                  ))}
-                </select>
+          <details style={{ marginTop: 10 }}>
+            <summary style={{ fontSize: "var(--font-sm)" }}>Position dauerhaft festlegen</summary>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <div style={{ display: "flex", gap: 6 }}>
                 <button
-                  className="btn"
-                  disabled={pending || !badDauerhaftKindId}
-                  onClick={() =>
-                    startTransition(async () => {
-                      await setzeDauerhafteBadZuordnung({
-                        wocheStartIso: wocheStart,
-                        zeitpunkt: badDauerhaftZeitpunkt,
-                        position: badDauerhaftPosition,
-                        kindId: badDauerhaftKindId,
-                      });
-                      setZeigeBadDauerhaft(false);
-                      setBadDauerhaftKindId("");
-                      await ladeWoche(wocheStart);
-                    })
-                  }
+                  type="button"
+                  className={badDauerhaftZeitpunkt === "morgens" ? "btn" : "btn-secondary"}
+                  style={{ flex: 1, fontSize: "var(--font-sm)" }}
+                  onClick={() => setBadDauerhaftZeitpunkt("morgens")}
                 >
-                  Dauerhaft festlegen
+                  Morgens
+                </button>
+                <button
+                  type="button"
+                  className={badDauerhaftZeitpunkt === "abends" ? "btn" : "btn-secondary"}
+                  style={{ flex: 1, fontSize: "var(--font-sm)" }}
+                  onClick={() => setBadDauerhaftZeitpunkt("abends")}
+                >
+                  Abends
                 </button>
               </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      {istEltern && (
-        <div className="card">
-          <button className="btn-secondary" onClick={() => setZeigeTausch((v) => !v)}>
-            Dienst abgeben oder tauschen
-          </button>
-          <p style={{ margin: "6px 0 0", fontSize: 12, color: "var(--text-muted)" }}>
-            Z. B. wenn ein Kind krank ist, im Urlaub ist, oder dauerhaft mit jemandem tauschen möchte.
-          </p>
-          {zeigeTausch && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 10 }}>
-              <div style={{ display: "flex", gap: 6 }}>
-                <button type="button" className={modus === "ABGEBEN" ? "btn" : "btn-secondary"} style={{ flex: 1, fontSize: 13 }} onClick={() => setModus("ABGEBEN")}>
-                  Abgeben
-                </button>
-                <button type="button" className={modus === "TAUSCH" ? "btn" : "btn-secondary"} style={{ flex: 1, fontSize: 13 }} onClick={() => setModus("TAUSCH")}>
-                  Tauschen
-                </button>
-              </div>
-              <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>
-                {modus === "ABGEBEN"
-                  ? "Eine Person gibt ihren Dienst komplett ab, die andere übernimmt ihn zusätzlich."
-                  : "Beide Personen tauschen ihre Dienste gegenseitig."}
-              </p>
-              <select value={vonKindId} onChange={(e) => setVonKindId(e.target.value)}>
-                <option value="">{modus === "ABGEBEN" ? "Wer gibt ab?" : "Erste Person"}</option>
+              <select value={badDauerhaftPosition} onChange={(e) => setBadDauerhaftPosition(Number(e.target.value))}>
+                {[1, 2, 3].map((p) => (
+                  <option key={p} value={p}>
+                    Position {p}
+                  </option>
+                ))}
+              </select>
+              <select value={badDauerhaftKindId} onChange={(e) => setBadDauerhaftKindId(e.target.value)}>
+                <option value="">Wer soll das dauerhaft übernehmen?</option>
                 {kinder.map((k) => (
-                  <option key={k.id} value={k.id} disabled={k.id === mitKindId}>
+                  <option key={k.id} value={k.id}>
                     {k.name}
                   </option>
                 ))}
               </select>
-              <select value={mitKindId} onChange={(e) => setMitKindId(e.target.value)}>
-                <option value="">{modus === "ABGEBEN" ? "Wer übernimmt?" : "Zweite Person"}</option>
-                {kinder.map((k) => (
-                  <option key={k.id} value={k.id} disabled={k.id === vonKindId}>
-                    {k.name}
-                  </option>
-                ))}
-              </select>
-              <div style={{ display: "flex", gap: 6 }}>
-                <button type="button" className={scope === "woche" ? "btn" : "btn-secondary"} style={{ flex: 1, fontSize: 13 }} onClick={() => setScope("woche")}>
-                  Ganze Woche
-                </button>
-                <button type="button" className={scope === "tag" ? "btn" : "btn-secondary"} style={{ flex: 1, fontSize: 13 }} onClick={() => setScope("tag")}>
-                  Einzelner Tag
-                </button>
-                <button type="button" className={scope === "dauerhaft" ? "btn" : "btn-secondary"} style={{ flex: 1, fontSize: 13 }} onClick={() => setScope("dauerhaft")}>
-                  Dauerhaft
-                </button>
-              </div>
-              {scope === "tag" && <input type="date" value={tag} onChange={(e) => setTag(e.target.value)} />}
-              {scope === "dauerhaft" && (
-                <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>
-                  Gilt ab sofort dauerhaft, bis hier erneut geändert — nicht nur für diese eine Woche.
-                </p>
-              )}
               <button
                 className="btn"
-                disabled={pending || !vonKindId || !mitKindId || (scope === "tag" && !tag)}
+                disabled={pending || !badDauerhaftKindId}
                 onClick={() =>
                   startTransition(async () => {
-                    if (scope === "dauerhaft") {
-                      await erstelleDauerhaftenTausch({ wocheStartIso: wocheStart, vonKindId, mitKindId, modus });
-                    } else {
-                      await erstelleTausch({ wocheStartIso: wocheStart, tag: scope === "woche" ? undefined : tag, vonKindId, mitKindId, modus });
-                    }
-                    setZeigeTausch(false);
-                    setVonKindId("");
-                    setMitKindId("");
-                    setScope("woche");
-                    setTag("");
+                    await setzeDauerhafteBadZuordnung({
+                      wocheStartIso: wocheStart,
+                      zeitpunkt: badDauerhaftZeitpunkt,
+                      position: badDauerhaftPosition,
+                      kindId: badDauerhaftKindId,
+                    });
+                    setBadDauerhaftKindId("");
                     await ladeWoche(wocheStart);
                   })
                 }
               >
-                {scope === "dauerhaft" ? "Dauerhaft ändern" : modus === "ABGEBEN" ? "Abgabe anlegen" : "Tausch anlegen"}
+                Dauerhaft festlegen
               </button>
             </div>
-          )}
-        </div>
+          </details>
+        )}
+      </div>
+
+      {istEltern && (
+        <details className="card">
+          <summary style={{ fontWeight: 600 }}>🔁 Dienst abgeben oder tauschen</summary>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <p style={{ margin: 0, fontSize: "var(--font-xs)", color: "var(--text-muted)" }}>
+              Z. B. wenn ein Kind krank ist, im Urlaub ist, oder dauerhaft mit jemandem tauschen möchte.
+            </p>
+            <div style={{ display: "flex", gap: 6 }}>
+              <button type="button" className={modus === "ABGEBEN" ? "btn" : "btn-secondary"} style={{ flex: 1, fontSize: "var(--font-sm)" }} onClick={() => setModus("ABGEBEN")}>
+                Abgeben
+              </button>
+              <button type="button" className={modus === "TAUSCH" ? "btn" : "btn-secondary"} style={{ flex: 1, fontSize: "var(--font-sm)" }} onClick={() => setModus("TAUSCH")}>
+                Tauschen
+              </button>
+            </div>
+            <p style={{ margin: 0, fontSize: "var(--font-xs)", color: "var(--text-muted)" }}>
+              {modus === "ABGEBEN"
+                ? "Eine Person gibt ihren Dienst komplett ab, die andere übernimmt ihn zusätzlich."
+                : "Beide Personen tauschen ihre Dienste gegenseitig."}
+            </p>
+            <select value={vonKindId} onChange={(e) => setVonKindId(e.target.value)}>
+              <option value="">{modus === "ABGEBEN" ? "Wer gibt ab?" : "Erste Person"}</option>
+              {kinder.map((k) => (
+                <option key={k.id} value={k.id} disabled={k.id === mitKindId}>
+                  {k.name}
+                </option>
+              ))}
+            </select>
+            <select value={mitKindId} onChange={(e) => setMitKindId(e.target.value)}>
+              <option value="">{modus === "ABGEBEN" ? "Wer übernimmt?" : "Zweite Person"}</option>
+              {kinder.map((k) => (
+                <option key={k.id} value={k.id} disabled={k.id === vonKindId}>
+                  {k.name}
+                </option>
+              ))}
+            </select>
+            <div style={{ display: "flex", gap: 6 }}>
+              <button type="button" className={scope === "woche" ? "btn" : "btn-secondary"} style={{ flex: 1, fontSize: "var(--font-sm)" }} onClick={() => setScope("woche")}>
+                Ganze Woche
+              </button>
+              <button type="button" className={scope === "tag" ? "btn" : "btn-secondary"} style={{ flex: 1, fontSize: "var(--font-sm)" }} onClick={() => setScope("tag")}>
+                Einzelner Tag
+              </button>
+              <button type="button" className={scope === "dauerhaft" ? "btn" : "btn-secondary"} style={{ flex: 1, fontSize: "var(--font-sm)" }} onClick={() => setScope("dauerhaft")}>
+                Dauerhaft
+              </button>
+            </div>
+            {scope === "tag" && <input type="date" value={tag} onChange={(e) => setTag(e.target.value)} />}
+            {scope === "dauerhaft" && (
+              <p style={{ margin: 0, fontSize: "var(--font-xs)", color: "var(--text-muted)" }}>
+                Gilt ab sofort dauerhaft, bis hier erneut geändert — nicht nur für diese eine Woche.
+              </p>
+            )}
+            <button
+              className="btn"
+              disabled={pending || !vonKindId || !mitKindId || (scope === "tag" && !tag)}
+              onClick={() =>
+                startTransition(async () => {
+                  if (scope === "dauerhaft") {
+                    await erstelleDauerhaftenTausch({ wocheStartIso: wocheStart, vonKindId, mitKindId, modus });
+                  } else {
+                    await erstelleTausch({ wocheStartIso: wocheStart, tag: scope === "woche" ? undefined : tag, vonKindId, mitKindId, modus });
+                  }
+                  setVonKindId("");
+                  setMitKindId("");
+                  setScope("woche");
+                  setTag("");
+                  await ladeWoche(wocheStart);
+                })
+              }
+            >
+              {scope === "dauerhaft" ? "Dauerhaft ändern" : modus === "ABGEBEN" ? "Abgabe anlegen" : "Tausch anlegen"}
+            </button>
+          </div>
+        </details>
       )}
 
       <details className="card">
@@ -490,7 +484,7 @@ export default function DienstplanClient({
         <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 10 }}>
           {historie.length === 0 && <p style={{ margin: 0, color: "var(--text-muted)" }}>Noch keine Tausche erfasst.</p>}
           {historie.map((h) => (
-            <div key={h.id} style={{ fontSize: 13, borderBottom: "1px solid rgba(128,128,128,0.15)", paddingBottom: 4 }}>
+            <div key={h.id} style={{ fontSize: "var(--font-sm)", borderBottom: "1px solid var(--border)", paddingBottom: 4 }}>
               <span style={{ color: "var(--text-muted)" }}>
                 {new Date(h.zeitpunkt).toLocaleString("de-DE", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
               </span>{" "}

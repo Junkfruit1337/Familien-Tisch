@@ -21,7 +21,7 @@ export default async function AufgabenPage() {
         personName: a.person?.name ?? "Familie",
         seriesId: a.seriesId,
       }))}
-      personen={personen.map((p) => ({ id: p.id, name: p.name }))}
+      personen={personen.map((p) => ({ id: p.id, name: p.name, farbe: p.farbe }))}
     />
   );
 }

@@ -5,6 +5,7 @@ import { createAufgabe, toggleAufgabe, deleteAufgabe, erkenneAufgabeAusText } fr
 import HistorieVerlauf from "@/components/HistorieVerlauf";
 import Spracheingabe from "@/components/Spracheingabe";
 import SeitenTitel from "@/components/SeitenTitel";
+import PersonChip from "@/components/PersonChip";
 import { BEREICH_FARBEN } from "@/lib/bereichFarben";
 
 type Aufgabe = {
@@ -16,7 +17,7 @@ type Aufgabe = {
   personName: string;
   seriesId: string | null;
 };
-type Person = { id: string; name: string };
+type Person = { id: string; name: string; farbe: string };
 
 const WIEDERHOLUNGEN = [
   { value: "KEINE", label: "Keine Wiederholung" },
@@ -50,6 +51,9 @@ export default function AufgabenClient({
   const [pending, startTransition] = useTransition();
   const [loeschAuswahl, setLoeschAuswahl] = useState<string | null>(null);
   const [spracheVerarbeitung, setSpracheVerarbeitung] = useState(false);
+  // Redesign (Fix-Batch 57): Formular ist jetzt wie bei Kalender/Schule ein Auf-/Zuklapp-
+  // Toggle statt einer immer offenen Karte — einheitliches "Neu anlegen"-Muster app-weit.
+  const [zeigeFormular, setZeigeFormular] = useState(false);
 
   async function spracheErkannt(text: string) {
     setSpracheVerarbeitung(true);
@@ -91,6 +95,7 @@ export default function AufgabenClient({
       setWiederholung("KEINE");
       setWiederholungUnbegrenzt(true);
       setWiederholungBis("");
+      setZeigeFormular(false);
     });
   }
 
@@ -108,64 +113,71 @@ export default function AufgabenClient({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <SeitenTitel icon="✅" farbe={BEREICH_FARBEN.aufgaben}>Aufgaben</SeitenTitel>
-
-      <div className="card" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        <Spracheingabe onErgebnis={spracheErkannt} disabled={spracheVerarbeitung} />
-        {spracheVerarbeitung && <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>Spracheingabe wird verarbeitet …</p>}
-        <input placeholder="Neue Aufgabe" value={titel} onChange={(e) => setTitel(e.target.value)} />
-        <input type="date" value={faelligkeit} onChange={(e) => setFaelligkeit(e.target.value)} />
-        {!faelligkeit && (
-          <p style={{ margin: 0, fontSize: 12, color: "var(--warning)" }}>
-            Ohne Fälligkeitsdatum erscheint diese Aufgabe nicht im Kalender.
-          </p>
-        )}
-        {istEltern && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            <label style={{ fontSize: 12, color: "var(--text-muted)" }}>Für wen?</label>
-            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 14 }}>
-              <input type="checkbox" checked={personIds.length === 0} onChange={() => setPersonIds([])} />
-              Familie (alle)
-            </label>
-            {personen.map((p) => (
-              <label key={p.id} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 14 }}>
-                <input
-                  type="checkbox"
-                  checked={personIds.includes(p.id)}
-                  onChange={() =>
-                    setPersonIds((prev) => (prev.includes(p.id) ? prev.filter((id) => id !== p.id) : [...prev, p.id]))
-                  }
-                />
-                {p.name}
-              </label>
-            ))}
-          </div>
-        )}
-        <select value={wiederholung} onChange={(e) => setWiederholung(e.target.value)} disabled={!faelligkeit}>
-          {WIEDERHOLUNGEN.map((w) => (
-            <option key={w.value} value={w.value}>
-              {w.label}
-            </option>
-          ))}
-        </select>
-        {wiederholung !== "KEINE" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 14 }}>
-              <input type="checkbox" checked={wiederholungUnbegrenzt} onChange={(e) => setWiederholungUnbegrenzt(e.target.checked)} />
-              Unbegrenzt wiederholen
-            </label>
-            {!wiederholungUnbegrenzt && (
-              <div>
-                <label style={{ fontSize: 12, color: "var(--text-muted)" }}>Wiederholen bis</label>
-                <input type="date" value={wiederholungBis} onChange={(e) => setWiederholungBis(e.target.value)} />
-              </div>
-            )}
-          </div>
-        )}
-        <button className="btn" disabled={pending} onClick={submit}>
-          Hinzufügen
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <SeitenTitel icon="✅" farbe={BEREICH_FARBEN.aufgaben}>Aufgaben</SeitenTitel>
+        <button className="btn" onClick={() => setZeigeFormular((v) => !v)}>
+          {zeigeFormular ? "Abbrechen" : "+ Neue Aufgabe"}
         </button>
       </div>
+
+      {zeigeFormular && (
+        <div className="card" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <Spracheingabe onErgebnis={spracheErkannt} disabled={spracheVerarbeitung} />
+          {spracheVerarbeitung && <p style={{ margin: 0, fontSize: "var(--font-xs)", color: "var(--text-muted)" }}>Spracheingabe wird verarbeitet …</p>}
+          <input placeholder="Neue Aufgabe" value={titel} onChange={(e) => setTitel(e.target.value)} />
+          <input type="date" value={faelligkeit} onChange={(e) => setFaelligkeit(e.target.value)} />
+          {!faelligkeit && (
+            <p style={{ margin: 0, fontSize: "var(--font-xs)", color: "var(--text-muted)" }}>
+              ℹ️ Ohne Fälligkeitsdatum erscheint diese Aufgabe nicht im Kalender.
+            </p>
+          )}
+          {istEltern && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <label style={{ fontSize: "var(--font-xs)", color: "var(--text-muted)" }}>Für wen?</label>
+              <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "var(--font-base)" }}>
+                <input type="checkbox" checked={personIds.length === 0} onChange={() => setPersonIds([])} />
+                Familie (alle)
+              </label>
+              {personen.map((p) => (
+                <label key={p.id} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "var(--font-base)" }}>
+                  <input
+                    type="checkbox"
+                    checked={personIds.includes(p.id)}
+                    onChange={() =>
+                      setPersonIds((prev) => (prev.includes(p.id) ? prev.filter((id) => id !== p.id) : [...prev, p.id]))
+                    }
+                  />
+                  {p.name}
+                </label>
+              ))}
+            </div>
+          )}
+          <select value={wiederholung} onChange={(e) => setWiederholung(e.target.value)} disabled={!faelligkeit}>
+            {WIEDERHOLUNGEN.map((w) => (
+              <option key={w.value} value={w.value}>
+                {w.label}
+              </option>
+            ))}
+          </select>
+          {wiederholung !== "KEINE" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "var(--font-base)" }}>
+                <input type="checkbox" checked={wiederholungUnbegrenzt} onChange={(e) => setWiederholungUnbegrenzt(e.target.checked)} />
+                Unbegrenzt wiederholen
+              </label>
+              {!wiederholungUnbegrenzt && (
+                <div>
+                  <label style={{ fontSize: "var(--font-xs)", color: "var(--text-muted)" }}>Wiederholen bis</label>
+                  <input type="date" value={wiederholungBis} onChange={(e) => setWiederholungBis(e.target.value)} />
+                </div>
+              )}
+            </div>
+          )}
+          <button className="btn" disabled={pending} onClick={submit}>
+            Hinzufügen
+          </button>
+        </div>
+      )}
 
       {istEltern && (
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -180,9 +192,17 @@ export default function AufgabenClient({
             <button
               key={p.id}
               className="btn-secondary"
-              style={{ background: filter === p.id ? "var(--accent)" : undefined, color: filter === p.id ? "var(--accent-contrast)" : undefined }}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                background: filter === p.id ? p.farbe : undefined,
+                color: filter === p.id ? "#fff" : undefined,
+                borderColor: filter === p.id ? p.farbe : undefined,
+              }}
               onClick={() => setFilter(p.id)}
             >
+              {filter !== p.id && <PersonChip name={p.name} farbe={p.farbe} size={16} />}
               {p.name}
             </button>
           ))}
@@ -238,13 +258,28 @@ export default function AufgabenClient({
               )}
             </div>
             {(istEltern || a.personId === eigeneId) && loeschAuswahl !== a.id && (
-              <button className="btn-secondary" style={{ fontSize: 13 }} onClick={() => loeschKlick(a)}>
-                Löschen
+              <button
+                className="btn-icon btn-icon-danger"
+                title="Aufgabe löschen"
+                onClick={() => {
+                  if (a.seriesId) {
+                    loeschKlick(a);
+                    return;
+                  }
+                  if (confirm(`"${a.titel}" wirklich löschen?`)) loeschKlick(a);
+                }}
+              >
+                🗑
               </button>
             )}
           </div>
         ))}
-        {offen.length === 0 && <p style={{ color: "var(--text-muted)" }}>Keine offenen Aufgaben. 🎉</p>}
+        {offen.length === 0 && (
+          <div className="empty-state">
+            <span className="empty-state-icon">🎉</span>
+            <span>Keine offenen Aufgaben.</span>
+          </div>
+        )}
       </div>
 
       {erledigt.length > 0 && (
