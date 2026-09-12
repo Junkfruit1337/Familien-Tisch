@@ -231,6 +231,9 @@ Chronologische, unveränderte Sammlung aller Wünsche und Ideen — wird laufend
 | 12.09.2026 | Florian | Auf dem iPhone überdeckt der Home-Indicator-Balken die Beschriftung der unteren Navigationsreiter — Screenshot beigefügt. | siehe Fix-Batch 68 |
 | 12.09.2026 | Claude (Fix-Batch 68) | Ursache: `env(safe-area-inset-bottom)` lieferte 0px, weil im `viewport`-Meta-Eintrag (`layout.tsx`) `viewport-fit=cover` fehlte — das in der Navigation bereits vorhandene `paddingBottom: env(safe-area-inset-bottom)` konnte dadurch nie greifen. Ergänzt; zusätzlich das untere Padding des Hauptinhalts um denselben Sicherheitsabstand erweitert. Lokal mit `npm run build` durchgeprüft. | Umgesetzt, deployt, live verifiziert |
 
+| 12.09.2026 | Florian | Kind kann das gerade aufgenommene Notenfoto vor dem Abschicken nicht richtig ansehen (nur danach, in der Übersicht, geht das). Ersetzen ging vermutlich schon. | siehe Fix-Batch 69 |
+| 12.09.2026 | Claude (Fix-Batch 69) | Die Vorschau nach der Aufnahme war nur ein winziges, nicht antippbares 60px-Bild. Jetzt öffnet Antippen dieselbe Groß-Ansicht (BildModal), die auch in der Noten-Übersicht nach dem Absenden genutzt wird. Ersetzen ("Entfernen" + erneute Aufnahme) war bereits vorhanden, unverändert. Lokal mit `npm run build` durchgeprüft. | Umgesetzt, deployt, live verifiziert |
+
 ## 6. Nächste Schritte
 
 - **Wichtigster nächster Schritt:** Fix-Batch 18 (siehe Log-Eintrag 11.09.2026, Push-Benachrichtigungen) ist committed und gepusht. **Florian muss noch die drei VAPID-Umgebungsvariablen in Coolify eintragen** (Werte im Chat erhalten), sonst bleibt Push serverseitig deaktiviert — der Rest der App läuft unabhängig davon normal weiter. Danach einmal im Dashboard auf „Aktivieren" klicken und testen (z. B. als Kind eine Note einreichen, prüfen ob bei den Eltern eine Benachrichtigung ankommt). Außerdem noch offen: die Rezept-Foto-Erkennung (Fix-Batch 17) einmal mit einem echten Foto ausprobieren.
