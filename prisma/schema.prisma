@@ -59,6 +59,7 @@ model Person {
   schulEintraege     SchulEintrag[]     @relation("SchulEintragPerson")
   tickets            Ticket[]
   dauerhafteZuordnungen DauerhafteZuordnung[]
+  hausprobleme       Hausproblem[]
 }
 
 model Session {
@@ -522,6 +523,36 @@ model Ticket {
   erstelltVon   Person       @relation(fields: [erstelltVonId], references: [id])
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
+}
+
+// ---------- Hausreparaturen/Vermieterkommunikation (Fix-Batch 35 Nachtrag) ----------
+// Mängel/Reparaturbedarf im Haus erfassen — mit Status, frei editierbaren Notizen, und der
+// Unterscheidung ob der Vermieter zuständig ist oder die Familie es selbst erledigt. Bei
+// Selbst-Erledigung lässt sich daraus eine normale Aufgabe für ein Familienmitglied anlegen
+// (aufgabeId verweist dann auf die entstandene Aufgabe).
+enum HausproblemStatus {
+  GEMELDET
+  IN_BEARBEITUNG
+  ERLEDIGT
+}
+
+enum HausproblemZustaendigkeit {
+  VERMIETER
+  FAMILIE
+}
+
+model Hausproblem {
+  id             String                    @id @default(cuid())
+  titel          String
+  beschreibung   String
+  status         HausproblemStatus         @default(GEMELDET)
+  zustaendigkeit HausproblemZustaendigkeit
+  notizen        String?
+  aufgabeId      String?
+  erstelltVonId  String
+  erstelltVon    Person                    @relation(fields: [erstelltVonId], references: [id])
+  createdAt      DateTime                  @default(now())
+  updatedAt      DateTime                  @updatedAt
 }
 
 // ---------- Schulferien (Fix-Batch 27) ----------

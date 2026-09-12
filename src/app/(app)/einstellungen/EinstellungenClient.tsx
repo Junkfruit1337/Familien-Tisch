@@ -11,6 +11,10 @@ import {
   erstelleTicket,
   erkenneTicketAusText,
   setzeTicketStatus,
+  erstelleHausproblem,
+  updateHausproblem,
+  loescheHausproblem,
+  wandleHausproblemInAufgabeUm,
 } from "./actions";
 import { addKategorie, setzeKategorieReihenfolge } from "../einkaufsliste/actions";
 import { addFach, updateFach, deleteFach, pruefeFachDuplikat, setSchulProfil } from "../schule/actions";
@@ -104,6 +108,24 @@ type Ticket = {
 };
 type TicketMitErsteller = Ticket & { erstellerName: string };
 
+type Hausproblem = {
+  id: string;
+  titel: string;
+  beschreibung: string;
+  status: string;
+  zustaendigkeit: string;
+  notizen: string | null;
+  aufgabeId: string | null;
+  erstellerName: string;
+  createdAt: string;
+};
+
+const HAUSPROBLEM_STATUS_LABEL: Record<string, string> = {
+  GEMELDET: "Gemeldet",
+  IN_BEARBEITUNG: "In Bearbeitung",
+  ERLEDIGT: "Erledigt",
+};
+
 const ROLLEN = [
   { value: "ELTERN", label: "Elternteil" },
   { value: "KIND", label: "Kind (mit Login)" },
@@ -130,6 +152,7 @@ export default function EinstellungenClient({
   historie,
   meineTickets,
   alleTickets,
+  hausprobleme,
 }: {
   istEltern: boolean;
   eigeneId: string;
@@ -142,6 +165,7 @@ export default function EinstellungenClient({
   historie: HistorieEintrag[];
   meineTickets: Ticket[];
   alleTickets: TicketMitErsteller[];
+  hausprobleme: Hausproblem[];
 }) {
   const [pending, startTransition] = useTransition();
   const [name, setName] = useState("");
@@ -151,6 +175,11 @@ export default function EinstellungenClient({
   const [pins, setPins] = useState<Record<string, string>>({});
   const [portionenEntwuerfe, setPortionenEntwuerfe] = useState<Record<string, string>>({});
   const [neueKategorie, setNeueKategorie] = useState("");
+  const [neuesHausproblemTitel, setNeuesHausproblemTitel] = useState("");
+  const [neuesHausproblemBeschreibung, setNeuesHausproblemBeschreibung] = useState("");
+  const [neuesHausproblemZustaendigkeit, setNeuesHausproblemZustaendigkeit] = useState<"VERMIETER" | "FAMILIE">("VERMIETER");
+  const [hausproblemNotizEntwuerfe, setHausproblemNotizEntwuerfe] = useState<Record<string, string>>({});
+  const [hausproblemAufgabePersonId, setHausproblemAufgabePersonId] = useState<Record<string, string>>({});
   const [kategoriePositionEntwuerfe, setKategoriePositionEntwuerfe] = useState<Record<string, string>>({});
   const [ausgewaehltesKind, setAusgewaehltesKind] = useState(kinder[0]?.id ?? "");
   const [neuesFach, setNeuesFach] = useState("");
@@ -509,6 +538,160 @@ export default function EinstellungenClient({
     </details>
   );
 
+  // Hausreparaturen/Vermieterkommunikation (Fix-Batch 35 Nachtrag) — jede Person darf melden
+  // und mitlesen, Status/Notizen/Umwandlung in eine Aufgabe bleibt Eltern vorbehalten.
+  const hausreparaturenSektion = (
+    <details>
+      <summary style={{ cursor: "pointer", fontWeight: 600 }}>🏠 Hausreparaturen ({hausprobleme.filter((h) => h.status !== "ERLEDIGT").length} offen)</summary>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
+        {hausprobleme.length === 0 && <p style={{ margin: 0, fontSize: 13, color: "var(--text-muted)" }}>Noch nichts gemeldet.</p>}
+        {hausprobleme.map((h) => (
+          <div key={h.id} className="card" style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+              <strong style={{ fontSize: 14 }}>{h.titel}</strong>
+              <span className={`pill pill-${h.status === "ERLEDIGT" ? "genehmigt" : h.status === "IN_BEARBEITUNG" ? "offen" : "abgelehnt"}`}>
+                {HAUSPROBLEM_STATUS_LABEL[h.status] ?? h.status}
+              </span>
+            </div>
+            <p style={{ margin: 0, fontSize: 13 }}>{h.beschreibung}</p>
+            <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>
+              {h.zustaendigkeit === "VERMIETER" ? "🏢 Vermieter zuständig" : "🔧 Familie erledigt selbst"} · Gemeldet von {h.erstellerName} am{" "}
+              {new Date(h.createdAt).toLocaleDateString("de-DE")}
+            </p>
+            {istEltern ? (
+              <>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  {(["GEMELDET", "IN_BEARBEITUNG", "ERLEDIGT"] as const).map((s) => (
+                    <button
+                      key={s}
+                      className="btn-secondary"
+                      style={{
+                        fontSize: 12,
+                        padding: "3px 8px",
+                        background: h.status === s ? "var(--accent)" : undefined,
+                        color: h.status === s ? "var(--accent-contrast)" : undefined,
+                      }}
+                      onClick={() => startTransition(() => updateHausproblem(h.id, { status: s }))}
+                    >
+                      {HAUSPROBLEM_STATUS_LABEL[s]}
+                    </button>
+                  ))}
+                  <button
+                    className="btn-secondary"
+                    style={{ fontSize: 12, padding: "3px 8px" }}
+                    onClick={() =>
+                      startTransition(() =>
+                        updateHausproblem(h.id, { zustaendigkeit: h.zustaendigkeit === "VERMIETER" ? "FAMILIE" : "VERMIETER" })
+                      )
+                    }
+                  >
+                    Zuständigkeit umschalten
+                  </button>
+                </div>
+                <textarea
+                  placeholder="Notizen (z. B. Termin mit Vermieter, Kontaktversuche)"
+                  rows={2}
+                  value={hausproblemNotizEntwuerfe[h.id] ?? h.notizen ?? ""}
+                  onChange={(e) => setHausproblemNotizEntwuerfe((prev) => ({ ...prev, [h.id]: e.target.value }))}
+                  onBlur={(e) => {
+                    if (e.target.value === (h.notizen ?? "")) return;
+                    startTransition(() => updateHausproblem(h.id, { notizen: e.target.value }));
+                  }}
+                  style={{ fontSize: 13 }}
+                />
+                {h.zustaendigkeit === "FAMILIE" &&
+                  (h.aufgabeId ? (
+                    <p style={{ margin: 0, fontSize: 12, color: "var(--success)" }}>✓ Als Aufgabe angelegt.</p>
+                  ) : (
+                    <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                      <select
+                        value={hausproblemAufgabePersonId[h.id] ?? ""}
+                        onChange={(e) => setHausproblemAufgabePersonId((prev) => ({ ...prev, [h.id]: e.target.value }))}
+                        style={{ flex: 1 }}
+                      >
+                        <option value="">Als Aufgabe anlegen für …</option>
+                        {personen.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.name}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        className="btn"
+                        style={{ fontSize: 12, padding: "4px 10px" }}
+                        disabled={!hausproblemAufgabePersonId[h.id]}
+                        onClick={() =>
+                          startTransition(() => wandleHausproblemInAufgabeUm(h.id, hausproblemAufgabePersonId[h.id]))
+                        }
+                      >
+                        Anlegen
+                      </button>
+                    </div>
+                  ))}
+                <button
+                  className="btn-secondary"
+                  style={{ fontSize: 12, alignSelf: "flex-start" }}
+                  onClick={() => {
+                    if (confirm(`"${h.titel}" wirklich löschen?`)) startTransition(() => loescheHausproblem(h.id));
+                  }}
+                >
+                  🗑 Löschen
+                </button>
+              </>
+            ) : (
+              h.notizen && <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>Notizen: {h.notizen}</p>
+            )}
+          </div>
+        ))}
+        <div className="card" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <strong style={{ fontSize: 13 }}>Neues Problem melden</strong>
+          <input placeholder="Titel (z. B. Wasserhahn tropft)" value={neuesHausproblemTitel} onChange={(e) => setNeuesHausproblemTitel(e.target.value)} />
+          <textarea
+            placeholder="Beschreibung"
+            rows={3}
+            value={neuesHausproblemBeschreibung}
+            onChange={(e) => setNeuesHausproblemBeschreibung(e.target.value)}
+          />
+          <div style={{ display: "flex", gap: 6 }}>
+            <button
+              type="button"
+              className={neuesHausproblemZustaendigkeit === "VERMIETER" ? "btn" : "btn-secondary"}
+              style={{ flex: 1, fontSize: 13 }}
+              onClick={() => setNeuesHausproblemZustaendigkeit("VERMIETER")}
+            >
+              Vermieter zuständig
+            </button>
+            <button
+              type="button"
+              className={neuesHausproblemZustaendigkeit === "FAMILIE" ? "btn" : "btn-secondary"}
+              style={{ flex: 1, fontSize: 13 }}
+              onClick={() => setNeuesHausproblemZustaendigkeit("FAMILIE")}
+            >
+              Wir erledigen es selbst
+            </button>
+          </div>
+          <button
+            className="btn"
+            disabled={pending || !neuesHausproblemTitel.trim() || !neuesHausproblemBeschreibung.trim()}
+            onClick={() =>
+              startTransition(async () => {
+                await erstelleHausproblem({
+                  titel: neuesHausproblemTitel,
+                  beschreibung: neuesHausproblemBeschreibung,
+                  zustaendigkeit: neuesHausproblemZustaendigkeit,
+                });
+                setNeuesHausproblemTitel("");
+                setNeuesHausproblemBeschreibung("");
+              })
+            }
+          >
+            Melden
+          </button>
+        </div>
+      </div>
+    </details>
+  );
+
   const grossesTicketBildModal = grossesTicketBild && (
     <div
       onClick={() => setGrossesTicketBild(null)}
@@ -526,6 +709,7 @@ export default function EinstellungenClient({
         <SeitenTitel icon="⚙️" farbe={BEREICH_FARBEN.einstellungen}>Einstellungen</SeitenTitel>
         {fehlerMeldenSektion}
         {geburtstagSektion}
+        {hausreparaturenSektion}
         {kinder.length > 0 && (
           <details>
             <summary style={{ cursor: "pointer", fontWeight: 600 }}>🎓 Meine Schule</summary>
@@ -548,6 +732,8 @@ export default function EinstellungenClient({
       {fehlerMeldenSektion}
 
       {geburtstagSektion}
+
+      {hausreparaturenSektion}
 
       {alleTickets.length > 0 && (
         <details>

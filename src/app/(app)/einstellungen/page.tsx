@@ -1,5 +1,5 @@
 import { getCurrentPerson } from "@/lib/auth";
-import { listPersonen, listMeineTickets, listAlleTickets } from "./actions";
+import { listPersonen, listMeineTickets, listAlleTickets, listHausprobleme } from "./actions";
 import { listKategorien } from "../einkaufsliste/actions";
 import { listKinder, listFaecher, listNotenGewichtung } from "../schule/actions";
 import { listDienstkatalog, listTagesroutinen, listKoerperpflegeplan } from "../dienstplan/actions";
@@ -12,6 +12,7 @@ export default async function EinstellungenPage() {
   const personen = await listPersonen();
   const meineTickets = await listMeineTickets();
   const alleTickets = istEltern ? await listAlleTickets() : [];
+  const hausprobleme = await listHausprobleme();
 
   const kategorien = istEltern ? await listKategorien() : [];
   const dienstkatalog = istEltern ? await listDienstkatalog() : [];
@@ -80,6 +81,17 @@ export default async function EinstellungenPage() {
         erstellerName: t.erstelltVon.name,
         createdAt: t.createdAt.toISOString(),
         updatedAt: t.updatedAt.toISOString(),
+      }))}
+      hausprobleme={hausprobleme.map((h) => ({
+        id: h.id,
+        titel: h.titel,
+        beschreibung: h.beschreibung,
+        status: h.status,
+        zustaendigkeit: h.zustaendigkeit,
+        notizen: h.notizen,
+        aufgabeId: h.aufgabeId,
+        erstellerName: h.erstelltVon.name,
+        createdAt: h.createdAt.toISOString(),
       }))}
     />
   );

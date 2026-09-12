@@ -111,3 +111,64 @@ export async function setzeTicketStatus(id: string, status: string, begruendung?
   await prisma.ticket.update({ where: { id }, data: { status: status as any, begruendung: begruendung || undefined } });
   revalidatePath("/einstellungen");
 }
+
+// ---------- Hausreparaturen/Vermieterkommunikation (Fix-Batch 35 Nachtrag) ----------
+// Jede Person darf melden/mitlesen (nicht nur Eltern) — wer ein Problem im Haus entdeckt,
+// soll es unkompliziert eintragen können. Status/Zuständigkeit ändern und die Umwandlung
+// in eine Aufgabe bleibt Eltern vorbehalten (analog anderen Verwaltungsaktionen).
+
+export async function listHausprobleme() {
+  await requirePerson();
+  return prisma.hausproblem.findMany({ include: { erstelltVon: true }, orderBy: { createdAt: "desc" } });
+}
+
+export async function erstelleHausproblem(data: { titel: string; beschreibung: string; zustaendigkeit: "VERMIETER" | "FAMILIE" }) {
+  const person = await requirePerson();
+  if (!data.titel.trim() || !data.beschreibung.trim()) throw new Error("Titel und Beschreibung dürfen nicht leer sein.");
+  await prisma.hausproblem.create({
+    data: {
+      titel: data.titel.trim(),
+      beschreibung: data.beschreibung.trim(),
+      zustaendigkeit: data.zustaendigkeit,
+      erstelltVonId: person.id,
+    },
+  });
+  revalidatePath("/einstellungen");
+}
+
+export async function updateHausproblem(
+  id: string,
+  data: { status?: "GEMELDET" | "IN_BEARBEITUNG" | "ERLEDIGT"; zustaendigkeit?: "VERMIETER" | "FAMILIE"; notizen?: string }
+) {
+  await requireParent();
+  await prisma.hausproblem.update({
+    where: { id },
+    data: {
+      status: data.status,
+      zustaendigkeit: data.zustaendigkeit,
+      notizen: data.notizen !== undefined ? data.notizen || null : undefined,
+    },
+  });
+  revalidatePath("/einstellungen");
+}
+
+export async function loescheHausproblem(id: string) {
+  await requireParent();
+  await prisma.hausproblem.delete({ where: { id } });
+  revalidatePath("/einstellungen");
+}
+
+// Wandelt ein selbst zu erledigendes Hausproblem in eine normale Aufgabe für ein
+// Familienmitglied um — landet danach in der regulären Aufgabenliste, das Hausproblem
+// merkt sich per aufgabeId, dass/wofür schon eine Aufgabe angelegt wurde.
+export async function wandleHausproblemInAufgabeUm(id: string, personId: string) {
+  const person = await requireParent();
+  const problem = await prisma.hausproblem.findUnique({ where: { id } });
+  if (!problem) throw new Error("Hausproblem nicht gefunden.");
+  const aufgabe = await prisma.aufgabe.create({
+    data: { titel: problem.titel, personId, erstelltVonId: person.id },
+  });
+  await prisma.hausproblem.update({ where: { id }, data: { aufgabeId: aufgabe.id } });
+  revalidatePath("/einstellungen");
+  revalidatePath("/aufgaben");
+}
