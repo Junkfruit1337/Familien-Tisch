@@ -548,27 +548,47 @@ export default function KalenderClient({
               )}
             </>
           )}
-          {/* Fix-Batch 89 (Florians Wunsch): Anhang (Bild oder PDF) hinterlegen — sichtbar nur
-              für die Zielperson(en) und die Person, die den Termin anlegt (siehe
-              anhaengeSichtbar in actions.ts). */}
+          {/* Fix-Batch 90 (Florians Nachfrage): Kamera-Direktaufnahme ergänzt — vorher gab es
+              nur einen generischen Datei-Picker, der je nach Browser/OS nicht zuverlässig die
+              Kamera anbot. Zwei-Buttons-Muster wie beim Rezept-Foto-Upload im Essensplan
+              (📷 Foto mit capture="environment" öffnet direkt die Kamera, 📁 Datei für Galerie
+              + PDF). */}
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             <span style={{ fontSize: 12, color: "var(--text-muted)" }}>Anhang (optional — Bild oder PDF)</span>
-            <label className="btn-secondary" style={{ fontSize: 13, padding: "8px 12px", cursor: "pointer", alignSelf: "flex-start", display: "flex", alignItems: "center", gap: 4 }}>
-              📎 Datei hinzufügen
-              <input
-                type="file"
-                accept="image/*,application/pdf"
-                multiple
-                style={{ display: "none" }}
-                onChange={async (e) => {
-                  const files = Array.from(e.target.files ?? []);
-                  if (files.length === 0) return;
-                  e.target.value = "";
-                  const neue = await Promise.all(files.map((f) => terminDateiAufBase64(f)));
-                  setAnhaengeEntwurf((prev) => [...prev, ...neue]);
-                }}
-              />
-            </label>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              <label className="btn-secondary" style={{ fontSize: 13, padding: "8px 12px", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>
+                📷 Foto
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  style={{ display: "none" }}
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    e.target.value = "";
+                    const base64 = await terminDateiAufBase64(file);
+                    setAnhaengeEntwurf((prev) => [...prev, base64]);
+                  }}
+                />
+              </label>
+              <label className="btn-secondary" style={{ fontSize: 13, padding: "8px 12px", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>
+                📁 Datei (Bild oder PDF)
+                <input
+                  type="file"
+                  accept="image/*,application/pdf"
+                  multiple
+                  style={{ display: "none" }}
+                  onChange={async (e) => {
+                    const files = Array.from(e.target.files ?? []);
+                    if (files.length === 0) return;
+                    e.target.value = "";
+                    const neue = await Promise.all(files.map((f) => terminDateiAufBase64(f)));
+                    setAnhaengeEntwurf((prev) => [...prev, ...neue]);
+                  }}
+                />
+              </label>
+            </div>
             {anhaengeEntwurf.length > 0 && (
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                 {anhaengeEntwurf.map((a, i) => (
