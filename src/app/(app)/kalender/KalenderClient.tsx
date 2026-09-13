@@ -1,7 +1,16 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { createTermin, updateTermin, deleteTermin, erkenneTerminAusText, pruefeTerminKonflikt } from "./actions";
+import {
+  createTermin,
+  updateTermin,
+  deleteTermin,
+  erkenneTerminAusText,
+  pruefeTerminKonflikt,
+  addChecklistenpunkt,
+  toggleChecklistenpunkt,
+  deleteChecklistenpunkt,
+} from "./actions";
 import { erkenneTerminKategorie, TERMIN_KATEGORIE_LABEL } from "@/lib/terminkategorisierung";
 import HistorieVerlauf from "@/components/HistorieVerlauf";
 import Spracheingabe from "@/components/Spracheingabe";
@@ -25,6 +34,7 @@ type Termin = {
   gruppeId: string | null;
   erstelltVonId: string | null;
   anhaenge: string[];
+  checklistenpunkte: { id: string; text: string; erledigt: boolean }[];
 };
 type Person = { id: string; name: string; farbe: string };
 
@@ -146,6 +156,9 @@ export default function KalenderClient({
   const [wiederholungBis, setWiederholungBis] = useState("");
   const [anhaengeEntwurf, setAnhaengeEntwurf] = useState<string[]>([]);
   const [grossesBild, setGrossesBild] = useState<string | null>(null);
+  // Fix-Batch 92 (Florians Wunsch): Packliste/Checkliste je Termin — Entwurfstext für ein
+  // neues Checklisten-Item, pro Termin getrennt gehalten.
+  const [checklisteNeuerPunkt, setChecklisteNeuerPunkt] = useState<Record<string, string>>({});
   const [spracheVerarbeitung, setSpracheVerarbeitung] = useState(false);
   const erkannteKategorie = useMemo(() => erkenneTerminKategorie(titel), [titel]);
 
@@ -407,6 +420,61 @@ export default function KalenderClient({
                 )
               )}
             </div>
+          )}
+          {/* Fix-Batch 92 (Florians Wunsch): Packliste/Checkliste — bewusst für alle sichtbar
+              und bearbeitbar, die diesen Termin ohnehin sehen (gemeinsame Familien-Aufgabe,
+              keine private Info wie bei den Anhängen weiter oben). */}
+          {t.typ === "termin" && (
+            <details style={{ marginTop: 6 }}>
+              <summary style={{ cursor: "pointer", fontSize: 12, color: "var(--text-muted)" }}>
+                📋 Packliste{t.checklistenpunkte.length > 0 ? ` (${t.checklistenpunkte.filter((c) => c.erledigt).length}/${t.checklistenpunkte.length})` : ""}
+              </summary>
+              <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 6 }}>
+                {t.checklistenpunkte.map((c) => (
+                  <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
+                    <input type="checkbox" checked={c.erledigt} onChange={() => startTransition(() => toggleChecklistenpunkt(c.id))} />
+                    <span style={{ flex: 1, textDecoration: c.erledigt ? "line-through" : undefined, color: c.erledigt ? "var(--text-muted)" : undefined }}>
+                      {c.text}
+                    </span>
+                    <button
+                      className="btn-icon"
+                      style={{ width: 20, height: 20, fontSize: 11 }}
+                      title="Entfernen"
+                      onClick={() => startTransition(() => deleteChecklistenpunkt(c.id))}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+                <div style={{ display: "flex", gap: 6 }}>
+                  <input
+                    placeholder="Neuer Punkt, z. B. Sonnencreme"
+                    value={checklisteNeuerPunkt[t.id] ?? ""}
+                    onChange={(e) => setChecklisteNeuerPunkt((prev) => ({ ...prev, [t.id]: e.target.value }))}
+                    style={{ flex: 1, fontSize: 13 }}
+                    onKeyDown={(e) => {
+                      if (e.key !== "Enter") return;
+                      const text = checklisteNeuerPunkt[t.id]?.trim();
+                      if (!text) return;
+                      startTransition(() => addChecklistenpunkt(t.id, text));
+                      setChecklisteNeuerPunkt((prev) => ({ ...prev, [t.id]: "" }));
+                    }}
+                  />
+                  <button
+                    className="btn-secondary"
+                    style={{ fontSize: 12, padding: "4px 10px" }}
+                    onClick={() => {
+                      const text = checklisteNeuerPunkt[t.id]?.trim();
+                      if (!text) return;
+                      startTransition(() => addChecklistenpunkt(t.id, text));
+                      setChecklisteNeuerPunkt((prev) => ({ ...prev, [t.id]: "" }));
+                    }}
+                  >
+                    + Hinzufügen
+                  </button>
+                </div>
+              </div>
+            </details>
           )}
           {loeschAuswahl?.id === t.id && (
             <div style={{ display: "flex", gap: 6, marginTop: 8, alignItems: "center", fontSize: 12, flexWrap: "wrap" }}>

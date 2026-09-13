@@ -350,6 +350,18 @@ export default function EinkaufslisteClient({
     return gruppen;
   }, [artikel]);
 
+  // Fix-Batch 92 (Florians Wunsch): Liste als reiner Text exportierbar — z. B. zum Teilen mit
+  // jemandem, der die App nicht hat (Oma geht einkaufen).
+  const exportText = useMemo(() => {
+    const zeilen: string[] = [];
+    for (const [kat, items] of Object.entries(nachKategorie)) {
+      zeilen.push(`${kat}:`);
+      for (const a of items) zeilen.push(`- ${a.name}${a.menge ? ` (${a.menge})` : ""}`);
+      zeilen.push("");
+    }
+    return zeilen.join("\n").trim();
+  }, [nachKategorie]);
+
   // Fix-Batch 71 (Florians Wunsch): "Bereits eingekauft" auf 50 gedeckelt, mit "mehr
   // anzeigen" höher ladbar — Historie bleibt komplett in der Datenbank erhalten (Fix-Batch
   // 67), es wird nur nicht mehr alles auf einmal angezeigt/geladen.
@@ -697,7 +709,13 @@ export default function EinkaufslisteClient({
 
       {!einkaufsmodus && istEltern && unbestaetigt.length > 0 && (
         <details open>
-          <summary style={{ cursor: "pointer", color: "var(--text-muted)" }}>🕓 Noch nicht zugesagt ({unbestaetigt.length})</summary>
+          {/* Fix-Batch 92 (Florians Wunsch): dieselbe pill-offen-Kennzeichnung wie bei
+              Noten/Tickets/Wünschen/Hausproblemen, statt nur mutedem Text — damit "wartet auf
+              Entscheidung" überall in der App gleich aussieht. */}
+          <summary style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: 8 }}>
+            <span>Noch nicht zugesagt</span>
+            <span className="pill pill-offen">{unbestaetigt.length}</span>
+          </summary>
           <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
             <p style={{ fontSize: 12, color: "var(--text-muted)", margin: 0 }}>
               Aus dem Essensplan übertragen — bitte prüfen, ob wirklich noch eingekauft werden muss (oder schon (teilweise) zu Hause vorrätig ist).
@@ -1136,6 +1154,46 @@ export default function EinkaufslisteClient({
         <p style={{ fontSize: 12, color: "var(--text-muted)", margin: 0 }}>
           Kategorien verwalten (hinzufügen, Reihenfolge ändern) geht jetzt zentral in den Einstellungen.
         </p>
+      )}
+
+      {/* Fix-Batch 92 (Florians Wunsch): Liste als Text exportieren — ganz unten, zum
+          Aufklappen, für Fälle wie "jemand ohne die App geht einkaufen". */}
+      {!einkaufsmodus && artikel.length > 0 && (
+        <details>
+          <summary style={{ cursor: "pointer", color: "var(--text-muted)" }}>📋 Liste als Text exportieren</summary>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
+            <textarea
+              readOnly
+              value={exportText}
+              rows={Math.min(20, exportText.split("\n").length)}
+              style={{ fontFamily: "monospace", fontSize: 13 }}
+              onFocus={(e) => e.target.select()}
+            />
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <button
+                className="btn-secondary"
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(exportText);
+                    alert("In die Zwischenablage kopiert.");
+                  } catch {
+                    alert("Kopieren nicht möglich — bitte den Text oben manuell markieren und kopieren.");
+                  }
+                }}
+              >
+                📋 Kopieren
+              </button>
+              {typeof navigator !== "undefined" && !!navigator.share && (
+                <button
+                  className="btn-secondary"
+                  onClick={() => navigator.share({ title: "Einkaufsliste", text: exportText }).catch(() => {})}
+                >
+                  📤 Teilen
+                </button>
+              )}
+            </div>
+          </div>
+        </details>
       )}
     </div>
   );
