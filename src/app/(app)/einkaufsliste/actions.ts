@@ -214,15 +214,19 @@ export async function listErledigteArtikel(limit = 50) {
   return { items, gesamtAnzahl };
 }
 
-// "Noch nicht zugesagt" (Fix-Batch 24): Zutaten, die aus dem Essensplan auf die Einkaufsliste
-// übertragen wurden, aber noch geprüft/angepasst/bestätigt werden müssen. Zeigt zur
-// Einordnung, aus welchem(n) Tag(en)/Gericht(en) die Menge stammt.
+// "Noch nicht zugesagt" (Fix-Batch 24): Zutaten, die automatisch aus einem Rezept auf die
+// Einkaufsliste übertragen wurden, aber noch geprüft/angepasst/bestätigt werden müssen.
+// Fix-Batch 85 (Florians Wunsch): läuft jetzt für ALLE automatischen Rezept-Übernahmen
+// gleichermaßen — Tagesgericht, Zusatzmahlzeit und Ad-hoc-Extra-Rezept —, nicht mehr nur
+// fürs Tagesgericht. Zeigt zur Einordnung, aus welchem(n) Gericht(en) die Menge stammt.
 export async function listUnbestaetigteArtikel() {
   await requireParent();
   const artikel = await prisma.einkaufsArtikel.findMany({
     where: { bestaetigt: false, erledigt: false },
     include: {
       essensplanHerkuenfte: { include: { eintrag: { include: { rezept: true } } } },
+      extraMahlzeitHerkuenfte: { include: { extraMahlzeit: { include: { rezept: true } } } },
+      quellen: true,
     },
     orderBy: { createdAt: "asc" },
   });
@@ -230,10 +234,13 @@ export async function listUnbestaetigteArtikel() {
     id: a.id,
     name: a.name,
     menge: a.menge,
-    herkunft: a.essensplanHerkuenfte.map((h) => ({
-      rezeptName: h.eintrag.rezept.name,
-      tag: h.eintrag.tag.toISOString(),
-    })),
+    herkunft: [
+      ...a.essensplanHerkuenfte.map(
+        (h) => `${h.eintrag.rezept.name} (${h.eintrag.tag.toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit" })})`
+      ),
+      ...a.extraMahlzeitHerkuenfte.map((h) => `${h.extraMahlzeit.bezeichnung}: ${h.extraMahlzeit.rezept.name}`),
+      ...a.quellen.map((q) => q.beschreibung),
+    ],
   }));
 }
 
@@ -254,7 +261,13 @@ export async function bestaetigeArtikel(id: string, data?: { menge?: string; nam
       where: { id: bestehender.id },
       data: { menge: await mergeMenge(bestehender.menge, menge) },
     });
+    // Fix-Batch 85: alle Herkunfts-/Quellen-Spuren des unbestätigten Postens müssen beim
+    // Merge auf den überlebenden (bereits bestätigten) Artikel umgehängt werden — sonst
+    // gehen sie beim anschließenden Löschen (onDelete: Cascade) mit verloren, und ein
+    // späteres Entsperren des Tages/der Zusatzmahlzeit fände keine Spur davon mehr.
     await prisma.essensplanHerkunft.updateMany({ where: { artikelId: id }, data: { artikelId: bestehender.id } });
+    await prisma.extraMahlzeitHerkunft.updateMany({ where: { artikelId: id }, data: { artikelId: bestehender.id } });
+    await prisma.artikelQuelle.updateMany({ where: { artikelId: id }, data: { artikelId: bestehender.id } });
     await prisma.einkaufsArtikel.delete({ where: { id } });
   } else {
     await prisma.einkaufsArtikel.update({ where: { id }, data: { menge, name, bestaetigt: true } });

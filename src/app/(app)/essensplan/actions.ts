@@ -494,12 +494,16 @@ export async function pruefeZutatenFuerRezept(rezeptId: string, faktor = 1) {
 
 // Übernimmt die geprüften Zeilen einer Ad-hoc-Rezept-Ergänzung auf die Einkaufsliste,
 // mit Herkunfts-Vermerk (analog "Manuell hinzugefügt"/"Wunsch von X", Fix-Batch 22).
+// Fix-Batch 85 (Florians Bug-Meldung): landet jetzt ebenfalls erst unbestätigt ("Noch nicht
+// zugesagt") statt sofort bestätigt — dieselbe Vorprüfung wie beim Hauptgericht und den
+// Zusatzmahlzeiten, damit z.B. "eine Prise Salz" (die man ohnehin meist schon hat) vor dem
+// Einkauf nochmal bestätigt oder abgelehnt werden kann.
 export async function uebernehmeZusaetzlicheZutaten(rezeptId: string, zeilen: { name: string; menge?: string }[], faktorLabel: string) {
   await requireParent();
   const rezept = await prisma.rezept.findUnique({ where: { id: rezeptId } });
   if (!rezept) return;
   for (const zeile of zeilen) {
-    const bestehender = await findeOffenenArtikel(zeile.name);
+    const bestehender = await findeOffenenUnbestaetigtenArtikel(zeile.name);
     let artikelId: string;
     if (bestehender) {
       await prisma.einkaufsArtikel.update({
@@ -510,7 +514,7 @@ export async function uebernehmeZusaetzlicheZutaten(rezeptId: string, zeilen: { 
     } else {
       const kategorieId = await autoKategorieId(zeile.name);
       const neu = await prisma.einkaufsArtikel.create({
-        data: { name: zeile.name, menge: zeile.menge, kategorieId: kategorieId || null, quelle: "essensplan" },
+        data: { name: zeile.name, menge: zeile.menge, kategorieId: kategorieId || null, quelle: "essensplan", bestaetigt: false },
       });
       artikelId = neu.id;
     }
@@ -580,6 +584,10 @@ export async function entferneExtraMahlzeit(id: string) {
 // addiert. Herkunft läuft jetzt über ExtraMahlzeitHerkunft (upsert, wie beim Hauptgericht)
 // statt über eine schlichte ArtikelQuelle-Zeile, damit sich die Menge beim Entsperren
 // wieder sauber herausrechnen lässt.
+// Fix-Batch 85 (Florians Bug-Meldung): landet jetzt genau wie beim Hauptgericht erst
+// unbestätigt ("Noch nicht zugesagt" auf der Einkaufsliste) statt sofort als bestätigter
+// Artikel — vorher gingen Zusatzmahlzeit-Zutaten ohne jede Vorprüfung direkt auf die Liste,
+// selbst Dinge wie "eine Prise Salz", die man ohnehin meist schon zu Hause hat.
 export async function fuegeZutatenFuerExtraMahlzeitHinzu(id: string) {
   await requireParent();
   const eintrag = await prisma.extraMahlzeit.findUnique({ where: { id }, include: { rezept: true } });
@@ -591,7 +599,7 @@ export async function fuegeZutatenFuerExtraMahlzeitHinzu(id: string) {
     .map((z) => skaliereZeile(parseZutatZeile(z), eintrag.faktor || 1));
 
   for (const zeile of zeilen) {
-    const bestehender = await findeOffenenArtikel(zeile.name);
+    const bestehender = await findeOffenenUnbestaetigtenArtikel(zeile.name);
     let artikelId: string;
     if (bestehender) {
       await prisma.einkaufsArtikel.update({
@@ -602,7 +610,7 @@ export async function fuegeZutatenFuerExtraMahlzeitHinzu(id: string) {
     } else {
       const kategorieId = await autoKategorieId(zeile.name);
       const neu = await prisma.einkaufsArtikel.create({
-        data: { name: zeile.name, menge: zeile.menge, kategorieId: kategorieId || null, quelle: "essensplan" },
+        data: { name: zeile.name, menge: zeile.menge, kategorieId: kategorieId || null, quelle: "essensplan", bestaetigt: false },
       });
       artikelId = neu.id;
     }

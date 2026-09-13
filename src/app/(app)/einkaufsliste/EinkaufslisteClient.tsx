@@ -64,7 +64,7 @@ type Wunsch = { id: string; artikelName: string; menge: string | null; notiz: st
 type Kategorie = { id: string; name: string };
 type Quelle = { id: string; beschreibung: string; menge: string | null; zeitpunkt: string };
 type Vorschlag = { name: string; menge: string | null };
-type Unbestaetigt = { id: string; name: string; menge: string | null; herkunft: { rezeptName: string; tag: string }[] };
+type Unbestaetigt = { id: string; name: string; menge: string | null; herkunft: string[] };
 type RezeptKurz = { id: string; name: string; zutaten: string; portionenBasis: number };
 type Zutat = { name: string; menge?: string };
 
@@ -710,12 +710,7 @@ export default function EinkaufslisteClient({
                   style={{ fontSize: 14, fontWeight: 600 }}
                 />
                 {a.herkunft.length > 0 && (
-                  <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>
-                    Für:{" "}
-                    {a.herkunft
-                      .map((h) => `${h.rezeptName} (${new Date(h.tag).toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit" })})`)
-                      .join(", ")}
-                  </p>
+                  <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>Für: {a.herkunft.join(", ")}</p>
                 )}
                 <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
                   <input
