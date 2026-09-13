@@ -448,9 +448,6 @@ export default function SchuleClient({
   schulEintraege: SchulEintrag[];
 }) {
   const [ausgewaehlt, setAusgewaehlt] = useState(kinder[0]?.id ?? "");
-  // Fix-Batch 100: eigener Umschalter für die THG-App, unabhängig von der Noten-Kind-Auswahl
-  // oben (man will ja z.B. Linas Noten sehen, aber Emils THG-Stundenplan aufrufen können).
-  const [thgKindId, setThgKindId] = useState(kinder[0]?.id ?? "");
   const [pending, startTransition] = useTransition();
   const kind = useMemo(() => kinder.find((k) => k.id === ausgewaehlt) ?? kinder[0], [kinder, ausgewaehlt]);
 
@@ -567,46 +564,21 @@ export default function SchuleClient({
         </p>
       )}
 
-      {/* Fix-Batch 100 (Florians Feedback zu Fix-Batch 99): die pro Kind verschachtelten
-          <details> waren unübersichtlich und das Fenster zu klein — jetzt EIN großes Fenster
-          mit einer Umschalt-Leiste darüber (wie die Kind-Auswahl oben bei den Noten), statt
-          gestapelter Akkordeons. `key={thgKindId}` sorgt dafür, dass das Fenster beim
-          Wechseln neu lädt (springt zur THG-Startseite statt auf einer alten Unterseite
-          stehenzubleiben). Wichtige, mit Florian besprochene Grenze: die Anmeldung bei
-          app.thg-lu.de ist browserseitig an die Website gebunden, nicht an dieses Fenster —
-          ein Wechsel der Buttons zeigt weiterhin die zuletzt angemeldete Person, bis sich
-          jemand aktiv ab-/wieder anmeldet. Kinder haben weiterhin ihren eigenen THG-Reiter
+      {/* Fix-Batch 102 (Florians Feedback zu Fix-Batch 101): die Kind-Buttons suggerierten einen
+          Konten-Wechsel, den es nicht gibt — Buttons ganz entfernt, stattdessen EIN einziger
+          aufklappbarer Bereich mit einem kurzen Warnhinweis direkt über dem großen Fenster
+          ("für jedes Kind separat anmelden"). Kinder haben weiterhin ihren eigenen THG-Reiter
           (dort meldet sich eh nur die eine Person an). */}
       {istEltern && (
         <details className="card">
           <summary style={{ cursor: "pointer", fontWeight: 600 }}>🏫 THG-App</summary>
           <p style={{ fontSize: 13, color: "var(--text-muted)" }}>Stundenplan, Vertretungsplan &amp; Co. der Schule.</p>
-          {/* Fix-Batch 101 (Florians Feedback, live bestätigt: "egal auf wen ich klicke, bin ich
-              bei Emma angemeldet"): der frühere kleine, mutede Hinweistext ging unter — jetzt
-              als auffällige Warnbox direkt über den Buttons, damit klar ist, dass diese NICHT
-              zwischen Konten wechseln (nur ein gemeinsamer Login für alle drei, ausdrücklich
-              Florians gewählte Option gegenüber Proxy-Lösung/Entfernen). */}
           <div style={{ background: "var(--warning-soft)", borderRadius: "var(--radius)", padding: 10, fontSize: 13, marginBottom: 8 }}>
-            ⚠️ Diese Buttons sind nur eine Sprungmarke, KEIN Konten-Wechsel — es gibt nur EINE gemeinsame Anmeldung für
-            alle drei Kinder. Um ein anderes Kind zu sehen: unten im Fenster erst beim aktuell angemeldeten Kind
-            abmelden, dann als das gewünschte Kind neu anmelden.
-          </div>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
-            {kinder.map((k) => (
-              <button
-                key={k.id}
-                className="btn-secondary"
-                style={{ background: thgKindId === k.id ? k.farbe : undefined, color: thgKindId === k.id ? "#fff" : undefined }}
-                onClick={() => setThgKindId(k.id)}
-              >
-                {k.name}
-              </button>
-            ))}
+            ⚠️ Es gibt nur EINE gemeinsame Anmeldung für alle Kinder — für jedes Kind separat abmelden und neu anmelden.
           </div>
           <iframe
-            key={thgKindId}
             src={THG_URL}
-            title={`THG-App – ${kinder.find((k) => k.id === thgKindId)?.name ?? ""}`}
+            title="THG-App"
             style={{ width: "100%", height: "85vh", border: "1px solid var(--border)", borderRadius: "var(--radius)" }}
           />
         </details>
