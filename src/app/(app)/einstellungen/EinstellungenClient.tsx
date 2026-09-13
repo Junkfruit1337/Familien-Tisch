@@ -33,6 +33,7 @@ import {
 } from "../dienstplan/actions";
 import PushBenachrichtigungen from "@/components/PushBenachrichtigungen";
 import DesignAuswahl from "@/components/DesignAuswahl";
+import NotengewichtungSektion from "@/components/NotengewichtungSektion";
 import Spracheingabe from "@/components/Spracheingabe";
 import SeitenTitel from "@/components/SeitenTitel";
 import { BEREICH_FARBEN } from "@/lib/bereichFarben";
@@ -75,6 +76,7 @@ type Kind = {
   bundesland: string | null;
   klassenstufe: number | null;
   klasse: string | null;
+  gewichtung: { fachId: string; fachName: string; gewichtungen: { art: string; gewichtung: number }[] }[];
 };
 
 const BUNDESLAENDER = [
@@ -1248,9 +1250,10 @@ export default function EinstellungenClient({
               </details>
             )}
             {kind && schulprofilUndFaecherKarten(kind)}
-            <p style={{ fontSize: 12, color: "var(--text-muted)", margin: 0 }}>
-              Die Notengewichtung findet sich jetzt direkt auf der Schule-Seite bei den Noten des jeweiligen Kindes.
-            </p>
+            {/* Fix-Batch 86 (Florians Wunsch): zurück in die Einstellungen — wird i.d.R. nur
+                einmal (ggf. einmal pro Schuljahr) angepasst, gehört daher nicht auf die
+                Schule-Seite, die den täglichen Überblick zeigen soll. */}
+            {kind && <NotengewichtungSektion kindId={kind.id} kindName={kind.name} gewichtung={kind.gewichtung} />}
           </div>
         </details>
       )}

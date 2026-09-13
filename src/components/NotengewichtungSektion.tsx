@@ -11,8 +11,8 @@ const ART_LABEL: Record<string, string> = {
 
 type Gewichtung = { fachId: string; fachName: string; gewichtungen: { art: string; gewichtung: number }[] };
 
-// In die Einstellungen verschoben (Fahrplan §3, Batch 6 "Einstellungen thematisch
-// gruppieren") — vorher unter Schule je Kind, jetzt gebündelt an einer Stelle.
+// Fix-Batch 86 (Florians Wunsch): wieder in den Einstellungen statt auf der Schule-Seite —
+// wird i.d.R. nur einmal (ggf. einmal pro Schuljahr) angepasst, keine tägliche Information.
 export default function NotengewichtungSektion({
   kindId,
   kindName,

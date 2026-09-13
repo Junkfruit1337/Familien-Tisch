@@ -1,7 +1,7 @@
 import { getCurrentPerson } from "@/lib/auth";
 import { listPersonen, listMeineTickets, listAlleTickets, listHausprobleme } from "./actions";
 import { listKategorien } from "../einkaufsliste/actions";
-import { listKinder, listFaecher } from "../schule/actions";
+import { listKinder, listFaecher, listNotenGewichtung } from "../schule/actions";
 import { listDienstkatalog, listTagesroutinen, listKoerperpflegeplan } from "../dienstplan/actions";
 import { getAenderungshistorie } from "../dashboard/actions";
 import EinstellungenClient from "./EinstellungenClient";
@@ -22,7 +22,11 @@ export default async function EinstellungenPage() {
   const kinder = istEltern ? await listKinder() : person ? [person] : [];
   const kinderDaten = await Promise.all(
     kinder.map(async (k) => {
-      const faecher = await listFaecher(k.id);
+      // Fix-Batch 86 (Florians Wunsch): Notengewichtung ist eine selten geänderte Einstellung
+      // (i.d.R. einmal pro Schuljahr) — gehört deshalb thematisch in die Einstellungen, nicht
+      // auf die Schule-Seite, die den täglichen Überblick zeigen soll (zurückverschoben von
+      // Fix-Batch 58, wo sie andersherum begründet wurde).
+      const [faecher, gewichtung] = await Promise.all([listFaecher(k.id), istEltern ? listNotenGewichtung(k.id) : Promise.resolve([])]);
       return {
         id: k.id,
         name: k.name,
@@ -30,6 +34,7 @@ export default async function EinstellungenPage() {
         bundesland: k.bundesland,
         klassenstufe: k.klassenstufe,
         klasse: k.klasse,
+        gewichtung,
       };
     })
   );

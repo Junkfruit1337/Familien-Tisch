@@ -21,7 +21,6 @@ import HistorieVerlauf from "@/components/HistorieVerlauf";
 import Spracheingabe from "@/components/Spracheingabe";
 import { erkenneSparzielIcon } from "@/lib/sparzielIcon";
 import SeitenTitel from "@/components/SeitenTitel";
-import NotengewichtungSektion from "@/components/NotengewichtungSektion";
 import LernHilfe from "@/components/LernHilfe";
 import { BEREICH_FARBEN } from "@/lib/bereichFarben";
 
@@ -53,7 +52,6 @@ type Kind = {
   taschengeld: Transaktion[];
   sparziel: { bezeichnung: string; zielbetrag: number } | null;
   ferien: FerienUebersicht;
-  gewichtung: { fachId: string; fachName: string; gewichtungen: { art: string; gewichtung: number }[] }[];
 };
 type SchulEintrag = {
   id: string;
@@ -71,6 +69,24 @@ const ART_LABEL: Record<string, string> = {
   HAUSAUFGABEN_KONTROLLE: "HÜ",
   EPOCHALNOTE: "Epo",
 };
+
+// Fix-Batch 86 (Florians Wunsch, Dashboard entlasten): die Sparziel-Hochrechnung ("bei X
+// €/Woche noch ca. Y Wochen") stand bisher als eigene Karte auf dem Dashboard — dort laut
+// Florian unnötige Info, die die Startseite überladen würde. Inhaltlich gehört sie klar
+// hierher, direkt neben den Sparziel-Fortschritt, den es hier ohnehin schon gibt. Rein aus
+// bereits geladenen Daten berechnet, kein zusätzlicher Server-Aufruf nötig.
+function sparzielEinschaetzung(kind: Kind): string | null {
+  if (!kind.sparziel) return null;
+  const rest = kind.sparziel.zielbetrag - kind.kontostand;
+  if (rest <= 0) return null;
+  const achtWochenHer = new Date();
+  achtWochenHer.setDate(achtWochenHer.getDate() - 56);
+  const juengere = kind.taschengeld.filter((t) => new Date(t.createdAt) >= achtWochenHer);
+  const netto = juengere.reduce((s, t) => s + (t.typ === "GUTSCHRIFT" ? t.betrag : -t.betrag), 0);
+  const proWoche = netto / 8;
+  if (proWoche <= 0) return "Zuletzt kaum Fortschritt gespart.";
+  return `Bei ${proWoche.toFixed(2)} €/Woche zuletzt noch ca. ${Math.ceil(rest / proWoche)} Woche(n).`;
+}
 
 const FERIEN_LABEL: Record<string, string> = {
   HERBST: "Herbstferien",
@@ -735,6 +751,7 @@ export default function SchuleClient({
                 <span>Ziel: {kind.sparziel.bezeichnung}</span>
                 <span>Zielbetrag: {kind.sparziel.zielbetrag.toFixed(2)} €</span>
                 <span>Noch benötigt: {Math.max(0, kind.sparziel.zielbetrag - kind.kontostand).toFixed(2)} €</span>
+                {sparzielEinschaetzung(kind) && <span>{sparzielEinschaetzung(kind)}</span>}
               </div>
             </details>
           )
@@ -1094,11 +1111,9 @@ export default function SchuleClient({
         )}
       </div>
 
-      {/* Redesign Fix-Batch 58: von den Einstellungen hierher verschoben — Florians Wunsch,
-          dass Dinge dort einsortiert werden, wo sie inhaltlich hingehören. Wer gerade die
-          Noten eines Kindes betrachtet, will die Gewichtung direkt hier anpassen können,
-          nicht in einem separaten, leicht zu übersehenden Einstellungen-Unterpunkt. */}
-      {istEltern && <NotengewichtungSektion kindId={kind.id} kindName={kind.name} gewichtung={kind.gewichtung} />}
+      {/* Fix-Batch 86 (Florians Wunsch): zurück in die Einstellungen verschoben — wird nur
+          selten (i.d.R. einmal pro Schuljahr) geändert und ist damit keine tägliche
+          Information, die auf der Schule-Seite Platz beanspruchen sollte. */}
       {!istEltern && kind.id === eigeneId && <LernHilfe />}
 
       <details>
