@@ -144,6 +144,15 @@ button {
   padding: var(--space-4);
 }
 
+/* Fix-Batch 111 (Florians Wunsch, "muss übersichtlich, modern und intuitiv sein, wie eine
+   App aus 2026"): einheitliches Signal für "hier wartet eine Entscheidung/Aktion auf dich"
+   (Anfragen der Kinder, offene Tickets, Noten zur Genehmigung, unbestätigte Artikel, ...) —
+   ein farbiger Akzentstreifen links, statt dass jede Seite optisch gleich aussieht und man
+   erst den Text lesen muss, um zu merken, was wichtig ist. */
+.card-action {
+  border-left: 4px solid var(--accent);
+}
+
 /* ---------- Aufklappbare Bereiche (Disclosure) — bewusst ANDERS gestylt als .card,
    damit auf einen Blick klar ist, was aufklappbar ist und was statischer Inhalt ist
    (Redesign-Grund: vorher sahen <details> und .card exakt gleich aus). Eckiger Rahmen

@@ -52,7 +52,7 @@ export default function DashboardClient({ daten, istEltern }: { daten: Daten; is
       )}
 
       {istEltern && anfragenGesamt > 0 && (
-        <div className="card">
+        <div className="card card-action">
           <strong>📥 Anfragen von den Kindern ({anfragenGesamt})</strong>
           <p style={{ margin: "2px 0 0", fontSize: 12, color: "var(--text-muted)" }}>
             Antippen führt zum jeweiligen Bereich, wo ihr die Details seht und entscheiden könnt.
@@ -104,7 +104,7 @@ export default function DashboardClient({ daten, istEltern }: { daten: Daten; is
       )}
 
       {daten.meineOffenenTickets.length > 0 && (
-        <div className="card">
+        <div className="card card-action">
           <strong>🎫 Meine offenen Tickets ({daten.meineOffenenTickets.length})</strong>
           <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
             {daten.meineOffenenTickets.map((t) => (
@@ -126,7 +126,11 @@ export default function DashboardClient({ daten, istEltern }: { daten: Daten; is
 
       <div className="card">
         <strong>🍽️ Heute gibt's</strong>
-        {daten.heutigeGerichte.length === 0 && <p style={{ margin: "4px 0 0", color: "var(--text-muted)" }}>Noch nicht geplant</p>}
+        {daten.heutigeGerichte.length === 0 && (
+          <div className="empty-state" style={{ padding: "var(--space-3) 0 0" }}>
+            <span>Noch nicht geplant</span>
+          </div>
+        )}
         {daten.heutigeGerichte.length > 0 && (
           <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 6 }}>
             {daten.heutigeGerichte.map((g, i) => (
@@ -149,11 +153,11 @@ export default function DashboardClient({ daten, istEltern }: { daten: Daten; is
                   textAlign: "left",
                 }}
               >
-                <span>
-                  <strong style={{ fontSize: 13 }}>{g.bezeichnung}:</strong> {g.rezeptName}
-                  {!g.zutatenUebernommen && (
-                    <span style={{ display: "block", fontSize: 11, color: "var(--warning)" }}>⚠️ Noch nicht eingekauft</span>
-                  )}
+                <span style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: "flex-start" }}>
+                  <span>
+                    <strong style={{ fontSize: 13 }}>{g.bezeichnung}:</strong> {g.rezeptName}
+                  </span>
+                  {!g.zutatenUebernommen && <span className="pill pill-offen">⚠️ Noch nicht eingekauft</span>}
                 </span>
                 <span style={{ color: "var(--accent)", fontSize: 16, flexShrink: 0 }}>→</span>
               </button>
@@ -203,7 +207,11 @@ export default function DashboardClient({ daten, istEltern }: { daten: Daten; is
 
       <div className="card">
         <strong>📅 Heute</strong>
-        {daten.termineHeute.length === 0 && <p style={{ margin: "4px 0 0", color: "var(--text-muted)" }}>Keine Termine heute.</p>}
+        {daten.termineHeute.length === 0 && (
+          <div className="empty-state" style={{ padding: "var(--space-3) 0 0" }}>
+            <span>Keine Termine heute.</span>
+          </div>
+        )}
         {daten.termineHeute.map((t) => (
           <div key={t.id} style={{ marginTop: 6, fontSize: 14 }}>
             {new Date(t.start).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })} — {t.titel} ({t.personName})
@@ -220,7 +228,11 @@ export default function DashboardClient({ daten, istEltern }: { daten: Daten; is
           </Link>
         </div>
 
-        {daten.schulEintraege.length === 0 && <p style={{ margin: "4px 0 0", color: "var(--text-muted)" }}>Nichts Anstehendes.</p>}
+        {daten.schulEintraege.length === 0 && (
+          <div className="empty-state" style={{ padding: "var(--space-3) 0 0" }}>
+            <span>Nichts Anstehendes.</span>
+          </div>
+        )}
         {daten.schulEintraege.map((s) => (
           <div key={s.id} style={{ marginTop: 8, borderTop: "1px solid var(--border)", paddingTop: 8 }}>
             <div style={{ fontWeight: 700, fontSize: "var(--font-md)" }}>

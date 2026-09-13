@@ -599,7 +599,7 @@ export default function EinkaufslisteClient({
               Aus dem Essensplan übertragen — bitte prüfen, ob wirklich noch eingekauft werden muss (oder schon (teilweise) zu Hause vorrätig ist).
             </p>
             {unbestaetigt.map((a) => (
-              <div key={a.id} className="card" style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <div key={a.id} className="card card-action" style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                 <input
                   value={unbestaetigtNamen[a.id] ?? a.name}
                   onChange={(e) => setUnbestaetigtNamen((prev) => ({ ...prev, [a.id]: e.target.value }))}
@@ -788,7 +788,7 @@ export default function EinkaufslisteClient({
       )}
 
       {!einkaufsmodus && istEltern && offeneWuensche.length > 0 && (
-        <div className="card" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        <div className="card card-action" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           <strong>Wünsche der Kinder</strong>
           {offeneWuensche.map((w) => {
             const erkannt = erkannteKategorieFuer(w.artikelName);

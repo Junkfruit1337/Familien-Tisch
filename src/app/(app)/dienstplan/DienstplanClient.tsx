@@ -150,20 +150,24 @@ export default function DienstplanClient({
         </button>
       </div>
 
+      {/* Fix-Batch 111 (Florians Wunsch, "übersichtlich/modern/intuitiv"): vorher ein
+          komplett handgestricktes Warnfarben-Kärtchen (feste Hex-Werte statt der Design-
+          Tokens) — jetzt die app-weit einheitliche "hier läuft gerade etwas Reversibles"-
+          Karte (card-action) mit echter Pill statt Klammertext für Tausch/Abgabe. */}
       {tausche.length > 0 && (
-        <div className="card" style={{ background: "var(--warning-soft)", color: "#6b5117", display: "flex", flexDirection: "column", gap: 6 }}>
+        <div className="card card-action" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {tausche.map((t) => (
-            <div key={t.id} style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "var(--font-sm)" }}>
-                <span>
-                  {t.modus === "TAUSCH" ? "🔄" : "➡️"} {t.vonName} {t.modus === "TAUSCH" ? "↔" : "→"} {t.mitName}{" "}
-                  {t.tag ? `am ${new Date(t.tag).toLocaleDateString("de-DE")}` : "(ganze Woche)"}{" "}
-                  <span style={{ opacity: 0.8 }}>({t.modus === "TAUSCH" ? "Tausch" : "Abgabe"})</span>
+            <div key={t.id} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, fontSize: "var(--font-sm)" }}>
+                <span style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                  <span className="pill pill-info">{t.modus === "TAUSCH" ? "🔄 Tausch" : "➡️ Abgabe"}</span>
+                  {t.vonName} {t.modus === "TAUSCH" ? "↔" : "→"} {t.mitName}{" "}
+                  {t.tag ? `am ${new Date(t.tag).toLocaleDateString("de-DE")}` : "(ganze Woche)"}
                 </span>
                 {istEltern && (
                   <button
                     className="btn-secondary"
-                    style={{ fontSize: "var(--font-xs)", padding: "2px 8px", color: "#6b5117", borderColor: "#6b5117" }}
+                    style={{ fontSize: "var(--font-xs)", padding: "2px 8px" }}
                     onClick={() => startTransition(() => hebeTauschAuf(t.id).then(() => ladeWoche(wocheStart)))}
                   >
                     aufheben
@@ -461,7 +465,10 @@ export default function DienstplanClient({
         <summary style={{ cursor: "pointer", fontWeight: 600 }}>🧴 Tagesroutinen &amp; Körperpflege-Plan</summary>
         <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 10 }}>
           {Object.keys(routinenNachKategorie).length === 0 && (
-            <p style={{ color: "var(--text-muted)", fontSize: 13, margin: 0 }}>Noch keine Routinen hinterlegt.</p>
+            <div className="empty-state">
+              <span className="empty-state-icon">🧴</span>
+              <span>Noch keine Routinen hinterlegt.</span>
+            </div>
           )}
           {Object.entries(routinenNachKategorie).map(([kategorie, eintraege]) => (
             <div key={kategorie}>
@@ -501,7 +508,12 @@ export default function DienstplanClient({
       <details className="card">
         <summary style={{ cursor: "pointer", fontWeight: 600 }}>🕘 Dienste-Historie ({historie.length})</summary>
         <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 10 }}>
-          {historie.length === 0 && <p style={{ margin: 0, color: "var(--text-muted)" }}>Noch keine Tausche erfasst.</p>}
+          {historie.length === 0 && (
+            <div className="empty-state">
+              <span className="empty-state-icon">🕘</span>
+              <span>Noch keine Tausche erfasst.</span>
+            </div>
+          )}
           {historie.map((h) => (
             <div key={h.id} style={{ fontSize: "var(--font-sm)", borderBottom: "1px solid var(--border)", paddingBottom: 4 }}>
               <span style={{ color: "var(--text-muted)" }}>

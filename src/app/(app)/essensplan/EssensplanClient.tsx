@@ -431,7 +431,7 @@ export default function EssensplanClient({
                 "gelockt" geprüft, da ein Tag auch ohne Zutaten-Übernahme manuell gesperrt sein
                 kann; nur ein tatsächlicher Herkunfts-Eintrag zählt als "schon eingekauft". */}
             {t.eintrag && !t.eintrag.zutatenUebernommen && (
-              <p style={{ margin: 0, fontSize: 12, color: "var(--warning)" }}>⚠️ Zutaten noch nicht eingekauft</p>
+              <span className="pill pill-offen" style={{ alignSelf: "flex-start" }}>⚠️ Zutaten noch nicht eingekauft</span>
             )}
             {/* Fix-Batch 82 (Florians Wunsch): ein bereits vergangener Tag darf nicht mehr
                 bearbeitet werden — dieselbe schreibgeschützte Ansicht wie für Kinder. */}
@@ -554,7 +554,7 @@ export default function EssensplanClient({
                       </span>
                       {/* Fix-Batch 87 (Florians Wunsch): siehe Kommentar beim Hauptgericht weiter
                           oben — derselbe verlässliche Herkunfts-Check statt "gelockt". */}
-                      {!e.zutatenUebernommen && <span style={{ color: "var(--warning)" }}>⚠️ Noch nicht eingekauft</span>}
+                      {!e.zutatenUebernommen && <span className="pill pill-offen">⚠️ Noch nicht eingekauft</span>}
                       {/* Fix-Batch 84 (Florians Bug-Meldung): dieselbe Sperren-Logik wie beim
                           Hauptgericht — nach Übernahme gesperrt, Löschen erst nach Entsperren. */}
                       {e.gelockt ? (

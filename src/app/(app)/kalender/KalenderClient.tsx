@@ -820,9 +820,9 @@ export default function KalenderClient({
                 style={{
                   aspectRatio: "1",
                   minWidth: 0,
-                  border: zelle.iso === ausgewaehlterTag ? "2px solid var(--accent)" : zelle.heute ? "2px solid var(--success)" : "1px solid rgba(128,128,128,0.25)",
+                  border: zelle.iso === ausgewaehlterTag ? "2px solid var(--accent)" : zelle.heute ? "2px solid var(--success)" : "1px solid var(--border)",
                   borderRadius: 8,
-                  background: zelle.heute && zelle.iso !== ausgewaehlterTag ? "rgba(107,143,90,0.12)" : "transparent",
+                  background: zelle.heute && zelle.iso !== ausgewaehlterTag ? "var(--success-soft)" : "transparent",
                   color: "inherit",
                   opacity: zelle.imMonat ? 1 : 0.35,
                   display: "flex",

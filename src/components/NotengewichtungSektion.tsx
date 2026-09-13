@@ -61,7 +61,12 @@ export default function NotengewichtungSektion({
             </div>
           </div>
         ))}
-        {gewichtung.length === 0 && <p style={{ color: "var(--text-muted)", margin: 0 }}>Noch keine Fächer angelegt.</p>}
+        {gewichtung.length === 0 && (
+          <div className="empty-state">
+            <span className="empty-state-icon">🎓</span>
+            <span>Noch keine Fächer angelegt.</span>
+          </div>
+        )}
       </div>
     </details>
   );

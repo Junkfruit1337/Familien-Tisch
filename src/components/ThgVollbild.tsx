@@ -34,8 +34,8 @@ export default function ThgVollbild({ compact }: { compact?: boolean }) {
         {compact ? "🏫 THG" : "🏫 THG-App öffnen"}
       </button>
       {offen && (
-        <div style={{ position: "fixed", top: headerHoehe, left: 0, right: 0, bottom: 0, zIndex: 20, background: "#fff", display: "flex", flexDirection: "column" }}>
-          <div style={{ display: "flex", justifyContent: "flex-end", padding: 8, background: "#eee", flexShrink: 0 }}>
+        <div style={{ position: "fixed", top: headerHoehe, left: 0, right: 0, bottom: 0, zIndex: 20, background: "var(--bg)", display: "flex", flexDirection: "column" }}>
+          <div style={{ display: "flex", justifyContent: "flex-end", padding: 8, background: "var(--surface-alt)", flexShrink: 0, borderBottom: "1px solid var(--border)" }}>
             <button className="btn-secondary" onClick={() => setOffen(false)}>
               ✕ Schließen
             </button>

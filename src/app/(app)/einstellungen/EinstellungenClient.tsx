@@ -414,7 +414,12 @@ export default function EinstellungenClient({
               )}
             </div>
           ))}
-          {k.faecher.length === 0 && <p style={{ fontSize: 13, color: "var(--text-muted)", margin: 0 }}>Noch keine Fächer.</p>}
+          {k.faecher.length === 0 && (
+            <div className="empty-state">
+              <span className="empty-state-icon">🎓</span>
+              <span>Noch keine Fächer.</span>
+            </div>
+          )}
           <div style={{ display: "flex", gap: 8, borderTop: "1px solid var(--border)", paddingTop: 8 }}>
             <input placeholder="Neues Fach" value={neuesFach} onChange={(e) => setNeuesFach(e.target.value)} />
             <button className="btn" onClick={() => fachAnlegen(k.id)}>
@@ -819,10 +824,16 @@ export default function EinstellungenClient({
             </summary>
             <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
         {hausprobleme.map((h) => (
-          <div key={h.id} className="card" style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          // Fix-Batch 111 (gefunden beim Übersichtlichkeits-Rundgang): "GEMELDET" (frisch
+          // gemeldet, noch von niemandem angeschaut) fiel bisher unter denselben Zweig wie
+          // "abgelehnt" (rot) — inhaltlich falsch, ein neu gemeldetes Problem wurde ja nicht
+          // abgelehnt. Jetzt: GEMELDET = pill-offen (braucht Aufmerksamkeit), IN_BEARBEITUNG =
+          // pill-info (läuft schon), ERLEDIGT = pill-genehmigt. Noch offene (nicht erledigte)
+          // Probleme bekommen außerdem card-action, damit sie sich von erledigten abheben.
+          <div key={h.id} className={`card${h.status !== "ERLEDIGT" ? " card-action" : ""}`} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
               <strong style={{ fontSize: 14 }}>{h.titel}</strong>
-              <span className={`pill pill-${h.status === "ERLEDIGT" ? "genehmigt" : h.status === "IN_BEARBEITUNG" ? "offen" : "abgelehnt"}`}>
+              <span className={`pill pill-${h.status === "ERLEDIGT" ? "genehmigt" : h.status === "IN_BEARBEITUNG" ? "info" : "offen"}`}>
                 {HAUSPROBLEM_STATUS_LABEL[h.status] ?? h.status}
               </span>
             </div>
@@ -889,7 +900,7 @@ export default function EinstellungenClient({
                 />
                 {h.zustaendigkeit === "FAMILIE" &&
                   (h.aufgabeId ? (
-                    <p style={{ margin: 0, fontSize: 12, color: "var(--success)" }}>✓ Als Aufgabe angelegt.</p>
+                    <span className="pill pill-genehmigt" style={{ alignSelf: "flex-start" }}>✓ Als Aufgabe angelegt</span>
                   ) : (
                     <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                       <select
@@ -999,7 +1010,7 @@ export default function EinstellungenClient({
 
       {alleTickets.length > 0 && (() => {
         const alleTicketEintrag = (t: TicketMitErsteller) => (
-          <div key={t.id} className="card" style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <div key={t.id} className={`card${t.status === "EINGEREICHT" ? " card-action" : ""}`} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
               <strong style={{ fontSize: 14 }}>{t.titel}</strong>
               <span className={`pill pill-${t.status === "ABGELEHNT" ? "abgelehnt" : t.status === "EINGEREICHT" ? "offen" : "genehmigt"}`}>
@@ -1568,7 +1579,12 @@ export default function EinstellungenClient({
       <details className="card">
         <summary style={{ cursor: "pointer", fontWeight: 600 }}>Änderungshistorie ({historie.length})</summary>
         <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 10 }}>
-          {historie.length === 0 && <p style={{ margin: 0, color: "var(--text-muted)" }}>Noch keine Änderungen erfasst.</p>}
+          {historie.length === 0 && (
+            <div className="empty-state">
+              <span className="empty-state-icon">🕘</span>
+              <span>Noch keine Änderungen erfasst.</span>
+            </div>
+          )}
           {historie.map((h) => (
             <div key={h.id} style={{ fontSize: "var(--font-sm)", borderBottom: "1px solid var(--border)", paddingBottom: 4 }}>
               <span style={{ color: "var(--text-muted)" }}>
