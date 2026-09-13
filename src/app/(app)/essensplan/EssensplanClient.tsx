@@ -278,6 +278,15 @@ export default function EssensplanClient({
   const [rezeptFinderText, setRezeptFinderText] = useState("");
   const [neuLaeuft, setNeuLaeuft] = useState(false);
   const [neuQuelle, setNeuQuelle] = useState<string | null>(null);
+  // Fix-Batch 98 (Florians Wunsch): der Mengen-Abgleich (Zutaten ↔ Zubereitung) läuft jetzt
+  // automatisch bei jeder Rezeptanlage über diesen einen "Rezept speichern"-Button — egal ob
+  // das Ergebnis manuell getippt oder per Foto/Sprache/KI vorausgefüllt wurde. Zeigt bei einem
+  // echten Widerspruch einen Zwischenschritt, statt stillschweigend zu speichern oder zu
+  // blockieren (die KI kann sich irren, deshalb keine Zwangs-Blockade wie beim reinen
+  // Vollständigkeits-Check oben).
+  const [neuAbgleichLaeuft, setNeuAbgleichLaeuft] = useState(false);
+  const [neuAbgleichWarnung, setNeuAbgleichWarnung] = useState<{ hinweis: string; korrigierteZubereitung?: string } | null>(null);
+  const [neuAbgleichGeprueft, setNeuAbgleichGeprueft] = useState<string | null>(null);
 
   const [portionenEntwuerfe, setPortionenEntwuerfe] = useState<Record<string, string>>({});
   const [bearbeiteRezeptId, setBearbeiteRezeptId] = useState<string | null>(null);
@@ -1313,13 +1322,70 @@ export default function EssensplanClient({
                 automatische Mengen-Anpassung, wenn ihr als Familie alle 6 esst.
               </p>
               {neuQuelle && <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>Gefunden auf: {neuQuelle}</p>}
+              {neuAbgleichLaeuft && (
+                <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>Mengen werden mit der Zubereitung abgeglichen …</p>
+              )}
+              {neuAbgleichWarnung && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 6, background: "var(--warning-soft)", borderRadius: "var(--radius)", padding: 10 }}>
+                  <p style={{ margin: 0, fontSize: 13 }}>⚠️ {neuAbgleichWarnung.hinweis}</p>
+                  {neuAbgleichWarnung.korrigierteZubereitung && (
+                    <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>
+                      Vorschlag zur Korrektur wurde bereits ins Zubereitungsfeld oben eingetragen — bitte prüfen.
+                    </p>
+                  )}
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                    <button
+                      className="btn-secondary"
+                      style={{ fontSize: 12, padding: "4px 10px" }}
+                      onClick={() => {
+                        setNeuAbgleichGeprueft(`${neuZutaten}||${neuZubereitung}`);
+                        setNeuAbgleichWarnung(null);
+                      }}
+                    >
+                      Trotzdem so speichern
+                    </button>
+                    <button
+                      className="btn-secondary"
+                      style={{ fontSize: 12, padding: "4px 10px" }}
+                      onClick={() => setNeuAbgleichWarnung(null)}
+                    >
+                      Erst noch anpassen
+                    </button>
+                  </div>
+                </div>
+              )}
               <button
                 className="btn"
-                disabled={pending || neuLaeuft}
+                disabled={pending || neuLaeuft || neuAbgleichLaeuft}
                 onClick={() => {
                   if (!neuName) return;
                   if (neuZutatenPruefung.some((z) => !z.vollstaendig)) {
                     setZeigeZutatenWarnungNeu(true);
+                    return;
+                  }
+                  // Fix-Batch 98 (Florians Wunsch): Mengen-Abgleich läuft automatisch bei jeder
+                  // Rezeptanlage — nur wenn diese genaue Zutaten/Zubereitung-Kombination noch
+                  // nicht geprüft (oder schon bestätigt "trotzdem speichern") wurde, damit
+                  // wiederholtes Klicken nicht jedes Mal erneut einen KI-Aufruf auslöst.
+                  const fingerprint = `${neuZutaten}||${neuZubereitung}`;
+                  if (neuZubereitung.trim() && neuAbgleichGeprueft !== fingerprint) {
+                    startTransition(async () => {
+                      setNeuAbgleichLaeuft(true);
+                      try {
+                        const ergebnis = await pruefeZutatenZubereitungVorschau(neuZutaten, neuZubereitung);
+                        if (ergebnis.ok && !ergebnis.ergebnis.konsistent) {
+                          setNeuAbgleichWarnung({ hinweis: ergebnis.ergebnis.hinweis, korrigierteZubereitung: ergebnis.ergebnis.korrigierteZubereitung });
+                          if (ergebnis.ergebnis.korrigierteZubereitung) setNeuZubereitung(ergebnis.ergebnis.korrigierteZubereitung);
+                        } else {
+                          // Konsistent, oder der Abgleich selbst ist fehlgeschlagen — in beiden
+                          // Fällen nicht das Speichern blockieren (die KI kann sich irren, ein
+                          // API-Fehler soll das Anlegen des Rezepts nicht verhindern).
+                          setNeuAbgleichGeprueft(fingerprint);
+                        }
+                      } finally {
+                        setNeuAbgleichLaeuft(false);
+                      }
+                    });
                     return;
                   }
                   startTransition(async () => {
@@ -1333,6 +1399,8 @@ export default function EssensplanClient({
                     setRezeptFinderText("");
                     setNeuQuelle(null);
                     setZeigeZutatenWarnungNeu(false);
+                    setNeuAbgleichGeprueft(null);
+                    setNeuAbgleichWarnung(null);
                   });
                 }}
               >

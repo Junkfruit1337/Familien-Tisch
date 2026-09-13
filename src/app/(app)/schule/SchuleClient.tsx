@@ -25,6 +25,10 @@ import LernHilfe from "@/components/LernHilfe";
 import VerlaufChart from "@/components/VerlaufChart";
 import { BEREICH_FARBEN } from "@/lib/bereichFarben";
 
+// Fix-Batch 99: dieselbe URL wie in src/app/(app)/thg/page.tsx (dortiger Reiter bleibt für
+// Kinder bestehen) — hier zusätzlich pro Kind aufklappbar für Eltern.
+const THG_URL = "https://app.thg-lu.de/";
+
 type Note = {
   id: string;
   fachId: string;
@@ -558,6 +562,32 @@ export default function SchuleClient({
           {klasseAnzeige(kind.klassenstufe, kind.klasse)}
           {kind.bundesland ? ` · ${kind.bundesland}` : ""}
         </p>
+      )}
+
+      {/* Fix-Batch 99 (Florians Wunsch): kein eigener THG-Reiter mehr für Eltern (zu viele
+          Reiter) — stattdessen hier versteckt, aufklappbar pro Kind, da sich jedes Kind mit
+          eigenen Zugangsdaten einloggt. Kinder selbst haben weiterhin ihren eigenen THG-Reiter
+          (dort meldet sich eh nur die eine Person an). */}
+      {istEltern && (
+        <details className="card">
+          <summary style={{ cursor: "pointer", fontWeight: 600 }}>🏫 THG-App</summary>
+          <p style={{ fontSize: 13, color: "var(--text-muted)" }}>
+            Stundenplan, Vertretungsplan &amp; Co. der Schule — Anmeldung läuft direkt auf der Seite der Schule, nicht
+            über Familientisch. Auf den Namen tippen, um die THG-App für dieses Kind aufzuklappen. Achtung: Es ist
+            überall dieselbe Anmeldung — meldet sich hier ein anderes Kind an, bleibt das so lange bestehen, bis sich
+            jemand wieder abmeldet.
+          </p>
+          {kinder.map((k) => (
+            <details key={k.id} style={{ marginTop: 8 }}>
+              <summary style={{ cursor: "pointer", fontSize: 14 }}>{k.name}</summary>
+              <iframe
+                src={THG_URL}
+                title={`THG-App – ${k.name}`}
+                style={{ width: "100%", height: "70vh", border: "1px solid var(--border)", borderRadius: "var(--radius)", marginTop: 8 }}
+              />
+            </details>
+          ))}
+        </details>
       )}
 
       {feier && <Feier onEnde={() => setFeier(false)} />}

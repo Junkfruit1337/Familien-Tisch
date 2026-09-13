@@ -40,7 +40,10 @@ const NAV_ITEMS = {
   mehr: { href: "/einstellungen", label: "Mehr", icon: "⚙️", farbe: BEREICH_FARBEN.einstellungen },
 } as const;
 
-const NAV_REIHENFOLGE_ELTERN = ["heute", "kalender", "aufgaben", "essen", "einkauf", "schule", "thg", "dienste", "mehr"] as const;
+// Fix-Batch 99 (Florians Wunsch): Eltern haben keinen eigenen THG-Reiter mehr (zu viele
+// Reiter) — für sie steckt die THG-App stattdessen aufklappbar pro Kind im "Schule"-Reiter.
+// Kinder melden sich nur für sich selbst an, daher bleibt ihr eigener THG-Reiter bestehen.
+const NAV_REIHENFOLGE_ELTERN = ["heute", "kalender", "aufgaben", "essen", "einkauf", "schule", "dienste", "mehr"] as const;
 const NAV_REIHENFOLGE_KIND = ["heute", "kalender", "aufgaben", "schule", "thg", "dienste", "essen", "einkauf", "mehr"] as const;
 
 function navFuerRolle(istEltern: boolean) {
