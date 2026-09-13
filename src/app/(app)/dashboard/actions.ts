@@ -83,6 +83,7 @@ export async function getDashboardDaten() {
     rezeptName: string;
     zutaten: string[];
     zubereitung: string | null;
+    zutatenUebernommen: boolean;
   }[] = [];
 
   if (heutigesEssen?.eintrag) {
@@ -94,13 +95,19 @@ export async function getDashboardDaten() {
         .filter(Boolean)
         .map((z) => skaliereZeile(parseZutatZeile(z), heutigesEssen.eintrag!.esserFaktor || 1))
         .map((z) => (z.menge ? `${z.menge} ${z.name}` : z.name));
-      heutigeGerichte.push({ bezeichnung: "Hauptgericht", rezeptName: rezept.name, zutaten, zubereitung: rezept.zubereitung });
+      heutigeGerichte.push({
+        bezeichnung: "Hauptgericht",
+        rezeptName: rezept.name,
+        zutaten,
+        zubereitung: rezept.zubereitung,
+        zutatenUebernommen: heutigesEssen.eintrag.zutatenUebernommen,
+      });
     }
   }
 
   const extraHeute = await prisma.extraMahlzeit.findMany({
     where: { wocheStart: new Date(plan.wocheStart) },
-    include: { rezept: true },
+    include: { rezept: true, _count: { select: { herkuenfte: true } } },
     orderBy: { createdAt: "asc" },
   });
   for (const e of extraHeute) {
@@ -111,7 +118,13 @@ export async function getDashboardDaten() {
       .filter(Boolean)
       .map((z) => skaliereZeile(parseZutatZeile(z), e.faktor || 1))
       .map((z) => (z.menge ? `${z.menge} ${z.name}` : z.name));
-    heutigeGerichte.push({ bezeichnung: e.bezeichnung, rezeptName: e.rezept.name, zutaten, zubereitung: e.rezept.zubereitung });
+    heutigeGerichte.push({
+      bezeichnung: e.bezeichnung,
+      rezeptName: e.rezept.name,
+      zutaten,
+      zubereitung: e.rezept.zubereitung,
+      zutatenUebernommen: e._count.herkuenfte > 0,
+    });
   }
 
   const schulEintraege = await listAnstehendeSchulEintraege();

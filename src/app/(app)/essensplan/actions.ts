@@ -320,7 +320,7 @@ export async function getWochenplan(offsetWochen = 0) {
 
   const eintraege = await prisma.essensplanEintrag.findMany({
     where: { wocheStart },
-    include: { rezept: true },
+    include: { rezept: true, _count: { select: { herkuenfte: true } } },
   });
 
   const heute = new Date();
@@ -342,6 +342,11 @@ export async function getWochenplan(offsetWochen = 0) {
             esserIds: eintrag.esserIds,
             esserFaktor: eintrag.esserFaktor,
             extraPortionen: eintrag.extraPortionen,
+            // Fix-Batch 87 (Florians Wunsch): "gelockt" reicht hier NICHT als Signal, ob schon
+            // eingekauft wurde — ein Tag kann auch manuell gesperrt sein (🔒 Sperren-Button),
+            // ohne dass je Zutaten übernommen wurden. Nur ein tatsächlicher Herkunfts-Eintrag
+            // beweist, dass Zutaten wirklich auf die Einkaufsliste gewandert sind.
+            zutatenUebernommen: eintrag._count.herkuenfte > 0,
           }
         : null,
     };
@@ -533,7 +538,7 @@ export async function listExtraMahlzeitenFuerWoche(wocheStartIso: string) {
   const wocheStart = new Date(wocheStartIso);
   const eintraege = await prisma.extraMahlzeit.findMany({
     where: { wocheStart },
-    include: { rezept: true },
+    include: { rezept: true, _count: { select: { herkuenfte: true } } },
     orderBy: { createdAt: "asc" },
   });
   return eintraege.map((e) => ({
@@ -544,6 +549,11 @@ export async function listExtraMahlzeitenFuerWoche(wocheStartIso: string) {
     rezeptName: e.rezept.name,
     faktor: e.faktor,
     gelockt: e.gelockt,
+    // Fix-Batch 87: siehe Kommentar bei getWochenplan — "gelockt" allein reicht nicht als
+    // "schon eingekauft"-Signal, da eine Zusatzmahlzeit theoretisch ohne Zutaten-Übernahme
+    // gesperrt sein könnte (aktuell zwar kein manueller Sperren-Weg dafür vorhanden, aber
+    // derselbe verlässliche Herkunfts-Check wie beim Hauptgericht schadet nicht).
+    zutatenUebernommen: e._count.herkuenfte > 0,
   }));
 }
 

@@ -17,7 +17,7 @@ const TICKET_STATUS_LABEL: Record<string, string> = {
   IN_UMSETZUNG: "Genehmigt und in Umsetzung",
 };
 
-type HeutigesGericht = { bezeichnung: string; rezeptName: string; zutaten: string[]; zubereitung: string | null };
+type HeutigesGericht = { bezeichnung: string; rezeptName: string; zutaten: string[]; zubereitung: string | null; zutatenUebernommen: boolean };
 
 type Daten = {
   person: { name: string; rolle: string };
@@ -151,6 +151,9 @@ export default function DashboardClient({ daten, istEltern }: { daten: Daten; is
               >
                 <span>
                   <strong style={{ fontSize: 13 }}>{g.bezeichnung}:</strong> {g.rezeptName}
+                  {!g.zutatenUebernommen && (
+                    <span style={{ display: "block", fontSize: 11, color: "var(--warning)" }}>⚠️ Noch nicht eingekauft</span>
+                  )}
                 </span>
                 <span style={{ color: "var(--accent)", fontSize: 16, flexShrink: 0 }}>→</span>
               </button>

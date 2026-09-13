@@ -92,6 +92,7 @@ type TagEintrag = {
   esserIds: string[];
   esserFaktor: number;
   extraPortionen: number;
+  zutatenUebernommen: boolean;
 };
 type Tag = { tag: string; vergangen: boolean; eintrag: TagEintrag | null };
 type Plan = { wocheStart: string; wocheEnde: string; tage: Tag[] };
@@ -110,7 +111,16 @@ type Familienmitglied = { id: string; name: string; farbe: string; portionsGewic
 type Herkunft = { artikelId: string; artikelName: string; menge: string | null };
 // Fix-Batch 80 (Florians Wunsch): zusätzliche geplante Mahlzeiten an einem Tag neben dem
 // Hauptgericht (Frühstück, zusätzliches warmes Essen, Mittags-Snack, ...).
-type ExtraMahlzeitEintrag = { id: string; tag: string; bezeichnung: string; rezeptId: string; rezeptName: string; faktor: number; gelockt: boolean };
+type ExtraMahlzeitEintrag = {
+  id: string;
+  tag: string;
+  bezeichnung: string;
+  rezeptId: string;
+  rezeptName: string;
+  faktor: number;
+  gelockt: boolean;
+  zutatenUebernommen: boolean;
+};
 const EXTRA_MAHLZEIT_VORSCHLAEGE = ["Frühstück", "Mittags-Snack", "Zusätzliches warmes Essen"];
 
 const WOCHEN_LABEL = ["Diese Woche", "Nächste Woche", "Übernächste Woche"];
@@ -402,6 +412,13 @@ export default function EssensplanClient({
               {new Date(t.tag).toLocaleDateString("de-DE", { weekday: "long", day: "2-digit", month: "2-digit" })}
               {t.vergangen && " · ✓ erledigt"}
             </div>
+            {/* Fix-Batch 87 (Florians Wunsch): Warnung, wenn für ein geplantes Gericht noch
+                keine Zutaten auf die Einkaufsliste übernommen wurden — bewusst NICHT über
+                "gelockt" geprüft, da ein Tag auch ohne Zutaten-Übernahme manuell gesperrt sein
+                kann; nur ein tatsächlicher Herkunfts-Eintrag zählt als "schon eingekauft". */}
+            {t.eintrag && !t.eintrag.zutatenUebernommen && (
+              <p style={{ margin: 0, fontSize: 12, color: "var(--warning)" }}>⚠️ Zutaten noch nicht eingekauft</p>
+            )}
             {/* Fix-Batch 82 (Florians Wunsch): ein bereits vergangener Tag darf nicht mehr
                 bearbeitet werden — dieselbe schreibgeschützte Ansicht wie für Kinder. */}
             {istEltern && !t.vergangen ? (
@@ -521,6 +538,9 @@ export default function EssensplanClient({
                         {e.rezeptName}
                         {e.faktor !== 1 ? ` (${e.faktor}×)` : ""}
                       </span>
+                      {/* Fix-Batch 87 (Florians Wunsch): siehe Kommentar beim Hauptgericht weiter
+                          oben — derselbe verlässliche Herkunfts-Check statt "gelockt". */}
+                      {!e.zutatenUebernommen && <span style={{ color: "var(--warning)" }}>⚠️ Noch nicht eingekauft</span>}
                       {/* Fix-Batch 84 (Florians Bug-Meldung): dieselbe Sperren-Logik wie beim
                           Hauptgericht — nach Übernahme gesperrt, Löschen erst nach Entsperren. */}
                       {e.gelockt ? (
