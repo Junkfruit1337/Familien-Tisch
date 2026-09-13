@@ -16,9 +16,13 @@ import { useEffect, useState } from "react";
 // richtet sich technisch nachweislich nach dem echten Dunkelmodus des Geräts/Browsers, nicht
 // nach Familientischs eigenem Schalter. Bleibt sie nach dem Umschalten weiterhin dunkel, hilft
 // nur der echte Dunkelmodus des Telefons bzw. der Browser-App selbst.
+// Fix-Batch 106 (Florians Wunsch): auf der Schule-Seite nimmt der ganze Block (Icon, Titel,
+// Beschreibung, Button, Warnhinweis) zu viel Platz oben ein — `compact` zeigt stattdessen nur
+// einen kleinen "THG"-Button (z. B. neben dem Seitentitel), der Hinweistext wandert dafür mit
+// in die Kopfleiste des Vollbild-Overlays selbst, statt auf der Seite zu stehen.
 const THG_URL = "https://app.thg-lu.de/";
 
-export default function ThgVollbild({ hinweis }: { hinweis: string }) {
+export default function ThgVollbild({ hinweis, compact }: { hinweis: string; compact?: boolean }) {
   const [offen, setOffen] = useState(false);
   const [headerHoehe, setHeaderHoehe] = useState(64);
 
@@ -30,14 +34,19 @@ export default function ThgVollbild({ hinweis }: { hinweis: string }) {
 
   return (
     <>
-      <button className="btn-secondary" onClick={() => setOffen(true)}>
-        🏫 THG-App öffnen
+      <button
+        className="btn-secondary"
+        style={compact ? { fontSize: 13, padding: "8px 12px", flexShrink: 0 } : undefined}
+        onClick={() => setOffen(true)}
+      >
+        {compact ? "🏫 THG" : "🏫 THG-App öffnen"}
       </button>
-      <p style={{ margin: "6px 0 0", fontSize: 12, color: "var(--text-muted)" }}>{hinweis}</p>
+      {!compact && <p style={{ margin: "6px 0 0", fontSize: 12, color: "var(--text-muted)" }}>{hinweis}</p>}
       {offen && (
         <div style={{ position: "fixed", top: headerHoehe, left: 0, right: 0, bottom: 0, zIndex: 20, background: "#fff", display: "flex", flexDirection: "column" }}>
-          <div style={{ display: "flex", justifyContent: "flex-end", padding: 8, background: "#eee", flexShrink: 0 }}>
-            <button className="btn-secondary" onClick={() => setOffen(false)}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: 8, background: "#eee", flexShrink: 0 }}>
+            <p style={{ margin: 0, fontSize: 12, color: "#555" }}>{hinweis}</p>
+            <button className="btn-secondary" style={{ flexShrink: 0 }} onClick={() => setOffen(false)}>
               ✕ Schließen
             </button>
           </div>

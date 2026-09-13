@@ -532,7 +532,17 @@ export default function SchuleClient({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <SeitenTitel icon="🎓" farbe={BEREICH_FARBEN.schule}>Schule &amp; Taschengeld</SeitenTitel>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+        <SeitenTitel icon="🎓" farbe={BEREICH_FARBEN.schule}>Schule &amp; Taschengeld</SeitenTitel>
+        {/* Fix-Batch 106 (Florians Wunsch): kompakter Button statt der ganzen THG-Karte, die
+            hier zu viel Platz eingenommen hat. */}
+        {istEltern && (
+          <ThgVollbild
+            compact
+            hinweis="⚠️ Es gibt nur EINE gemeinsame Anmeldung für alle Kinder — für jedes Kind separat abmelden und neu anmelden. Falls schlecht lesbar: oben ☀️ hellen Modus wählen (wirkt nur, wenn nicht das Gerät selbst im Dunkelmodus ist)."
+          />
+        )}
+      </div>
 
       {/* Fix-Batch 53 (Florians Feedback): die Kind-Auswahl steht jetzt GANZ OBEN, direkt
           unter dem Titel — vorher stand die Klasse/Bundesland-Zeile schon oben (unklar wessen
@@ -559,19 +569,6 @@ export default function SchuleClient({
           {klasseAnzeige(kind.klassenstufe, kind.klasse)}
           {kind.bundesland ? ` · ${kind.bundesland}` : ""}
         </p>
-      )}
-
-      {/* Fix-Batch 103 (Florians Bug-Meldung: Fenster war abgeschnitten, muss komplett
-          anzeigbar sein): das eingebettete Fenster in einer Karte war zu klein — jetzt ein
-          echtes Vollbild-Overlay per Knopf (ThgVollbild), das die App genauso groß zeigt wie
-          im eigenen Browser-Tab. Kinder haben weiterhin ihren eigenen THG-Reiter (dort meldet
-          sich eh nur die eine Person an). */}
-      {istEltern && (
-        <div className="card" style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-          <strong>🏫 THG-App</strong>
-          <p style={{ margin: 0, fontSize: 13, color: "var(--text-muted)" }}>Stundenplan, Vertretungsplan &amp; Co. der Schule.</p>
-          <ThgVollbild hinweis="⚠️ Es gibt nur EINE gemeinsame Anmeldung für alle Kinder — für jedes Kind separat abmelden und neu anmelden. Falls schlecht lesbar: oben ☀️ hellen Modus wählen (wirkt nur, wenn nicht das Gerät selbst im Dunkelmodus ist)." />
-        </div>
       )}
 
       {feier && <Feier onEnde={() => setFeier(false)} />}
