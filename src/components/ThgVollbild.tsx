@@ -12,6 +12,11 @@ import { useEffect, useState } from "react";
 // Fix-Batch 107 (Florians Feedback: "funktioniert super", Warnhinweis wird nicht mehr
 // gebraucht): der Hinweistext (gemeinsame Anmeldung/Hell-Modus) komplett entfernt — beides
 // hat sich in der Praxis als kein Problem mehr erwiesen.
+// Fix-Batch 111 hatte die feste hell/#fff-Optik hier fälschlich als generische Dunkelmodus-
+// Inkonsistenz "korrigiert" (auf Theme-Variablen umgestellt) — das war falsch: die THG-App
+// selbst bleibt laut Fix-Batch 103/104 ausdrücklich IMMER hell, unabhängig vom Familientisch-
+// Theme, sonst wird sie bei aktivem Dunkelmodus teils unlesbar. Bewusst wieder zurück auf
+// feste helle Farben statt Theme-Variablen — hier absichtlich, keine Nachlässigkeit.
 const THG_URL = "https://app.thg-lu.de/";
 
 export default function ThgVollbild({ compact }: { compact?: boolean }) {
@@ -34,8 +39,8 @@ export default function ThgVollbild({ compact }: { compact?: boolean }) {
         {compact ? "🏫 THG" : "🏫 THG-App öffnen"}
       </button>
       {offen && (
-        <div style={{ position: "fixed", top: headerHoehe, left: 0, right: 0, bottom: 0, zIndex: 20, background: "var(--bg)", display: "flex", flexDirection: "column" }}>
-          <div style={{ display: "flex", justifyContent: "flex-end", padding: 8, background: "var(--surface-alt)", flexShrink: 0, borderBottom: "1px solid var(--border)" }}>
+        <div style={{ position: "fixed", top: headerHoehe, left: 0, right: 0, bottom: 0, zIndex: 20, background: "#fff", display: "flex", flexDirection: "column" }}>
+          <div style={{ display: "flex", justifyContent: "flex-end", padding: 8, background: "#eee", flexShrink: 0 }}>
             <button className="btn-secondary" onClick={() => setOffen(false)}>
               ✕ Schließen
             </button>

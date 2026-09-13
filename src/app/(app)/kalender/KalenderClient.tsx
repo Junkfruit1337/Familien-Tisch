@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import {
   createTermin,
   updateTermin,
@@ -146,6 +146,21 @@ export default function KalenderClient({
   // Einträge, ein Personen-Filter ergäbe für sie keinen Sinn (Fix-Batch 30).
   const [filter, setFilter] = useState<string[]>([]);
   const [nurZukunft, setNurZukunft] = useState(true);
+  // Fix-Batch 112 (Florians Bug-Meldung: die "heute"-Markierung im Monatsraster blieb auf dem
+  // Vortag stehen, obwohl schon längst Mitternacht vorbei war): `isoVonDate(new Date())` wurde
+  // bisher DIREKT in den useMemo-Blöcken berechnet, deren Abhängigkeits-Arrays sich aber nie
+  // ändern, nur weil die Uhrzeit weiterläuft — blieb die Seite über Mitternacht hinweg offen,
+  // rechnete keiner der Blöcke neu. Jetzt ein eigener State, der jede Minute geprüft und bei
+  // echtem Datumswechsel aktualisiert wird, als gemeinsame Abhängigkeit für alle "heute"-
+  // Berechnungen dieser Seite.
+  const [heuteIso, setHeuteIso] = useState(() => isoVonDate(new Date()));
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const aktuell = isoVonDate(new Date());
+      setHeuteIso((prev) => (prev !== aktuell ? aktuell : prev));
+    }, 60_000);
+    return () => clearInterval(timer);
+  }, []);
   const [zeigeFormular, setZeigeFormular] = useState(false);
   const [bearbeitenId, setBearbeitenId] = useState<string | null>(null);
   const [loeschAuswahl, setLoeschAuswahl] = useState<{ id: string; titel: string } | null>(null);
@@ -179,8 +194,7 @@ export default function KalenderClient({
   }
 
   const gefiltert = useMemo(() => {
-    const jetzt = new Date();
-    const heuteMitternacht = new Date(jetzt.toDateString());
+    const heuteMitternacht = new Date(`${heuteIso}T00:00:00`);
     const liste = termine
       .filter(passtFilter)
       .filter((t) => !nurZukunft || ausgewaehlterTag || new Date(t.ende ?? t.start) >= heuteMitternacht)
@@ -214,7 +228,7 @@ export default function KalenderClient({
 
     return liste.filter((t) => t.typ !== "geburtstag" || behalteneGeburtstagIds.has(t.id));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [termine, filter, nurZukunft, ausgewaehlterTag]);
+  }, [termine, filter, nurZukunft, ausgewaehlterTag, heuteIso]);
 
   const monatsZellen = useMemo(() => {
     const jahr = monatsDatum.getFullYear();
@@ -222,7 +236,6 @@ export default function KalenderClient({
     const ersterTag = new Date(jahr, monat, 1);
     const montagOffset = (ersterTag.getDay() + 6) % 7; // 0 = Montag
     const start0 = new Date(jahr, monat, 1 - montagOffset);
-    const heuteIso = isoVonDate(new Date());
 
     const zellen = [];
     for (let i = 0; i < 42; i++) {
@@ -233,10 +246,9 @@ export default function KalenderClient({
     }
     return zellen;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [monatsDatum, termine, filter]);
+  }, [monatsDatum, termine, filter, heuteIso]);
 
   const wochenTage = useMemo(() => {
-    const heuteIso = isoVonDate(new Date());
     return Array.from({ length: 7 }, (_, i) => {
       const datum = addTage(wochenDatum, i);
       const iso = isoVonDate(datum);
@@ -246,7 +258,7 @@ export default function KalenderClient({
       return { iso, datum, heute: iso === heuteIso, eintraege };
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [wochenDatum, termine, filter]);
+  }, [wochenDatum, termine, filter, heuteIso]);
 
   const tagesEintraege = useMemo(() => {
     const iso = isoVonDate(tagesDatum);
