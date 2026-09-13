@@ -31,20 +31,17 @@ const NAV_ITEMS = {
   kalender: { href: "/kalender", label: "Kalender", icon: "📅", farbe: BEREICH_FARBEN.kalender },
   aufgaben: { href: "/aufgaben", label: "Aufgaben", icon: "✅", farbe: BEREICH_FARBEN.aufgaben },
   schule: { href: "/schule", label: "Schule", icon: "🎓", farbe: BEREICH_FARBEN.schule },
-  // Fix-Batch 97 (Florians Wunsch): eigener Reiter für die THG-Schul-App (Stundenplan/
-  // Vertretungsplan, externe Seite in einem iframe).
-  thg: { href: "/thg", label: "THG", icon: "🏫", farbe: BEREICH_FARBEN.thg },
   dienste: { href: "/dienstplan", label: "Dienste", icon: "🧹", farbe: BEREICH_FARBEN.dienstplan },
   einkauf: { href: "/einkaufsliste", label: "Einkauf", icon: "🛒", farbe: BEREICH_FARBEN.einkaufsliste },
   essen: { href: "/essensplan", label: "Essen", icon: "🍽️", farbe: BEREICH_FARBEN.essensplan },
   mehr: { href: "/einstellungen", label: "Mehr", icon: "⚙️", farbe: BEREICH_FARBEN.einstellungen },
 } as const;
 
-// Fix-Batch 99 (Florians Wunsch): Eltern haben keinen eigenen THG-Reiter mehr (zu viele
-// Reiter) — für sie steckt die THG-App stattdessen aufklappbar pro Kind im "Schule"-Reiter.
-// Kinder melden sich nur für sich selbst an, daher bleibt ihr eigener THG-Reiter bestehen.
+// Fix-Batch 108 (Florians Wunsch): kein eigener THG-Reiter mehr — auch für Kinder nicht mehr
+// (Eltern hatten das schon in Fix-Batch 99, jetzt einheitlich für beide Rollen). THG-App steckt
+// jetzt für alle als kompakter Button in "Schule" (siehe ThgVollbild in SchuleClient.tsx).
 const NAV_REIHENFOLGE_ELTERN = ["heute", "kalender", "aufgaben", "essen", "einkauf", "schule", "dienste", "mehr"] as const;
-const NAV_REIHENFOLGE_KIND = ["heute", "kalender", "aufgaben", "schule", "thg", "dienste", "essen", "einkauf", "mehr"] as const;
+const NAV_REIHENFOLGE_KIND = ["heute", "kalender", "aufgaben", "schule", "dienste", "essen", "einkauf", "mehr"] as const;
 
 function navFuerRolle(istEltern: boolean) {
   const reihenfolge = istEltern ? NAV_REIHENFOLGE_ELTERN : NAV_REIHENFOLGE_KIND;

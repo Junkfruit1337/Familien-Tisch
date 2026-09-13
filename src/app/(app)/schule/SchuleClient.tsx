@@ -291,13 +291,18 @@ function SchulEintraegeSektion({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-      {!istEltern && (
-        <div style={{ display: "flex", justifyContent: "flex-end" }}>
-          <button className="btn-secondary" style={{ fontSize: 12 }} onClick={() => setZeigeForm((v) => !v)}>
+      {/* Fix-Batch 109 (Florians Feedback: "sieht nicht schön aus"): der "+ Eintrag"-Button
+          hing bisher rechtsbündig für sich allein unter einem <summary>-Klapptitel der
+          aufrufenden Seite — dadurch entstand ein großer, unmotivierter Leerraum. Jetzt trägt
+          dieser Abschnitt seinen Titel selbst, direkt in derselben Zeile wie der Button. */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <strong>🎓 Arbeiten &amp; HÜs</strong>
+        {!istEltern && (
+          <button className="btn-secondary" style={{ fontSize: 13 }} onClick={() => setZeigeForm((v) => !v)}>
             {zeigeForm ? "Abbrechen" : "+ Eintrag"}
           </button>
-        </div>
-      )}
+        )}
+      </div>
 
       {!istEltern && zeigeForm && (
         <div style={{ display: "flex", flexDirection: "column", gap: 8, borderTop: "1px solid var(--border)", paddingTop: 10 }}>
@@ -488,6 +493,24 @@ export default function SchuleClient({
   // hier immer ALLE Kinder gepoolt angezeigt, unabhängig vom ausgewählten Reiter).
   const offeneNoten = istEltern ? kind.noten.filter((n) => n.status === "OFFEN").map((n) => ({ ...n, kindName: kind.name })) : [];
 
+  // Fix-Batch 107 (Florians Wunsch): zusätzlich zur Kind-bezogenen Ansicht oben eine gepoolte
+  // "Für alle Kinder"-Übersicht — was über ALLE Kinder hinweg ansteht, ohne jeden Reiter
+  // einzeln durchklicken zu müssen. Nur lesend/als Sprungmarke (per Klick auf den Kind-Namen
+  // zum jeweiligen Reiter springen) — die eigentliche Genehmigen/Ablehnen-Aktion bleibt unten
+  // im Kind-bezogenen Abschnitt, keine doppelte Logik.
+  const alleOffenenNoten = istEltern
+    ? kinder
+        .flatMap((k) => k.noten.filter((n) => n.status === "OFFEN").map((n) => ({ ...n, kindId: k.id, kindName: k.name, kindFarbe: k.farbe })))
+        .sort((a, b) => new Date(a.datum).getTime() - new Date(b.datum).getTime())
+    : [];
+  const heuteMitternacht = new Date(new Date().toDateString());
+  const naechsteSchulEintraege = istEltern
+    ? [...schulEintraege]
+        .filter((e) => new Date(e.datum) >= heuteMitternacht)
+        .sort((a, b) => new Date(a.datum).getTime() - new Date(b.datum).getTime())
+        .slice(0, 5)
+    : [];
+
   async function spracheErkannt(text: string) {
     setSpracheVerarbeitung(true);
     try {
@@ -530,19 +553,292 @@ export default function SchuleClient({
     }
   }
 
+  // Fix-Batch 107 (Florians Wunsch): "Noten je Fach" als eigene Variable statt inline, damit
+  // sie weiter oben (direkt nach "Noten zur Genehmigung", vor dem Kontostand) platziert werden
+  // kann, ohne den riesigen JSX-Block an zwei Stellen duplizieren zu müssen.
+  const notenJeFachSektion = (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <strong>Noten je Fach</strong>
+      {kind.faecher.map((f) => {
+        const notenDesFachs = kind.noten.filter((n) => n.fachId === f.id);
+        if (notenDesFachs.length === 0) return null;
+        // Durchschnitt zählt nur Noten des laufenden Schuljahres (Fix-Batch 27) —
+        // ältere Noten bleiben in der Liste sichtbar, fließen aber nicht mehr in den Ø ein.
+        const genehmigt = notenDesFachs.filter((n) => n.status === "GENEHMIGT" && istImLaufendenSchuljahr(n.datum));
+        const summeGewicht = genehmigt.reduce((s, n) => s + n.gewichtung, 0);
+        const schnitt = summeGewicht > 0 ? genehmigt.reduce((s, n) => s + n.note * n.gewichtung, 0) / summeGewicht : null;
+        // Fix-Batch 62 (Florians Wunsch): einfacher Trendpfeil, ob sich der Schnitt zuletzt
+        // eher verbessert (Note wird zahlenmäßig kleiner) oder verschlechtert hat — Vergleich
+        // ältere Hälfte vs. jüngere Hälfte der genehmigten Noten dieses Schuljahres. Braucht
+        // mindestens 4 Noten, sonst wäre das Signal zu wackelig.
+        const trend = (() => {
+          if (genehmigt.length < 4) return null;
+          const sortiert = [...genehmigt].sort((a, b) => new Date(a.datum).getTime() - new Date(b.datum).getTime());
+          const mitte = Math.floor(sortiert.length / 2);
+          const avg = (arr: typeof sortiert) => {
+            const g = arr.reduce((s, n) => s + n.gewichtung, 0);
+            return g > 0 ? arr.reduce((s, n) => s + n.note * n.gewichtung, 0) / g : null;
+          };
+          const alt = avg(sortiert.slice(0, mitte));
+          const neu = avg(sortiert.slice(mitte));
+          if (alt === null || neu === null) return null;
+          const diff = neu - alt;
+          if (diff <= -0.3) return "besser" as const;
+          if (diff >= 0.3) return "schlechter" as const;
+          return "stabil" as const;
+        })();
+        return (
+          <details key={f.id} className="card">
+            <summary style={{ cursor: "pointer", display: "flex", justifyContent: "space-between" }}>
+              <span>{f.name}</span>
+              <span style={{ color: "var(--text-muted)", fontWeight: 400, display: "flex", alignItems: "center", gap: 4 }}>
+                {schnitt !== null ? `Ø ${schnitt.toFixed(2)} · ${genehmigt.length} Note(n)` : "noch keine genehmigte Note"}
+                {trend === "besser" && <span title="Zuletzt verbessert" style={{ color: "var(--success)" }}>↗</span>}
+                {trend === "schlechter" && <span title="Zuletzt verschlechtert" style={{ color: "var(--danger)" }}>↘</span>}
+                {trend === "stabil" && <span title="Zuletzt stabil" style={{ color: "var(--text-muted)" }}>→</span>}
+              </span>
+            </summary>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {/* Fix-Batch 92 (Florians Wunsch): Notenverlauf über die Zeit als kleines
+                  Diagramm — ergänzt den bereits bestehenden Trendpfeil um den tatsächlichen
+                  Verlauf. Zeigt die echten Notenwerte (1 = beste Note), die Beschriftung
+                  darunter zeigt die tatsächliche erste/letzte Note klar an. */}
+              {genehmigt.length >= 2 && (
+                <VerlaufChart
+                  punkte={[...genehmigt]
+                    .sort((a, b) => new Date(a.datum).getTime() - new Date(b.datum).getTime())
+                    .map((n) => ({ label: new Date(n.datum).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" }), wert: n.note }))}
+                />
+              )}
+              {notenDesFachs.map((n) =>
+                neueinreichungId === n.id ? (
+                  <div key={n.id} style={{ display: "flex", flexDirection: "column", gap: 8, borderTop: "1px solid var(--border)", paddingTop: 8 }}>
+                    <select value={neueinreichungNote} onChange={(e) => setNeueinreichungNote(Number(e.target.value))}>
+                      {[1, 2, 3, 4, 5, 6].map((v) => (
+                        <option key={v} value={v}>
+                          Note {v}
+                        </option>
+                      ))}
+                    </select>
+                    <input placeholder="Notiz (optional)" value={neueinreichungNotiz} onChange={(e) => setNeueinreichungNotiz(e.target.value)} />
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <button
+                        className="btn"
+                        style={{ padding: "6px 10px" }}
+                        onClick={() =>
+                          startTransition(async () => {
+                            await erneutEinreichen(n.id, { note: neueinreichungNote, notiz: neueinreichungNotiz || undefined });
+                            setNeueinreichungId(null);
+                          })
+                        }
+                      >
+                        Erneut einreichen
+                      </button>
+                      <button className="btn-secondary" style={{ padding: "6px 10px" }} onClick={() => setNeueinreichungId(null)}>
+                        Abbrechen
+                      </button>
+                    </div>
+                  </div>
+                ) : korrekturId === n.id ? (
+                  <div key={n.id} style={{ display: "flex", flexDirection: "column", gap: 8, borderTop: "1px solid var(--border)", paddingTop: 8 }}>
+                    <select value={korrekturNote} onChange={(e) => setKorrekturNote(Number(e.target.value))}>
+                      {[1, 2, 3, 4, 5, 6].map((v) => (
+                        <option key={v} value={v}>
+                          Note {v}
+                        </option>
+                      ))}
+                    </select>
+                    <input placeholder="Thema" value={korrekturNotiz} onChange={(e) => setKorrekturNotiz(e.target.value)} />
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <button
+                        className="btn"
+                        style={{ padding: "6px 10px" }}
+                        onClick={() =>
+                          startTransition(async () => {
+                            try {
+                              await korrigiereNote(n.id, { note: korrekturNote, notiz: korrekturNotiz || undefined });
+                              setKorrekturId(null);
+                            } catch (e: any) {
+                              alert(e.message);
+                            }
+                          })
+                        }
+                      >
+                        Speichern
+                      </button>
+                      <button className="btn-secondary" style={{ padding: "6px 10px" }} onClick={() => setKorrekturId(null)}>
+                        Abbrechen
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <details key={n.id} style={{ borderTop: "1px solid var(--border)", paddingTop: 8 }}>
+                    <summary
+                      style={{
+                        cursor: "pointer",
+                        listStyle: "none",
+                        display: "grid",
+                        gridTemplateColumns: "28px 1fr auto",
+                        alignItems: "center",
+                        gap: 8,
+                      }}
+                    >
+                      <span style={{ fontWeight: 700, fontSize: 16 }}>{n.note}</span>
+                      <span style={{ fontSize: 13, color: "var(--text-muted)" }}>
+                        {ART_LABEL[n.art]} · {new Date(n.datum).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" })}
+                        {n.fotoBase64 ? " · 📷" : ""}
+                      </span>
+                      <span className={`pill pill-${n.status.toLowerCase()}`}>{n.status}</span>
+                    </summary>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8, paddingLeft: 2 }}>
+                      {n.fotoBase64 && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={n.fotoBase64}
+                          alt="Notenzettel"
+                          style={{ width: 72, height: 72, objectFit: "cover", borderRadius: 8, cursor: "pointer" }}
+                          onClick={() => setGrossesBild(n.fotoBase64)}
+                        />
+                      )}
+                      <div style={{ fontSize: 13, color: "var(--text-muted)" }}>
+                        {n.gewichtung !== 1 && <div>Gewichtung {n.gewichtung}</div>}
+                        {n.notiz && <div>Thema: „{n.notiz}"</div>}
+                      </div>
+                      {istEltern && <HistorieVerlauf entityTyp="NOTE" entityId={n.id} />}
+                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                        {n.status === "ABGELEHNT" && kind.id === eigeneId && (
+                          <button
+                            className="btn-secondary"
+                            style={{ fontSize: 12 }}
+                            onClick={() => {
+                              setNeueinreichungId(n.id);
+                              setNeueinreichungNote(n.note);
+                              setNeueinreichungNotiz(n.notiz ?? "");
+                            }}
+                          >
+                            Erneut einreichen
+                          </button>
+                        )}
+                        {n.status === "OFFEN" && !istEltern && kind.id === eigeneId && (
+                          <>
+                            <button
+                              className="btn-secondary"
+                              style={{ fontSize: 12 }}
+                              onClick={() => {
+                                setKorrekturId(n.id);
+                                setKorrekturNote(n.note);
+                                setKorrekturNotiz(n.notiz ?? "");
+                              }}
+                            >
+                              ✎ Bearbeiten
+                            </button>
+                            <button
+                              className="btn-secondary"
+                              style={{ fontSize: 12 }}
+                              onClick={() => {
+                                if (confirm("Diese noch offene Note wirklich löschen?")) {
+                                  startTransition(async () => {
+                                    try {
+                                      await loescheNote(n.id);
+                                    } catch (e: any) {
+                                      alert(e.message);
+                                    }
+                                  });
+                                }
+                              }}
+                            >
+                              🗑 Löschen
+                            </button>
+                          </>
+                        )}
+                        {istEltern && (
+                          <button
+                            className="btn-secondary"
+                            style={{ fontSize: 12 }}
+                            onClick={() => {
+                              if (confirm("Diese Note wirklich löschen?")) startTransition(() => loescheNote(n.id));
+                            }}
+                          >
+                            🗑 Löschen
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </details>
+                )
+              )}
+            </div>
+          </details>
+        );
+      })}
+      {kind.noten.length === 0 && (
+        <div className="empty-state">
+          <span className="empty-state-icon">📝</span>
+          <span>Noch keine Noten.</span>
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
         <SeitenTitel icon="🎓" farbe={BEREICH_FARBEN.schule}>Schule &amp; Taschengeld</SeitenTitel>
         {/* Fix-Batch 106 (Florians Wunsch): kompakter Button statt der ganzen THG-Karte, die
-            hier zu viel Platz eingenommen hat. */}
-        {istEltern && (
-          <ThgVollbild
-            compact
-            hinweis="⚠️ Es gibt nur EINE gemeinsame Anmeldung für alle Kinder — für jedes Kind separat abmelden und neu anmelden. Falls schlecht lesbar: oben ☀️ hellen Modus wählen (wirkt nur, wenn nicht das Gerät selbst im Dunkelmodus ist)."
-          />
-        )}
+            hier zu viel Platz eingenommen hat. Fix-Batch 108: auch für Kinder hier (statt des
+            entfernten eigenen THG-Reiters) — jeder meldet sich für sich selbst an. */}
+        <ThgVollbild compact />
       </div>
+
+      {/* Fix-Batch 107 (Florians Wunsch): "Für alle Kinder"-Übersicht ganz oben, noch vor der
+          Kind-Auswahl — auf einen Blick, was über alle Kinder hinweg ansteht, statt jeden
+          Reiter einzeln durchklicken zu müssen. Auf einen Eintrag tippen springt zum
+          jeweiligen Kind-Reiter (dort läuft die eigentliche Genehmigen/Ablehnen-Aktion). */}
+      {istEltern && kinder.length > 1 && (naechsteSchulEintraege.length > 0 || alleOffenenNoten.length > 0) && (
+        <div className="card" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <strong>📋 Für alle Kinder</strong>
+          {naechsteSchulEintraege.length > 0 && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <span style={{ fontSize: 12, color: "var(--text-muted)" }}>Nächste Arbeiten &amp; HÜs</span>
+              {naechsteSchulEintraege.map((e) => (
+                <button
+                  key={e.id}
+                  onClick={() => setAusgewaehlt(e.personId)}
+                  style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, background: "none", border: "none", padding: "4px 0", textAlign: "left", cursor: "pointer", color: "var(--text)" }}
+                >
+                  <span style={{ width: 10, height: 10, borderRadius: "50%", background: e.personFarbe, flexShrink: 0 }} />
+                  <span style={{ flex: 1 }}>
+                    {e.personName}: {ART_LABEL[e.art] ?? e.art}
+                    {e.fachName ? ` (${e.fachName})` : ""} — {e.titel}
+                  </span>
+                  <span style={{ color: "var(--text-muted)", fontSize: 12, flexShrink: 0 }}>
+                    {new Date(e.datum).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" })}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+          {alleOffenenNoten.length > 0 && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <span style={{ fontSize: 12, color: "var(--text-muted)", display: "flex", alignItems: "center", gap: 6 }}>
+                Noten zur Genehmigung <span className="pill pill-offen">{alleOffenenNoten.length}</span>
+              </span>
+              {alleOffenenNoten.map((n) => (
+                <button
+                  key={n.id}
+                  onClick={() => setAusgewaehlt(n.kindId)}
+                  style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, background: "none", border: "none", padding: "4px 0", textAlign: "left", cursor: "pointer", color: "var(--text)" }}
+                >
+                  <span style={{ width: 10, height: 10, borderRadius: "50%", background: n.kindFarbe, flexShrink: 0 }} />
+                  <span style={{ flex: 1 }}>
+                    {n.kindName} — {n.fachName}: Note {n.note}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Fix-Batch 53 (Florians Feedback): die Kind-Auswahl steht jetzt GANZ OBEN, direkt
           unter dem Titel — vorher stand die Klasse/Bundesland-Zeile schon oben (unklar wessen
@@ -574,18 +870,19 @@ export default function SchuleClient({
       {feier && <Feier onEnde={() => setFeier(false)} />}
       {grossesBild && <BildModal src={grossesBild} onClose={() => setGrossesBild(null)} />}
 
-      <details className="card">
-        <summary style={{ cursor: "pointer", fontWeight: 600 }}>🎓 Arbeiten &amp; HÜs</summary>
-        <div style={{ marginTop: 10 }}>
-          <SchulEintraegeSektion
-            istEltern={istEltern}
-            eigeneId={eigeneId}
-            kinder={kinder.map((k) => ({ id: k.id, name: k.name, farbe: k.farbe, faecher: k.faecher }))}
-            eintraege={schulEintraege}
-            ausgewaehlteKindId={istEltern ? kind.id : undefined}
-          />
-        </div>
-      </details>
+      {/* Fix-Batch 107 (Florians Wunsch): "was ansteht" ist jetzt der prominenteste Abschnitt.
+          Fix-Batch 109: kein <details>/<summary> mehr drumherum — war ohnehin immer
+          aufgeklappt und erzeugte nur einen verwirrenden Leerraum zum eigenen Titel der
+          Sektion; jetzt eine schlichte Karte. */}
+      <div className="card">
+        <SchulEintraegeSektion
+          istEltern={istEltern}
+          eigeneId={eigeneId}
+          kinder={kinder.map((k) => ({ id: k.id, name: k.name, farbe: k.farbe, faecher: k.faecher }))}
+          eintraege={schulEintraege}
+          ausgewaehlteKindId={istEltern ? kind.id : undefined}
+        />
+      </div>
 
       {istEltern && offeneNoten.length > 0 && (
         <details className="card">
@@ -680,9 +977,13 @@ export default function SchuleClient({
         </details>
       )}
 
+      {/* Fix-Batch 107 (Florians Wunsch): "Noten je Fach" steht jetzt VOR dem Kontostand —
+          Noten sind der tägliche Bezug, Kontostand/Sparziel eher am Rande. */}
+      {notenJeFachSektion}
+
       <div className="card">
         <strong>Kontostand: {kind.kontostand.toFixed(2)} €</strong>
-        {kind.sparziel && (
+        {!istEltern && kind.sparziel && (
           <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 12 }}>
             <div
               style={{
@@ -919,227 +1220,6 @@ export default function SchuleClient({
         </details>
       )}
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        <strong>Noten je Fach</strong>
-        {kind.faecher.map((f) => {
-          const notenDesFachs = kind.noten.filter((n) => n.fachId === f.id);
-          if (notenDesFachs.length === 0) return null;
-          // Durchschnitt zählt nur Noten des laufenden Schuljahres (Fix-Batch 27) —
-          // ältere Noten bleiben in der Liste sichtbar, fließen aber nicht mehr in den Ø ein.
-          const genehmigt = notenDesFachs.filter((n) => n.status === "GENEHMIGT" && istImLaufendenSchuljahr(n.datum));
-          const summeGewicht = genehmigt.reduce((s, n) => s + n.gewichtung, 0);
-          const schnitt = summeGewicht > 0 ? genehmigt.reduce((s, n) => s + n.note * n.gewichtung, 0) / summeGewicht : null;
-          // Fix-Batch 62 (Florians Wunsch): einfacher Trendpfeil, ob sich der Schnitt zuletzt
-          // eher verbessert (Note wird zahlenmäßig kleiner) oder verschlechtert hat — Vergleich
-          // ältere Hälfte vs. jüngere Hälfte der genehmigten Noten dieses Schuljahres. Braucht
-          // mindestens 4 Noten, sonst wäre das Signal zu wackelig.
-          const trend = (() => {
-            if (genehmigt.length < 4) return null;
-            const sortiert = [...genehmigt].sort((a, b) => new Date(a.datum).getTime() - new Date(b.datum).getTime());
-            const mitte = Math.floor(sortiert.length / 2);
-            const avg = (arr: typeof sortiert) => {
-              const g = arr.reduce((s, n) => s + n.gewichtung, 0);
-              return g > 0 ? arr.reduce((s, n) => s + n.note * n.gewichtung, 0) / g : null;
-            };
-            const alt = avg(sortiert.slice(0, mitte));
-            const neu = avg(sortiert.slice(mitte));
-            if (alt === null || neu === null) return null;
-            const diff = neu - alt;
-            if (diff <= -0.3) return "besser" as const;
-            if (diff >= 0.3) return "schlechter" as const;
-            return "stabil" as const;
-          })();
-          return (
-            <details key={f.id} className="card">
-              <summary style={{ cursor: "pointer", display: "flex", justifyContent: "space-between" }}>
-                <span>{f.name}</span>
-                <span style={{ color: "var(--text-muted)", fontWeight: 400, display: "flex", alignItems: "center", gap: 4 }}>
-                  {schnitt !== null ? `Ø ${schnitt.toFixed(2)} · ${genehmigt.length} Note(n)` : "noch keine genehmigte Note"}
-                  {trend === "besser" && <span title="Zuletzt verbessert" style={{ color: "var(--success)" }}>↗</span>}
-                  {trend === "schlechter" && <span title="Zuletzt verschlechtert" style={{ color: "var(--danger)" }}>↘</span>}
-                  {trend === "stabil" && <span title="Zuletzt stabil" style={{ color: "var(--text-muted)" }}>→</span>}
-                </span>
-              </summary>
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {/* Fix-Batch 92 (Florians Wunsch): Notenverlauf über die Zeit als kleines
-                    Diagramm — ergänzt den bereits bestehenden Trendpfeil um den tatsächlichen
-                    Verlauf. Zeigt die echten Notenwerte (1 = beste Note), die Beschriftung
-                    darunter zeigt die tatsächliche erste/letzte Note klar an. */}
-                {genehmigt.length >= 2 && (
-                  <VerlaufChart
-                    punkte={[...genehmigt]
-                      .sort((a, b) => new Date(a.datum).getTime() - new Date(b.datum).getTime())
-                      .map((n) => ({ label: new Date(n.datum).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" }), wert: n.note }))}
-                  />
-                )}
-                {notenDesFachs.map((n) =>
-                  neueinreichungId === n.id ? (
-                    <div key={n.id} style={{ display: "flex", flexDirection: "column", gap: 8, borderTop: "1px solid var(--border)", paddingTop: 8 }}>
-                      <select value={neueinreichungNote} onChange={(e) => setNeueinreichungNote(Number(e.target.value))}>
-                        {[1, 2, 3, 4, 5, 6].map((v) => (
-                          <option key={v} value={v}>
-                            Note {v}
-                          </option>
-                        ))}
-                      </select>
-                      <input placeholder="Notiz (optional)" value={neueinreichungNotiz} onChange={(e) => setNeueinreichungNotiz(e.target.value)} />
-                      <div style={{ display: "flex", gap: 6 }}>
-                        <button
-                          className="btn"
-                          style={{ padding: "6px 10px" }}
-                          onClick={() =>
-                            startTransition(async () => {
-                              await erneutEinreichen(n.id, { note: neueinreichungNote, notiz: neueinreichungNotiz || undefined });
-                              setNeueinreichungId(null);
-                            })
-                          }
-                        >
-                          Erneut einreichen
-                        </button>
-                        <button className="btn-secondary" style={{ padding: "6px 10px" }} onClick={() => setNeueinreichungId(null)}>
-                          Abbrechen
-                        </button>
-                      </div>
-                    </div>
-                  ) : korrekturId === n.id ? (
-                    <div key={n.id} style={{ display: "flex", flexDirection: "column", gap: 8, borderTop: "1px solid var(--border)", paddingTop: 8 }}>
-                      <select value={korrekturNote} onChange={(e) => setKorrekturNote(Number(e.target.value))}>
-                        {[1, 2, 3, 4, 5, 6].map((v) => (
-                          <option key={v} value={v}>
-                            Note {v}
-                          </option>
-                        ))}
-                      </select>
-                      <input placeholder="Thema" value={korrekturNotiz} onChange={(e) => setKorrekturNotiz(e.target.value)} />
-                      <div style={{ display: "flex", gap: 6 }}>
-                        <button
-                          className="btn"
-                          style={{ padding: "6px 10px" }}
-                          onClick={() =>
-                            startTransition(async () => {
-                              try {
-                                await korrigiereNote(n.id, { note: korrekturNote, notiz: korrekturNotiz || undefined });
-                                setKorrekturId(null);
-                              } catch (e: any) {
-                                alert(e.message);
-                              }
-                            })
-                          }
-                        >
-                          Speichern
-                        </button>
-                        <button className="btn-secondary" style={{ padding: "6px 10px" }} onClick={() => setKorrekturId(null)}>
-                          Abbrechen
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <details key={n.id} style={{ borderTop: "1px solid var(--border)", paddingTop: 8 }}>
-                      <summary
-                        style={{
-                          cursor: "pointer",
-                          listStyle: "none",
-                          display: "grid",
-                          gridTemplateColumns: "28px 1fr auto",
-                          alignItems: "center",
-                          gap: 8,
-                        }}
-                      >
-                        <span style={{ fontWeight: 700, fontSize: 16 }}>{n.note}</span>
-                        <span style={{ fontSize: 13, color: "var(--text-muted)" }}>
-                          {ART_LABEL[n.art]} · {new Date(n.datum).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" })}
-                          {n.fotoBase64 ? " · 📷" : ""}
-                        </span>
-                        <span className={`pill pill-${n.status.toLowerCase()}`}>{n.status}</span>
-                      </summary>
-                      <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8, paddingLeft: 2 }}>
-                        {n.fotoBase64 && (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={n.fotoBase64}
-                            alt="Notenzettel"
-                            style={{ width: 72, height: 72, objectFit: "cover", borderRadius: 8, cursor: "pointer" }}
-                            onClick={() => setGrossesBild(n.fotoBase64)}
-                          />
-                        )}
-                        <div style={{ fontSize: 13, color: "var(--text-muted)" }}>
-                          {n.gewichtung !== 1 && <div>Gewichtung {n.gewichtung}</div>}
-                          {n.notiz && <div>Thema: „{n.notiz}"</div>}
-                        </div>
-                        {istEltern && <HistorieVerlauf entityTyp="NOTE" entityId={n.id} />}
-                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                          {n.status === "ABGELEHNT" && kind.id === eigeneId && (
-                            <button
-                              className="btn-secondary"
-                              style={{ fontSize: 12 }}
-                              onClick={() => {
-                                setNeueinreichungId(n.id);
-                                setNeueinreichungNote(n.note);
-                                setNeueinreichungNotiz(n.notiz ?? "");
-                              }}
-                            >
-                              Erneut einreichen
-                            </button>
-                          )}
-                          {n.status === "OFFEN" && !istEltern && kind.id === eigeneId && (
-                            <>
-                              <button
-                                className="btn-secondary"
-                                style={{ fontSize: 12 }}
-                                onClick={() => {
-                                  setKorrekturId(n.id);
-                                  setKorrekturNote(n.note);
-                                  setKorrekturNotiz(n.notiz ?? "");
-                                }}
-                              >
-                                ✎ Bearbeiten
-                              </button>
-                              <button
-                                className="btn-secondary"
-                                style={{ fontSize: 12 }}
-                                onClick={() => {
-                                  if (confirm("Diese noch offene Note wirklich löschen?")) {
-                                    startTransition(async () => {
-                                      try {
-                                        await loescheNote(n.id);
-                                      } catch (e: any) {
-                                        alert(e.message);
-                                      }
-                                    });
-                                  }
-                                }}
-                              >
-                                🗑 Löschen
-                              </button>
-                            </>
-                          )}
-                          {istEltern && (
-                            <button
-                              className="btn-secondary"
-                              style={{ fontSize: 12 }}
-                              onClick={() => {
-                                if (confirm("Diese Note wirklich löschen?")) startTransition(() => loescheNote(n.id));
-                              }}
-                            >
-                              🗑 Löschen
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    </details>
-                  )
-                )}
-              </div>
-            </details>
-          );
-        })}
-        {kind.noten.length === 0 && (
-          <div className="empty-state">
-            <span className="empty-state-icon">📝</span>
-            <span>Noch keine Noten.</span>
-          </div>
-        )}
-      </div>
 
       {/* Fix-Batch 86 (Florians Wunsch): zurück in die Einstellungen verschoben — wird nur
           selten (i.d.R. einmal pro Schuljahr) geändert und ist damit keine tägliche

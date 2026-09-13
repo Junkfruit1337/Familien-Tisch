@@ -104,12 +104,10 @@ export const TUTORIAL_KAPITEL: TutorialKapitel[] = [
       "Noten eintragen, Durchschnitt wird automatisch berechnet",
       "Taschengeld-Verlauf und Sparziel-Fortschritt",
       "Anstehende Arbeiten/HÜ-Kontrollen mit Lerntipps",
+      "THG-App (Stundenplan/Vertretungsplan) per Knopf oben öffnen",
     ],
-    punkteKind: [
-      "KI-Lernhilfe: ein Foto der Aufgabe erklären lassen oder ähnliche Übungsaufgaben zum Trainieren erzeugen",
-      "Eigener Reiter „THG“ mit Stundenplan/Vertretungsplan der Schule",
-    ],
-    punkteEltern: ["THG-App (Stundenplan/Vertretungsplan) hier aufklappbar je Kind, statt eines eigenen Reiters"],
+    punkteKind: ["KI-Lernhilfe: ein Foto der Aufgabe erklären lassen oder ähnliche Übungsaufgaben zum Trainieren erzeugen"],
+    punkteEltern: ["Übersicht „Für alle Kinder“ ganz oben: was über alle Kinder hinweg ansteht"],
   },
   {
     id: "dienste",
