@@ -53,10 +53,12 @@ export const TUTORIAL_KAPITEL: TutorialKapitel[] = [
     farbe: BEREICH_FARBEN.kalender,
     nutzen: "Alle Termine der Familie an einem Ort — statt in getrennten Kalendern oder Zetteln am Kühlschrank.",
     punkte: [
-      "Termine für die ganze Familie oder nur einzelne Personen anlegen",
+      "Termine für die ganze Familie oder nur einzelne Personen anlegen, auch über mehrere Tage",
       "Wiederkehrende Termine (täglich, wöchentlich, monatlich, ...)",
       "Geburtstage erscheinen automatisch jedes Jahr",
+      "Anhänge (Foto/PDF) und eine Packliste je Termin",
     ],
+    punkteEltern: ["Termine aus einem anderen Kalender (z. B. Faminice) als ICS-Datei importieren"],
   },
   {
     id: "aufgaben",
@@ -89,6 +91,7 @@ export const TUTORIAL_KAPITEL: TutorialKapitel[] = [
       "Artikel per Text, Sprache oder Foto hinzufügen",
       "Kategorien werden automatisch erkannt und merken sich Korrekturen",
       "Einkaufsmodus hält den Bildschirm wach, während du abhakst",
+      "Liste als Text exportieren oder teilen",
     ],
     punkteKind: ["Wünsche einreichen, die die Eltern genehmigen oder ablehnen"],
   },
@@ -103,7 +106,11 @@ export const TUTORIAL_KAPITEL: TutorialKapitel[] = [
       "Taschengeld-Verlauf und Sparziel-Fortschritt",
       "Anstehende Arbeiten/HÜ-Kontrollen mit Lerntipps",
     ],
-    punkteKind: ["KI-Lernhilfe: ein Foto der Aufgabe erklären lassen oder ähnliche Übungsaufgaben zum Trainieren erzeugen"],
+    punkteKind: [
+      "KI-Lernhilfe: ein Foto der Aufgabe erklären lassen oder ähnliche Übungsaufgaben zum Trainieren erzeugen",
+      "Eigener Reiter „THG“ mit Stundenplan/Vertretungsplan der Schule",
+    ],
+    punkteEltern: ["THG-App (Stundenplan/Vertretungsplan) hier aufklappbar je Kind, statt eines eigenen Reiters"],
   },
   {
     id: "dienste",

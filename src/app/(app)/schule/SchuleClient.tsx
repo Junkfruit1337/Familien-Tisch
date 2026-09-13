@@ -448,6 +448,9 @@ export default function SchuleClient({
   schulEintraege: SchulEintrag[];
 }) {
   const [ausgewaehlt, setAusgewaehlt] = useState(kinder[0]?.id ?? "");
+  // Fix-Batch 100: eigener Umschalter für die THG-App, unabhängig von der Noten-Kind-Auswahl
+  // oben (man will ja z.B. Linas Noten sehen, aber Emils THG-Stundenplan aufrufen können).
+  const [thgKindId, setThgKindId] = useState(kinder[0]?.id ?? "");
   const [pending, startTransition] = useTransition();
   const kind = useMemo(() => kinder.find((k) => k.id === ausgewaehlt) ?? kinder[0], [kinder, ausgewaehlt]);
 
@@ -564,29 +567,43 @@ export default function SchuleClient({
         </p>
       )}
 
-      {/* Fix-Batch 99 (Florians Wunsch): kein eigener THG-Reiter mehr für Eltern (zu viele
-          Reiter) — stattdessen hier versteckt, aufklappbar pro Kind, da sich jedes Kind mit
-          eigenen Zugangsdaten einloggt. Kinder selbst haben weiterhin ihren eigenen THG-Reiter
+      {/* Fix-Batch 100 (Florians Feedback zu Fix-Batch 99): die pro Kind verschachtelten
+          <details> waren unübersichtlich und das Fenster zu klein — jetzt EIN großes Fenster
+          mit einer Umschalt-Leiste darüber (wie die Kind-Auswahl oben bei den Noten), statt
+          gestapelter Akkordeons. `key={thgKindId}` sorgt dafür, dass das Fenster beim
+          Wechseln neu lädt (springt zur THG-Startseite statt auf einer alten Unterseite
+          stehenzubleiben). Wichtige, mit Florian besprochene Grenze: die Anmeldung bei
+          app.thg-lu.de ist browserseitig an die Website gebunden, nicht an dieses Fenster —
+          ein Wechsel der Buttons zeigt weiterhin die zuletzt angemeldete Person, bis sich
+          jemand aktiv ab-/wieder anmeldet. Kinder haben weiterhin ihren eigenen THG-Reiter
           (dort meldet sich eh nur die eine Person an). */}
       {istEltern && (
         <details className="card">
           <summary style={{ cursor: "pointer", fontWeight: 600 }}>🏫 THG-App</summary>
           <p style={{ fontSize: 13, color: "var(--text-muted)" }}>
-            Stundenplan, Vertretungsplan &amp; Co. der Schule — Anmeldung läuft direkt auf der Seite der Schule, nicht
-            über Familientisch. Auf den Namen tippen, um die THG-App für dieses Kind aufzuklappen. Achtung: Es ist
-            überall dieselbe Anmeldung — meldet sich hier ein anderes Kind an, bleibt das so lange bestehen, bis sich
-            jemand wieder abmeldet.
+            Stundenplan, Vertretungsplan &amp; Co. der Schule. Mit den Buttons unten das Kind auswählen, dessen
+            THG-App angezeigt werden soll. Achtung: Es ist überall dieselbe Anmeldung — wechselt ihr das Kind, bleibt
+            die zuletzt angemeldete Person aktiv, bis sich jemand im Fenster abmeldet und die/der Nächste sich
+            anmeldet.
           </p>
-          {kinder.map((k) => (
-            <details key={k.id} style={{ marginTop: 8 }}>
-              <summary style={{ cursor: "pointer", fontSize: 14 }}>{k.name}</summary>
-              <iframe
-                src={THG_URL}
-                title={`THG-App – ${k.name}`}
-                style={{ width: "100%", height: "70vh", border: "1px solid var(--border)", borderRadius: "var(--radius)", marginTop: 8 }}
-              />
-            </details>
-          ))}
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
+            {kinder.map((k) => (
+              <button
+                key={k.id}
+                className="btn-secondary"
+                style={{ background: thgKindId === k.id ? k.farbe : undefined, color: thgKindId === k.id ? "#fff" : undefined }}
+                onClick={() => setThgKindId(k.id)}
+              >
+                {k.name}
+              </button>
+            ))}
+          </div>
+          <iframe
+            key={thgKindId}
+            src={THG_URL}
+            title={`THG-App – ${kinder.find((k) => k.id === thgKindId)?.name ?? ""}`}
+            style={{ width: "100%", height: "85vh", border: "1px solid var(--border)", borderRadius: "var(--radius)" }}
+          />
         </details>
       )}
 
