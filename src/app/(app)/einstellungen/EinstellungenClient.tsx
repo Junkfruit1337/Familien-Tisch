@@ -34,6 +34,7 @@ import {
 import PushBenachrichtigungen from "@/components/PushBenachrichtigungen";
 import DesignAuswahl from "@/components/DesignAuswahl";
 import NotengewichtungSektion from "@/components/NotengewichtungSektion";
+import TutorialModal from "@/components/TutorialModal";
 import Spracheingabe from "@/components/Spracheingabe";
 import SeitenTitel from "@/components/SeitenTitel";
 import { BEREICH_FARBEN } from "@/lib/bereichFarben";
@@ -174,6 +175,8 @@ export default function EinstellungenClient({
   hausprobleme: Hausproblem[];
 }) {
   const [pending, startTransition] = useTransition();
+  // Fix-Batch 88 (Florians Wunsch): In-App-Einführung, jederzeit hier öffenbar.
+  const [tutorialOffen, setTutorialOffen] = useState(false);
   const [name, setName] = useState("");
   const [rolle, setRolle] = useState("KIND");
   const [pin, setPinInput] = useState("");
@@ -943,7 +946,11 @@ export default function EinstellungenClient({
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
         {grossesTicketBildModal}
+        {tutorialOffen && <TutorialModal istEltern={istEltern} onClose={() => setTutorialOffen(false)} />}
         <SeitenTitel icon="⚙️" farbe={BEREICH_FARBEN.einstellungen}>Einstellungen</SeitenTitel>
+        <button className="btn-secondary" style={{ alignSelf: "flex-start" }} onClick={() => setTutorialOffen(true)}>
+          📘 Einführung
+        </button>
         {fehlerMeldenSektion}
         {geburtstagSektion}
         {kinder.length > 0 && (
@@ -964,7 +971,11 @@ export default function EinstellungenClient({
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       {grossesTicketBildModal}
+      {tutorialOffen && <TutorialModal istEltern={istEltern} onClose={() => setTutorialOffen(false)} />}
       <SeitenTitel icon="⚙️" farbe={BEREICH_FARBEN.einstellungen}>Einstellungen</SeitenTitel>
+      <button className="btn-secondary" style={{ alignSelf: "flex-start" }} onClick={() => setTutorialOffen(true)}>
+        📘 Einführung
+      </button>
 
       <details>
         <summary style={{ cursor: "pointer", fontWeight: 600 }}>
