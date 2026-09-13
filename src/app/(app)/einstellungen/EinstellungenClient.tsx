@@ -1351,7 +1351,13 @@ export default function EinstellungenClient({
                           <button
                             className="btn-secondary"
                             style={{ fontSize: 12, padding: "3px 8px" }}
-                            onClick={() => startTransition(() => deleteDienst(d.id))}
+                            onClick={() => {
+                              // Fix-Batch 94 (Audit-Ergebnis, Florians Wunsch "einheitliche
+                              // Lösch-Bestätigung überall wo sinnvoll"): eine Dienst-Definition
+                              // ließ sich bisher ohne Rückfrage löschen.
+                              if (!confirm(`„${d.bezeichnung}" wirklich löschen?`)) return;
+                              startTransition(() => deleteDienst(d.id));
+                            }}
                           >
                             🗑
                           </button>

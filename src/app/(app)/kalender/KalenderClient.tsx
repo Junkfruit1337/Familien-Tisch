@@ -332,10 +332,13 @@ export default function KalenderClient({
     });
   }
 
+  // Fix-Batch 94 (Audit-Ergebnis, Florians Wunsch "einheitliche Lösch-Bestätigung überall wo
+  // sinnvoll"): ein einzelner Termin ließ sich bisher ohne jede Rückfrage löschen.
   function loeschKlick(t: Termin) {
     if (t.seriesId || t.gruppeId) {
       setLoeschAuswahl({ id: t.id, titel: t.titel });
     } else {
+      if (!confirm(`„${t.titel}" wirklich löschen?`)) return;
       startTransition(() => deleteTermin(t.id, "eins"));
     }
   }
@@ -493,6 +496,10 @@ export default function KalenderClient({
                 className="btn-danger"
                 style={{ fontSize: 12, padding: "2px 8px" }}
                 onClick={() => {
+                  // Fix-Batch 94 (Audit-Ergebnis): löscht potenziell viele Termine auf einmal —
+                  // verdient eine explizite Rückfrage, mehr als "Nur diesen".
+                  const beschreibung = t.gruppeId && !t.seriesId ? "für alle Personen" : "die ganze Serie";
+                  if (!confirm(`„${t.titel}" wirklich ${beschreibung} löschen? Das betrifft möglicherweise mehrere Termine.`)) return;
                   startTransition(() => deleteTermin(t.id, "serie"));
                   setLoeschAuswahl(null);
                 }}
