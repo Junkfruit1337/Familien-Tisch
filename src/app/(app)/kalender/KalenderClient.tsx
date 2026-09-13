@@ -24,8 +24,45 @@ type Termin = {
   seriesId: string | null;
   gruppeId: string | null;
   erstelltVonId: string | null;
+  anhaenge: string[];
 };
 type Person = { id: string; name: string; farbe: string };
+
+// Fix-Batch 89 (Florians Wunsch: "einen Anhang hinzufügen ... wie z.B. ein Bild oder eine PDF
+// Datei") — Fotos werden wie überall in der App verkleinert (kleinere Datenbank-Zeilen, siehe
+// z.B. ticketFotoAufBase64 in den Einstellungen), PDFs unverändert als Base64 gelesen (analog
+// rezeptDateiAufBase64 im Essensplan).
+function terminDateiAufBase64(file: File): Promise<string> {
+  if (file.type === "application/pdf") {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = reject;
+      reader.onload = () => resolve(reader.result as string);
+      reader.readAsDataURL(file);
+    });
+  }
+  return new Promise((resolve, reject) => {
+    const bild = new Image();
+    const reader = new FileReader();
+    reader.onerror = reject;
+    reader.onload = () => {
+      bild.onerror = reject;
+      bild.onload = () => {
+        const maxBreite = 1000;
+        const skalierung = Math.min(1, maxBreite / bild.width);
+        const canvas = document.createElement("canvas");
+        canvas.width = bild.width * skalierung;
+        canvas.height = bild.height * skalierung;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return reject(new Error("Canvas nicht verfügbar"));
+        ctx.drawImage(bild, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL("image/jpeg", 0.72));
+      };
+      bild.src = reader.result as string;
+    };
+    reader.readAsDataURL(file);
+  });
+}
 
 const WOCHENTAGE = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
 
@@ -43,6 +80,15 @@ const WIEDERHOLUNGEN = [
 function isoDatum(iso: string): string {
   const d = new Date(iso);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+// Fix-Batch 89 (Florians Wunsch): Termine über mehrere Tage — ein Termin erscheint jetzt an
+// jedem Tag zwischen (inklusive) Start- und Enddatum, nicht mehr nur am Starttag. `ende` war
+// bisher nur als Datenfeld vorhanden, wurde aber nirgends im Formular gesetzt/genutzt.
+function umfasstTag(t: Termin, iso: string): boolean {
+  const startIso = isoDatum(t.start);
+  const endeIso = t.ende ? isoDatum(t.ende) : startIso;
+  return iso >= startIso && iso <= endeIso;
 }
 
 function isoVonDate(d: Date): string {
@@ -93,10 +139,13 @@ export default function KalenderClient({
 
   const [titel, setTitel] = useState("");
   const [start, setStart] = useState("");
+  const [ende, setEnde] = useState("");
   const [ganztaegig, setGanztaegig] = useState(false);
   const [personIds, setPersonIds] = useState<string[]>(istEltern ? [] : [eigeneId]);
   const [wiederholung, setWiederholung] = useState("KEINE");
   const [wiederholungBis, setWiederholungBis] = useState("");
+  const [anhaengeEntwurf, setAnhaengeEntwurf] = useState<string[]>([]);
+  const [grossesBild, setGrossesBild] = useState<string | null>(null);
   const [spracheVerarbeitung, setSpracheVerarbeitung] = useState(false);
   const erkannteKategorie = useMemo(() => erkenneTerminKategorie(titel), [titel]);
 
@@ -113,8 +162,8 @@ export default function KalenderClient({
     const heuteMitternacht = new Date(jetzt.toDateString());
     const liste = termine
       .filter(passtFilter)
-      .filter((t) => !nurZukunft || ausgewaehlterTag || new Date(t.start) >= heuteMitternacht)
-      .filter((t) => !ausgewaehlterTag || isoDatum(t.start) === ausgewaehlterTag);
+      .filter((t) => !nurZukunft || ausgewaehlterTag || new Date(t.ende ?? t.start) >= heuteMitternacht)
+      .filter((t) => !ausgewaehlterTag || umfasstTag(t, ausgewaehlterTag));
 
     // Geburtstage werden serverseitig für mehrere Jahre (letztes bis +5) vorausberechnet, damit
     // sie im Monats-/Wochen-/Tag-Raster an ihrem jeweiligen Datum erscheinen — in der flachen
@@ -158,7 +207,7 @@ export default function KalenderClient({
     for (let i = 0; i < 42; i++) {
       const datum = new Date(start0.getFullYear(), start0.getMonth(), start0.getDate() + i);
       const iso = isoVonDate(datum);
-      const eintraege = termine.filter((t) => passtFilter(t) && isoDatum(t.start) === iso);
+      const eintraege = termine.filter((t) => passtFilter(t) && umfasstTag(t, iso));
       zellen.push({ iso, tag: datum.getDate(), imMonat: datum.getMonth() === monat, heute: iso === heuteIso, eintraege });
     }
     return zellen;
@@ -171,7 +220,7 @@ export default function KalenderClient({
       const datum = addTage(wochenDatum, i);
       const iso = isoVonDate(datum);
       const eintraege = termine
-        .filter((t) => passtFilter(t) && isoDatum(t.start) === iso)
+        .filter((t) => passtFilter(t) && umfasstTag(t, iso))
         .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
       return { iso, datum, heute: iso === heuteIso, eintraege };
     });
@@ -181,7 +230,7 @@ export default function KalenderClient({
   const tagesEintraege = useMemo(() => {
     const iso = isoVonDate(tagesDatum);
     return termine
-      .filter((t) => passtFilter(t) && isoDatum(t.start) === iso)
+      .filter((t) => passtFilter(t) && umfasstTag(t, iso))
       .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tagesDatum, termine, filter]);
@@ -189,6 +238,8 @@ export default function KalenderClient({
   function formularZuruecksetzen() {
     setTitel("");
     setStart("");
+    setEnde("");
+    setAnhaengeEntwurf([]);
     setGanztaegig(false);
     setWiederholung("KEINE");
     setWiederholungBis("");
@@ -201,6 +252,8 @@ export default function KalenderClient({
     setTitel(t.titel);
     setGanztaegig(t.ganztaegig);
     setStart(t.ganztaegig ? isoDatum(t.start) : t.start.slice(0, 16));
+    setEnde(t.ende ? (t.ganztaegig ? isoDatum(t.ende) : t.ende.slice(0, 16)) : "");
+    setAnhaengeEntwurf(t.anhaenge);
     setWiederholung("KEINE");
     setWiederholungBis("");
     setZeigeFormular(true);
@@ -232,10 +285,15 @@ export default function KalenderClient({
 
   function submit() {
     if (!titel || !start) return;
+    const startWert = ganztaegig ? `${start}T00:00` : start;
+    const endeWert = ende ? (ganztaegig ? `${ende}T00:00` : ende) : undefined;
+    if (endeWert && new Date(endeWert) < new Date(startWert)) {
+      alert("Das \"Bis\"-Datum darf nicht vor dem Start liegen.");
+      return;
+    }
     startTransition(async () => {
-      const startWert = ganztaegig ? `${start}T00:00` : start;
       if (bearbeitenId) {
-        await updateTermin(bearbeitenId, { titel, start: startWert });
+        await updateTermin(bearbeitenId, { titel, start: startWert, ende: endeWert, anhaenge: anhaengeEntwurf });
       } else {
         // Fix-Batch 63 (Terminkonflikt-Check): vor dem Anlegen prüfen, ob am selben Tag für
         // dieselbe(n) Person(en) schon ein Termin oder eine Klassenarbeit/HÜ-Kontrolle steht
@@ -249,10 +307,12 @@ export default function KalenderClient({
         await createTermin({
           titel,
           start: startWert,
+          ende: endeWert,
           ganztaegig,
           personIds,
           wiederholung,
           wiederholungBis: wiederholungBis || undefined,
+          anhaenge: anhaengeEntwurf,
         });
       }
       formularZuruecksetzen();
@@ -290,9 +350,19 @@ export default function KalenderClient({
             {t.seriesId ? " 🔁" : ""}
           </div>
           <div style={{ fontSize: 13, color: "var(--text-muted)" }}>
-            {t.ganztaegig
-              ? new Date(t.start).toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit" })
-              : new Date(t.start).toLocaleString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+            {/* Fix-Batch 89 (Florians Wunsch): mehrtägige Termine zeigen den ganzen Zeitraum
+                statt nur den Starttag, sobald Start- und Enddatum auseinanderliegen. */}
+            {t.ende && isoDatum(t.ende) !== isoDatum(t.start) ? (
+              <>
+                {new Date(t.start).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" })}
+                {" – "}
+                {new Date(t.ende).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" })}
+              </>
+            ) : t.ganztaegig ? (
+              new Date(t.start).toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit" })
+            ) : (
+              new Date(t.start).toLocaleString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })
+            )}
             {t.typ !== "geburtstag" && (
               <>
                 {" · "}
@@ -311,6 +381,33 @@ export default function KalenderClient({
             {t.typ === "aufgabe" && <span> · Aufgabe</span>}
             {t.typ === "schule" && <span> · Schule</span>}
           </div>
+          {t.anhaenge.length > 0 && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
+              {t.anhaenge.map((a, i) =>
+                a.startsWith("data:application/pdf") ? (
+                  <a
+                    key={i}
+                    href={a}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn-secondary"
+                    style={{ fontSize: 12, padding: "4px 8px", textDecoration: "none" }}
+                  >
+                    📄 PDF öffnen
+                  </a>
+                ) : (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    key={i}
+                    src={a}
+                    alt="Anhang"
+                    style={{ width: 50, height: 50, objectFit: "cover", borderRadius: 8, cursor: "pointer" }}
+                    onClick={() => setGrossesBild(a)}
+                  />
+                )
+              )}
+            </div>
+          )}
           {loeschAuswahl?.id === t.id && (
             <div style={{ display: "flex", gap: 6, marginTop: 8, alignItems: "center", fontSize: 12, flexWrap: "wrap" }}>
               <span>Nur diesen Termin oder {t.gruppeId && !t.seriesId ? "alle Personen" : "die ganze Serie"} löschen?</span>
@@ -361,6 +458,15 @@ export default function KalenderClient({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      {grossesBild && (
+        <div
+          onClick={() => setGrossesBild(null)}
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.8)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={grossesBild} alt="Anhang groß" style={{ maxWidth: "100%", maxHeight: "100%", borderRadius: 8 }} />
+        </div>
+      )}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <SeitenTitel icon="📅" farbe={BEREICH_FARBEN.kalender}>Kalender</SeitenTitel>
         <button
@@ -395,6 +501,10 @@ export default function KalenderClient({
           </label>
           <label style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: -6 }}>{ganztaegig ? "Datum" : "Datum & Uhrzeit"}</label>
           <input type={ganztaegig ? "date" : "datetime-local"} value={start} onChange={(e) => setStart(e.target.value)} />
+          <label style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: -6 }}>
+            Bis (optional — für Termine über mehrere Tage)
+          </label>
+          <input type={ganztaegig ? "date" : "datetime-local"} value={ende} onChange={(e) => setEnde(e.target.value)} />
           {titel.trim() && (
             <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>
               Erkannt als: <strong>{TERMIN_KATEGORIE_LABEL[erkannteKategorie]}</strong>
@@ -438,6 +548,58 @@ export default function KalenderClient({
               )}
             </>
           )}
+          {/* Fix-Batch 89 (Florians Wunsch): Anhang (Bild oder PDF) hinterlegen — sichtbar nur
+              für die Zielperson(en) und die Person, die den Termin anlegt (siehe
+              anhaengeSichtbar in actions.ts). */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            <span style={{ fontSize: 12, color: "var(--text-muted)" }}>Anhang (optional — Bild oder PDF)</span>
+            <label className="btn-secondary" style={{ fontSize: 13, padding: "8px 12px", cursor: "pointer", alignSelf: "flex-start", display: "flex", alignItems: "center", gap: 4 }}>
+              📎 Datei hinzufügen
+              <input
+                type="file"
+                accept="image/*,application/pdf"
+                multiple
+                style={{ display: "none" }}
+                onChange={async (e) => {
+                  const files = Array.from(e.target.files ?? []);
+                  if (files.length === 0) return;
+                  e.target.value = "";
+                  const neue = await Promise.all(files.map((f) => terminDateiAufBase64(f)));
+                  setAnhaengeEntwurf((prev) => [...prev, ...neue]);
+                }}
+              />
+            </label>
+            {anhaengeEntwurf.length > 0 && (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                {anhaengeEntwurf.map((a, i) => (
+                  <div key={i} style={{ position: "relative" }}>
+                    {a.startsWith("data:application/pdf") ? (
+                      <div
+                        style={{ width: 60, height: 60, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, background: "var(--surface-soft, var(--border))", borderRadius: 8 }}
+                      >
+                        📄
+                      </div>
+                    ) : (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={a}
+                        alt="Anhang-Vorschau"
+                        style={{ width: 60, height: 60, objectFit: "cover", borderRadius: 8, cursor: "pointer" }}
+                        onClick={() => setGrossesBild(a)}
+                      />
+                    )}
+                    <button
+                      className="btn-secondary"
+                      style={{ position: "absolute", top: -6, right: -6, width: 20, height: 20, padding: 0, fontSize: 11, borderRadius: 999, lineHeight: 1 }}
+                      onClick={() => setAnhaengeEntwurf((prev) => prev.filter((_, idx) => idx !== i))}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
           <div style={{ display: "flex", gap: 8 }}>
             <button className="btn" disabled={pending} onClick={submit}>
               Speichern

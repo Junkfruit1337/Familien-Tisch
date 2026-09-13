@@ -33,6 +33,16 @@ function naechsterTermin(datum: Date, wiederholung: string): Date {
 // Fasst mehrere Personen-Zeilen desselben Anlege-Vorgangs (gemeinsame gruppeId + gleicher
 // Zeitpunkt) zu einem Anzeige-Eintrag zusammen (Fix-Batch 30) — ein Termin für mehrere
 // Personen erscheint dadurch im Kalender nur einmal, mit allen betroffenen Personen.
+// Fix-Batch 89 (Florians Wunsch): Anhänge dürfen NUR die Zielperson(en) des Termins und die
+// Person, die ihn erstellt hat, sehen — bewusst enger als die sonstige Sichtbarkeit von
+// Terminen (Eltern sehen z.B. auch Termine anderer Kinder, aber nicht zwangsläufig deren
+// Anhänge). Ein familienweiter Termin (kein personId) hat keine einzelne Zielperson — dort
+// bleiben die Anhänge für alle sichtbar, die den Termin ohnehin sehen.
+function anhaengeSichtbar(personIds: (string | null)[], erstelltVonId: string, eigeneId: string): boolean {
+  if (personIds.includes(null)) return true;
+  return personIds.includes(eigeneId) || erstelltVonId === eigeneId;
+}
+
 export async function listTermine() {
   const person = await requirePerson();
   const where =
@@ -71,6 +81,7 @@ export async function listTermine() {
       gruppeId: r.gruppeId,
       erstelltVonId: r.erstelltVonId,
       personen: r.person ? [r.person] : [],
+      anhaenge: anhaengeSichtbar([r.personId], r.erstelltVonId, person.id) ? r.anhaenge : [],
     })),
     ...[...gruppen.values()].map((liste) => ({
       id: liste[0].id,
@@ -84,6 +95,13 @@ export async function listTermine() {
       gruppeId: liste[0].gruppeId,
       erstelltVonId: liste[0].erstelltVonId,
       personen: liste.filter((r) => r.person).map((r) => r.person!),
+      anhaenge: anhaengeSichtbar(
+        liste.map((r) => r.personId),
+        liste[0].erstelltVonId,
+        person.id
+      )
+        ? liste[0].anhaenge
+        : [],
     })),
   ];
 
@@ -205,6 +223,7 @@ export async function createTermin(data: {
   personIds: string[];
   wiederholung?: string;
   wiederholungBis?: string;
+  anhaenge?: string[];
 }) {
   const person = await requirePerson();
   const zielIds: (string | null)[] =
@@ -249,6 +268,7 @@ export async function createTermin(data: {
           wiederholung: wiederholung as any,
           wiederholungBis: unbegrenzt ? null : wiederholungBis,
           erstelltVonId: person.id,
+          anhaenge: data.anhaenge ?? [],
         },
       });
       erstellte.push(termin);
@@ -272,7 +292,7 @@ export async function createTermin(data: {
 // löschen und neu anlegen; das vereinfacht das Bearbeiten von Mehrfach-Personen-Terminen
 // (jede Zeile der Gruppe wird beim Bearbeiten einzeln mit denselben Titel-/Zeit-Werten
 // aktualisiert, ohne ihre individuelle Personen-Zuordnung anzufassen).
-export async function updateTermin(id: string, data: { titel: string; start: string; ende?: string }) {
+export async function updateTermin(id: string, data: { titel: string; start: string; ende?: string; anhaenge?: string[] }) {
   const person = await requirePerson();
   const termin = await prisma.termin.findUnique({ where: { id } });
   if (!termin) return;
@@ -287,6 +307,7 @@ export async function updateTermin(id: string, data: { titel: string; start: str
       start: new Date(data.start),
       ende: data.ende ? new Date(data.ende) : null,
       kategorie,
+      anhaenge: data.anhaenge,
     },
   });
   await logAenderung({

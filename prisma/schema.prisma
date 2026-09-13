@@ -140,6 +140,10 @@ model Termin {
   wiederholung       Wiederholung    @default(KEINE)
   wiederholungBis    DateTime?
   erinnerungGesendet Boolean         @default(false)
+  // Fix-Batch 89 (Florians Wunsch): Anhänge (Bild oder PDF) je Termin, als Base64-Daten-URLs
+  // (analog Ticket.fotos/Hausproblem.fotos) — sichtbar nur für die Zielperson(en) und
+  // den/die Ersteller:in, siehe listTermine() in actions.ts.
+  anhaenge           String[]        @default([])
   erstelltVonId      String
   erstelltVon        Person          @relation("TerminErsteller", fields: [erstelltVonId], references: [id])
   createdAt          DateTime        @default(now())
