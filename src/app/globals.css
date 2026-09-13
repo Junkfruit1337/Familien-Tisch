@@ -608,3 +608,18 @@ input[type="radio"] {
   --shadow-sm: 0 2px 6px rgba(231, 143, 179, 0.14), 0 1px 2px rgba(231, 143, 179, 0.08);
   --shadow-md: 0 9px 20px rgba(231, 143, 179, 0.16), 0 3px 7px rgba(231, 143, 179, 0.1);
 }
+
+/* Fix-Batch 103 (Florians Wunsch, hands-on geprüft): die THG-Schul-App (eingebettet per
+   iframe) soll immer hell/lesbar sein, auch wenn das Telefon/der Browser im Dunkelmodus ist.
+   Ein eigener Test hat gezeigt: eine cross-origin-Seite in einem iframe folgt IMMER dem
+   echten System-/Browser-Dunkelmodus (prefers-color-scheme), völlig unabhängig davon, was die
+   umgebende Seite selbst an color-scheme/Theme setzt — es gibt dafür keine direkte CSS-
+   Möglichkeit, eine fremde Seite von außen auf "hell" zu zwingen. Einzig funktionierender Weg:
+   die Farben umdrehen, GENAU dann, wenn das echte System im Dunkelmodus ist (dann rendert die
+   fremde Seite selbst dunkel) — bei echtem Hellmodus greift die Regel gar nicht erst, die Seite
+   ist dann schon hell. Kosten: Bilder/Logos in der THG-App erscheinen dabei farblich verdreht,
+   Text bleibt aber lesbar — angesichts von Florians eigenem Qualitätsmaßstab bei komprimierten
+   Fotos ("muss nur ungefähr erkennbar sein") ein akzeptabler Kompromiss. */
+@media (prefers-color-scheme: dark) {
+  .thg-iframe-force-light { filter: invert(1) hue-rotate(180deg); }
+}

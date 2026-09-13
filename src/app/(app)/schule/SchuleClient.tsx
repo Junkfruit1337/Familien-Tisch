@@ -24,10 +24,7 @@ import SeitenTitel from "@/components/SeitenTitel";
 import LernHilfe from "@/components/LernHilfe";
 import VerlaufChart from "@/components/VerlaufChart";
 import { BEREICH_FARBEN } from "@/lib/bereichFarben";
-
-// Fix-Batch 99: dieselbe URL wie in src/app/(app)/thg/page.tsx (dortiger Reiter bleibt für
-// Kinder bestehen) — hier zusätzlich pro Kind aufklappbar für Eltern.
-const THG_URL = "https://app.thg-lu.de/";
+import ThgVollbild from "@/components/ThgVollbild";
 
 type Note = {
   id: string;
@@ -564,24 +561,17 @@ export default function SchuleClient({
         </p>
       )}
 
-      {/* Fix-Batch 102 (Florians Feedback zu Fix-Batch 101): die Kind-Buttons suggerierten einen
-          Konten-Wechsel, den es nicht gibt — Buttons ganz entfernt, stattdessen EIN einziger
-          aufklappbarer Bereich mit einem kurzen Warnhinweis direkt über dem großen Fenster
-          ("für jedes Kind separat anmelden"). Kinder haben weiterhin ihren eigenen THG-Reiter
-          (dort meldet sich eh nur die eine Person an). */}
+      {/* Fix-Batch 103 (Florians Bug-Meldung: Fenster war abgeschnitten, muss komplett
+          anzeigbar sein): das eingebettete Fenster in einer Karte war zu klein — jetzt ein
+          echtes Vollbild-Overlay per Knopf (ThgVollbild), das die App genauso groß zeigt wie
+          im eigenen Browser-Tab. Kinder haben weiterhin ihren eigenen THG-Reiter (dort meldet
+          sich eh nur die eine Person an). */}
       {istEltern && (
-        <details className="card">
-          <summary style={{ cursor: "pointer", fontWeight: 600 }}>🏫 THG-App</summary>
-          <p style={{ fontSize: 13, color: "var(--text-muted)" }}>Stundenplan, Vertretungsplan &amp; Co. der Schule.</p>
-          <div style={{ background: "var(--warning-soft)", borderRadius: "var(--radius)", padding: 10, fontSize: 13, marginBottom: 8 }}>
-            ⚠️ Es gibt nur EINE gemeinsame Anmeldung für alle Kinder — für jedes Kind separat abmelden und neu anmelden.
-          </div>
-          <iframe
-            src={THG_URL}
-            title="THG-App"
-            style={{ width: "100%", height: "85vh", border: "1px solid var(--border)", borderRadius: "var(--radius)" }}
-          />
-        </details>
+        <div className="card" style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          <strong>🏫 THG-App</strong>
+          <p style={{ margin: 0, fontSize: 13, color: "var(--text-muted)" }}>Stundenplan, Vertretungsplan &amp; Co. der Schule.</p>
+          <ThgVollbild hinweis="⚠️ Es gibt nur EINE gemeinsame Anmeldung für alle Kinder — für jedes Kind separat abmelden und neu anmelden." />
+        </div>
       )}
 
       {feier && <Feier onEnde={() => setFeier(false)} />}
