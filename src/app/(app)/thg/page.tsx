@@ -21,7 +21,7 @@ export default async function ThgPage() {
         Stundenplan, Vertretungsplan & Co. der Schule — Anmeldung läuft direkt auf der Seite der Schule, nicht über
         Familientisch.
       </p>
-      <ThgVollbild hinweis="Auf einem gemeinsam genutzten Gerät bleibt die Anmeldung bestehen, bis sich jemand abmeldet." />
+      <ThgVollbild hinweis="Auf einem gemeinsam genutzten Gerät bleibt die Anmeldung bestehen, bis sich jemand abmeldet. Falls schlecht lesbar: oben ☀️ hellen Modus wählen (wirkt nur, wenn nicht das Gerät selbst im Dunkelmodus ist)." />
     </div>
   );
 }

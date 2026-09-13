@@ -570,7 +570,7 @@ export default function SchuleClient({
         <div className="card" style={{ display: "flex", flexDirection: "column", gap: 4 }}>
           <strong>🏫 THG-App</strong>
           <p style={{ margin: 0, fontSize: 13, color: "var(--text-muted)" }}>Stundenplan, Vertretungsplan &amp; Co. der Schule.</p>
-          <ThgVollbild hinweis="⚠️ Es gibt nur EINE gemeinsame Anmeldung für alle Kinder — für jedes Kind separat abmelden und neu anmelden." />
+          <ThgVollbild hinweis="⚠️ Es gibt nur EINE gemeinsame Anmeldung für alle Kinder — für jedes Kind separat abmelden und neu anmelden. Falls schlecht lesbar: oben ☀️ hellen Modus wählen (wirkt nur, wenn nicht das Gerät selbst im Dunkelmodus ist)." />
         </div>
       )}
 
