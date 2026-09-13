@@ -663,19 +663,42 @@ export async function pruefeGelocktenExtraMahlzeitWechsel(extraMahlzeitId: strin
   return herkuenfte.map((h) => ({ artikelId: h.artikelId, artikelName: h.artikel.name, menge: h.menge }));
 }
 
+// Fix-Batch 105 (Florians Bug-Meldung: Knoblauchzehen beim Entfernen komplett verschwunden,
+// obwohl 5 davon manuell dazugekommen waren): "entfernen" rechnete den Mengen-Anteil eines
+// Gerichts bisher nur gegen ANDERE Herkünfte DERSELBEN Art aus (z. B. nur andere
+// ExtraMahlzeitHerkunft-Zeilen) — sowohl manuell/per Wunsch hinzugefügte Mengen
+// (ArtikelQuelle) als auch Mengen aus der jeweils ANDEREN Herkunftsart (Hauptgericht vs.
+// Zusatzmahlzeit) blieben dabei unberücksichtigt und gingen mit verloren, obwohl sie
+// unabhängig vom gerade entfernten Gericht weiterbestehen sollten. Jetzt: verbleibende Menge
+// = Summe ALLER anderen Herkünfte (beide Arten) + ALLER ArtikelQuelle-Einträge. Gemeinsam für
+// wendeEntscheidungenAn (Hauptgericht) und entsperreExtraMahlzeit (Zusatzmahlzeit) genutzt.
+async function berechneVerbleibendeMenge(
+  artikelId: string,
+  ausgenommen: { eintragId?: string; extraMahlzeitId?: string }
+): Promise<string | null> {
+  const [essensplanHerkuenfte, extraHerkuenfte, quellen] = await Promise.all([
+    prisma.essensplanHerkunft.findMany({
+      where: { artikelId, ...(ausgenommen.eintragId ? { eintragId: { not: ausgenommen.eintragId } } : {}) },
+    }),
+    prisma.extraMahlzeitHerkunft.findMany({
+      where: { artikelId, ...(ausgenommen.extraMahlzeitId ? { extraMahlzeitId: { not: ausgenommen.extraMahlzeitId } } : {}) },
+    }),
+    prisma.artikelQuelle.findMany({ where: { artikelId } }),
+  ]);
+  let neueMenge: string | null = null;
+  for (const h of [...essensplanHerkuenfte, ...extraHerkuenfte, ...quellen]) {
+    neueMenge = await mergeMenge(neueMenge, h.menge);
+  }
+  return neueMenge;
+}
+
 // Entsperrt eine Zusatzmahlzeit — dieselbe Entfernen/Behalten-Logik wie beim Hauptgericht
 // (siehe wendeEntscheidungenAn), nur auf ExtraMahlzeitHerkunft statt EssensplanHerkunft.
 export async function entsperreExtraMahlzeit(extraMahlzeitId: string, entscheidungen: { artikelId: string; aktion: "entfernen" | "behalten" }[]) {
   await requireParent();
   for (const e of entscheidungen) {
     if (e.aktion === "entfernen") {
-      const uebrige = await prisma.extraMahlzeitHerkunft.findMany({
-        where: { artikelId: e.artikelId, extraMahlzeitId: { not: extraMahlzeitId } },
-      });
-      let neueMenge: string | null = null;
-      for (const u of uebrige) {
-        neueMenge = await mergeMenge(neueMenge, u.menge);
-      }
+      const neueMenge = await berechneVerbleibendeMenge(e.artikelId, { extraMahlzeitId });
       const artikel = await prisma.einkaufsArtikel.findUnique({ where: { id: e.artikelId } });
       if (artikel) {
         if (!neueMenge && artikel.quelle === "essensplan") {
@@ -709,13 +732,7 @@ export async function pruefeGelocktenTagWechsel(eintragId: string) {
 async function wendeEntscheidungenAn(eintragId: string, entscheidungen: { artikelId: string; aktion: "entfernen" | "behalten" }[]) {
   for (const e of entscheidungen) {
     if (e.aktion === "entfernen") {
-      const uebrige = await prisma.essensplanHerkunft.findMany({
-        where: { artikelId: e.artikelId, eintragId: { not: eintragId } },
-      });
-      let neueMenge: string | null = null;
-      for (const u of uebrige) {
-        neueMenge = await mergeMenge(neueMenge, u.menge);
-      }
+      const neueMenge = await berechneVerbleibendeMenge(e.artikelId, { eintragId });
       const artikel = await prisma.einkaufsArtikel.findUnique({ where: { id: e.artikelId } });
       if (artikel) {
         if (!neueMenge && artikel.quelle === "essensplan") {
