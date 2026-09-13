@@ -324,6 +324,33 @@ export async function updateTermin(id: string, data: { titel: string; start: str
   revalidatePath("/dashboard");
 }
 
+// Fix-Batch 95 (Florians Wunsch): Titel für eine ganze Serie/Personen-Gruppe auf einmal ändern
+// (z.B. Tippfehler in "Klavier" korrigieren, statt jeden Termin einzeln). Bewusst nur der Titel
+// — Datum/Uhrzeit/Anhänge bleiben je Termin unterschiedlich und werden hier nicht angefasst.
+// Derselbe Gruppierungs-Vorrang wie beim Serien-Löschen (gruppeId vor seriesId), damit "ganze
+// Serie" konsistent dasselbe meint wie beim Löschen.
+export async function updateTerminSerie(id: string, titel: string) {
+  const person = await requirePerson();
+  const termin = await prisma.termin.findUnique({ where: { id } });
+  if (!termin) return;
+  if (person.rolle !== "ELTERN" && termin.erstelltVonId !== person.id) {
+    throw new Error("Das darfst du nicht bearbeiten.");
+  }
+  const kategorie = erkenneTerminKategorie(titel);
+  const where = termin.gruppeId ? { gruppeId: termin.gruppeId } : termin.seriesId ? { seriesId: termin.seriesId } : { id };
+  await prisma.termin.updateMany({ where, data: { titel, kategorie } });
+  await logAenderung({
+    entityTyp: "TERMIN",
+    entityId: id,
+    aktion: "geaendert",
+    alterWert: `${termin.titel} (ganze Serie)`,
+    neuerWert: titel,
+    geaendertVonId: person.id,
+  });
+  revalidatePath("/kalender");
+  revalidatePath("/dashboard");
+}
+
 // scope "serie" löscht alle Termine derselben Serie (Outlook-Stil-Rückfrage, Fragenkatalog Frage 2).
 // Fix-Batch 30: (1) Kinder dürfen nur noch selbst angelegte Termine löschen (vorher reichte
 // es, dass der Termin ihnen zugewiesen war — auch von Eltern gesetzte Termine ließen sich so

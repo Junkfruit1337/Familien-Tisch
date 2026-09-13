@@ -7,6 +7,9 @@ export type ErkannterTermin = {
   titel: string;
   datum: string | null; // JJJJ-MM-TT
   uhrzeit: string | null; // HH:MM
+  // Fix-Batch 95 (Florians Wunsch, Beispiel "jeden Dienstag Klavier 15–16 Uhr"): bisher wurde
+  // nur die Start-Uhrzeit erkannt, eine genannte Endzeit ging verloren.
+  endzeit: string | null; // HH:MM oder null, falls keine Endzeit genannt wurde
   personIds: string[]; // leer = niemand Bestimmtes genannt/Familie
   wiederholung: "KEINE" | "TAEGLICH" | "WOECHENTLICH" | "ZWEIWOECHENTLICH" | "MONATLICH";
   wiederholungBis: string | null; // JJJJ-MM-TT, null = unbegrenzt (falls wiederholung != KEINE)
@@ -113,6 +116,7 @@ export async function erkenneTerminAusSprache(text: string, personen: PersonFuer
     `Bekannte Personen (ID = Name): ${personenListe}\n\n` +
     "Extrahiere die Termin-Angaben und antworte AUSSCHLIESSLICH mit einem JSON-Objekt, ohne Markdown-Codeblock, ohne weiteren Text, in genau diesem Format:\n" +
     '{"titel": "kurzer prägnanter Titel", "datum": "JJJJ-MM-TT", "uhrzeit": "HH:MM oder null, falls keine Uhrzeit genannt wurde", ' +
+    '"endzeit": "HH:MM oder null (z.B. bei \\"von 15 bis 16 Uhr\\" oder \\"15-16 Uhr\\" ist endzeit 16:00; null, falls keine Endzeit genannt wurde)", ' +
     '"personIds": ["eine oder mehrere IDs aus der Liste — leeres Array, falls niemand Bestimmtes/die ganze Familie gemeint ist"], ' +
     '"wiederholung": "KEINE oder TAEGLICH oder WOECHENTLICH oder ZWEIWOECHENTLICH oder MONATLICH", ' +
     '"wiederholungBis": "JJJJ-MM-TT oder null (null bedeutet unbegrenzt, nur relevant falls wiederholung nicht KEINE ist)"}\n' +
@@ -125,6 +129,7 @@ export async function erkenneTerminAusSprache(text: string, personen: PersonFuer
     titel: typeof d.titel === "string" && d.titel.trim() ? d.titel.trim() : text.trim(),
     datum: leseDatumsfeld(d.datum),
     uhrzeit: typeof d.uhrzeit === "string" && /^\d{1,2}:\d{2}$/.test(d.uhrzeit) ? d.uhrzeit : null,
+    endzeit: typeof d.endzeit === "string" && /^\d{1,2}:\d{2}$/.test(d.endzeit) ? d.endzeit : null,
     personIds: lesePersonIds(d.personIds, personen),
     wiederholung: leseWiederholung(d),
     wiederholungBis: leseDatumsfeld(d.wiederholungBis),

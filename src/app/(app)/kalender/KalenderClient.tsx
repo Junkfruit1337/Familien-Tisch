@@ -4,6 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import {
   createTermin,
   updateTermin,
+  updateTerminSerie,
   deleteTermin,
   erkenneTerminAusText,
   pruefeTerminKonflikt,
@@ -51,6 +52,9 @@ function terminDateiAufBase64(file: File): Promise<string> {
       reader.readAsDataURL(file);
     });
   }
+  // Fix-Batch 95 (Florians Wunsch, generell alle persistierten Fotos stärker komprimieren
+  // außer dem Notenfoto): PDFs (oben) bleiben unangetastet, da dort eher wirklich lesbare
+  // Infozettel landen — Fotos hier sind eher Schnappschüsse, "ungefähr erkennen" reicht.
   return new Promise((resolve, reject) => {
     const bild = new Image();
     const reader = new FileReader();
@@ -58,7 +62,7 @@ function terminDateiAufBase64(file: File): Promise<string> {
     reader.onload = () => {
       bild.onerror = reject;
       bild.onload = () => {
-        const maxBreite = 1000;
+        const maxBreite = 700;
         const skalierung = Math.min(1, maxBreite / bild.width);
         const canvas = document.createElement("canvas");
         canvas.width = bild.width * skalierung;
@@ -66,7 +70,7 @@ function terminDateiAufBase64(file: File): Promise<string> {
         const ctx = canvas.getContext("2d");
         if (!ctx) return reject(new Error("Canvas nicht verfügbar"));
         ctx.drawImage(bild, 0, 0, canvas.width, canvas.height);
-        resolve(canvas.toDataURL("image/jpeg", 0.72));
+        resolve(canvas.toDataURL("image/jpeg", 0.55));
       };
       bild.src = reader.result as string;
     };
@@ -159,6 +163,10 @@ export default function KalenderClient({
   // Fix-Batch 92 (Florians Wunsch): Packliste/Checkliste je Termin — Entwurfstext für ein
   // neues Checklisten-Item, pro Termin getrennt gehalten.
   const [checklisteNeuerPunkt, setChecklisteNeuerPunkt] = useState<Record<string, string>>({});
+  // Fix-Batch 95 (Florians Wunsch): wiederkehrenden Termin nachträglich als GANZE Serie
+  // bearbeiten können (bisher nur der Titel/die Zeit des einen angeklickten Einzeltermins).
+  const [bearbeitenSerieMoeglich, setBearbeitenSerieMoeglich] = useState(false);
+  const [fuerGanzeSerie, setFuerGanzeSerie] = useState(false);
   const [spracheVerarbeitung, setSpracheVerarbeitung] = useState(false);
   const erkannteKategorie = useMemo(() => erkenneTerminKategorie(titel), [titel]);
 
@@ -253,6 +261,8 @@ export default function KalenderClient({
     setStart("");
     setEnde("");
     setAnhaengeEntwurf([]);
+    setBearbeitenSerieMoeglich(false);
+    setFuerGanzeSerie(false);
     setGanztaegig(false);
     setWiederholung("KEINE");
     setWiederholungBis("");
@@ -269,6 +279,8 @@ export default function KalenderClient({
     setAnhaengeEntwurf(t.anhaenge);
     setWiederholung("KEINE");
     setWiederholungBis("");
+    setBearbeitenSerieMoeglich(!!(t.seriesId || t.gruppeId));
+    setFuerGanzeSerie(false);
     setZeigeFormular(true);
   }
 
@@ -288,6 +300,9 @@ export default function KalenderClient({
       // Keine Uhrzeit erkannt → als ganztägig übernehmen statt eine Uhrzeit zu erfinden.
       setGanztaegig(!t.uhrzeit);
       setStart(t.uhrzeit ? `${datum}T${t.uhrzeit}` : datum);
+      // Fix-Batch 95 (Florians Wunsch, Beispiel "jeden Dienstag Klavier 15–16 Uhr"): eine
+      // genannte Endzeit jetzt ebenfalls übernehmen, statt sie stillschweigend zu verwerfen.
+      setEnde(t.uhrzeit && t.endzeit ? `${datum}T${t.endzeit}` : "");
       if (istEltern && t.personIds.length > 0) setPersonIds(t.personIds);
       setWiederholung(t.wiederholung);
       setWiederholungBis(t.wiederholungBis ?? "");
@@ -306,7 +321,11 @@ export default function KalenderClient({
     }
     startTransition(async () => {
       if (bearbeitenId) {
-        await updateTermin(bearbeitenId, { titel, start: startWert, ende: endeWert, anhaenge: anhaengeEntwurf });
+        if (fuerGanzeSerie) {
+          await updateTerminSerie(bearbeitenId, titel);
+        } else {
+          await updateTermin(bearbeitenId, { titel, start: startWert, ende: endeWert, anhaenge: anhaengeEntwurf });
+        }
       } else {
         // Fix-Batch 63 (Terminkonflikt-Check): vor dem Anlegen prüfen, ob am selben Tag für
         // dieselbe(n) Person(en) schon ein Termin oder eine Klassenarbeit/HÜ-Kontrolle steht
@@ -561,25 +580,39 @@ export default function KalenderClient({
           {!bearbeitenId && <Spracheingabe onErgebnis={spracheErkannt} disabled={spracheVerarbeitung} />}
           {spracheVerarbeitung && <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>Spracheingabe wird verarbeitet …</p>}
           <input placeholder="Titel" value={titel} onChange={(e) => setTitel(e.target.value)} />
-          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 14 }}>
-            <input
-              type="checkbox"
-              checked={ganztaegig}
-              onChange={(e) => {
-                const neu = e.target.checked;
-                setGanztaegig(neu);
-                // Beim Umschalten den bisherigen Wert sinnvoll umformatieren, statt ihn zu verwerfen.
-                setStart((prev) => (neu ? prev.slice(0, 10) : prev ? `${prev}T09:00` : prev));
-              }}
-            />
-            Ganztägig (keine Uhrzeit)
-          </label>
-          <label style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: -6 }}>{ganztaegig ? "Datum" : "Datum & Uhrzeit"}</label>
-          <input type={ganztaegig ? "date" : "datetime-local"} value={start} onChange={(e) => setStart(e.target.value)} />
-          <label style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: -6 }}>
-            Bis (optional — für Termine über mehrere Tage)
-          </label>
-          <input type={ganztaegig ? "date" : "datetime-local"} value={ende} onChange={(e) => setEnde(e.target.value)} />
+          {/* Fix-Batch 95 (Florians Wunsch): wiederkehrenden Termin/Personen-Gruppe nachträglich
+              als GANZE Serie bearbeiten, statt nur den einen angeklickten Einzeltermin. Bewusst
+              nur der Titel wird dabei übernommen — Datum/Uhrzeit/Anhänge bleiben je Termin
+              unterschiedlich, deshalb werden die Felder unten dann ausgeblendet. */}
+          {bearbeitenId && bearbeitenSerieMoeglich && (
+            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
+              <input type="checkbox" checked={fuerGanzeSerie} onChange={(e) => setFuerGanzeSerie(e.target.checked)} />
+              Titel für die ganze Serie übernehmen (nicht nur diesen Termin)
+            </label>
+          )}
+          {!fuerGanzeSerie && (
+            <>
+              <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 14 }}>
+                <input
+                  type="checkbox"
+                  checked={ganztaegig}
+                  onChange={(e) => {
+                    const neu = e.target.checked;
+                    setGanztaegig(neu);
+                    // Beim Umschalten den bisherigen Wert sinnvoll umformatieren, statt ihn zu verwerfen.
+                    setStart((prev) => (neu ? prev.slice(0, 10) : prev ? `${prev}T09:00` : prev));
+                  }}
+                />
+                Ganztägig (keine Uhrzeit)
+              </label>
+              <label style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: -6 }}>{ganztaegig ? "Datum" : "Datum & Uhrzeit"}</label>
+              <input type={ganztaegig ? "date" : "datetime-local"} value={start} onChange={(e) => setStart(e.target.value)} />
+              <label style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: -6 }}>
+                Bis (optional — für Termine über mehrere Tage)
+              </label>
+              <input type={ganztaegig ? "date" : "datetime-local"} value={ende} onChange={(e) => setEnde(e.target.value)} />
+            </>
+          )}
           {titel.trim() && (
             <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>
               Erkannt als: <strong>{TERMIN_KATEGORIE_LABEL[erkannteKategorie]}</strong>
@@ -628,6 +661,7 @@ export default function KalenderClient({
               Kamera anbot. Zwei-Buttons-Muster wie beim Rezept-Foto-Upload im Essensplan
               (📷 Foto mit capture="environment" öffnet direkt die Kamera, 📁 Datei für Galerie
               + PDF). */}
+          {!fuerGanzeSerie && (
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             <span style={{ fontSize: 12, color: "var(--text-muted)" }}>Anhang (optional — Bild oder PDF)</span>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
@@ -695,6 +729,7 @@ export default function KalenderClient({
               </div>
             )}
           </div>
+          )}
           <div style={{ display: "flex", gap: 8 }}>
             <button className="btn" disabled={pending} onClick={submit}>
               Speichern

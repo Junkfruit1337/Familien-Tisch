@@ -40,8 +40,13 @@ import SeitenTitel from "@/components/SeitenTitel";
 import { BEREICH_FARBEN } from "@/lib/bereichFarben";
 import { formatiereDatumUhrzeit } from "@/lib/datumFormat";
 
-// Für Ticket-Fotos (z.B. Screenshot eines Fehlers) — analog dem Notenfoto-Resize in
-// SchuleClient.tsx.
+// Für Ticket-/Hausproblem-Fotos (z.B. Screenshot eines Fehlers) — rein zum Anschauen durch
+// Eltern gedacht, keine OCR/KI-Erkennung wie beim Notenfoto. Fix-Batch 95 (Florians Wunsch,
+// "generell alle Fotos... es reicht, wenn man ungefähr erkennt was darauf ist"): stärker
+// komprimiert als vorher, um die Datenbank (alles liegt als Base64 in Postgres) nicht unnötig
+// wachsen zu lassen — bewusst NICHT beim Notenfoto (muss lesbar bleiben) oder bei Fotos, die
+// eine KI danach ausliest (Lernhilfe, Einkaufslisten-Import, Rezept-Import — dort würde
+// stärkeres Komprimieren die Erkennung verschlechtern).
 function ticketFotoAufBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const bild = new Image();
@@ -50,7 +55,7 @@ function ticketFotoAufBase64(file: File): Promise<string> {
     reader.onload = () => {
       bild.onerror = reject;
       bild.onload = () => {
-        const maxBreite = 1000;
+        const maxBreite = 700;
         const skalierung = Math.min(1, maxBreite / bild.width);
         const canvas = document.createElement("canvas");
         canvas.width = bild.width * skalierung;
@@ -58,7 +63,7 @@ function ticketFotoAufBase64(file: File): Promise<string> {
         const ctx = canvas.getContext("2d");
         if (!ctx) return reject(new Error("Canvas nicht verfügbar"));
         ctx.drawImage(bild, 0, 0, canvas.width, canvas.height);
-        resolve(canvas.toDataURL("image/jpeg", 0.72));
+        resolve(canvas.toDataURL("image/jpeg", 0.55));
       };
       bild.src = reader.result as string;
     };
