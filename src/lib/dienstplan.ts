@@ -43,7 +43,13 @@ export async function ensureWeekAssignments(wocheStart: Date) {
 
   const created = [];
   for (let schicht = 1; schicht <= 3; schicht++) {
-    const kindIndex = (offset + schicht - 1) % 3;
+    // Fix-Batch 91 (Florians Bug-Meldung): pro Person rückte die Schicht-Nummer bisher jede
+    // Woche eine Nummer NACH UNTEN (3→2→1→3...), obwohl die Kinder seit Monaten in die andere
+    // Richtung rotieren (1→2→3→1...). Die alte Formel ((offset + schicht - 1) % 3) ergab genau
+    // die falsche Richtung; ((schicht - offset) % 3) ist an derselben Referenzwoche verankert,
+    // dreht die Richtung aber um. Bereits erzeugte künftige Wochen werden dazu einmalig in
+    // prisma/seed.ts korrigiert.
+    const kindIndex = (((schicht - offset) % 3) + 3) % 3;
     const berechnetesKindId = byName[ROTATIONS_KINDER_NAMEN[kindIndex]]?.id;
     const kindId = dauerhaft[schicht] ?? berechnetesKindId;
     if (!kindId) continue;

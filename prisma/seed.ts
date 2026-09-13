@@ -98,6 +98,38 @@ async function main() {
     await prisma.einkaufsKategorie.delete({ where: { id: alteObstGemueseKategorie.id } });
   }
 
+  // Einmalige, aber gefahrlos wiederholbare Korrektur (Fix-Batch 91, Florians Bug-Meldung):
+  // die Dienst-Rotation lief bisher pro Person eine Schicht-Nummer pro Woche NACH UNTEN statt
+  // nach oben — die Kinder machen es seit Monaten andersherum. Ab dem 14.09.2026 ("ab morgen",
+  // Florians Wunsch) korrigiert; die laufende Woche (bis 13.09.2026) bleibt unangetastet.
+  // Bereits erzeugte DienstZuweisung-Zeilen ab diesem Datum werden hier einmalig auf die neue
+  // Formel (siehe lib/dienstplan.ts) umgerechnet — läuft bei jedem weiteren Deploy einfach ins
+  // Leere, sobald alle betroffenen Zeilen schon korrekt sind.
+  const ROTATION_KORREKTUR_AB = new Date(Date.UTC(2026, 8, 14));
+  const ROTATION_ANCHOR_MONDAY = new Date(Date.UTC(2026, 4, 11));
+  const ROTATIONS_KINDER_NAMEN = ["Lina", "Emil", "Emma"];
+  const zuKorrigierendeZuweisungen = await prisma.dienstZuweisung.findMany({
+    where: { wocheStart: { gte: ROTATION_KORREKTUR_AB } },
+  });
+  if (zuKorrigierendeZuweisungen.length > 0) {
+    const rotationsKinder = await prisma.person.findMany({ where: { name: { in: ROTATIONS_KINDER_NAMEN } } });
+    const byName = Object.fromEntries(rotationsKinder.map((k) => [k.name, k]));
+    const dauerhafteZuordnungen = await prisma.dauerhafteZuordnung.findMany({ where: { art: "DIENST" } });
+    const dauerhaftProSlot = Object.fromEntries(dauerhafteZuordnungen.map((d) => [d.slot, d.kindId]));
+    const msProWoche = 7 * 24 * 60 * 60 * 1000;
+
+    for (const zuweisung of zuKorrigierendeZuweisungen) {
+      if (dauerhaftProSlot[zuweisung.schichtNummer]) continue; // dauerhafte Zuordnung hat Vorrang, unverändert lassen
+      const wochenSeitAnker = Math.round((zuweisung.wocheStart.getTime() - ROTATION_ANCHOR_MONDAY.getTime()) / msProWoche);
+      const offset = ((wochenSeitAnker % 3) + 3) % 3;
+      const kindIndex = (((zuweisung.schichtNummer - offset) % 3) + 3) % 3;
+      const korrektesKindId = byName[ROTATIONS_KINDER_NAMEN[kindIndex]]?.id;
+      if (korrektesKindId && korrektesKindId !== zuweisung.kindId) {
+        await prisma.dienstZuweisung.update({ where: { id: zuweisung.id }, data: { kindId: korrektesKindId } });
+      }
+    }
+  }
+
   // Schulferien-Referenzdaten (Fix-Batch 27) — jedes Jahr per Deploy neu synchronisiert,
   // sobald schulferienDaten.ts um ein weiteres Schuljahr ergänzt wird.
   for (const f of SCHULFERIEN) {
