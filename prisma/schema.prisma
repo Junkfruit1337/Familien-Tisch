@@ -490,15 +490,18 @@ model Rezept {
 }
 
 model EssensplanEintrag {
-  id             String   @id @default(cuid())
-  wocheStart     DateTime // Samstag der jeweiligen Woche
-  tag            DateTime
-  rezeptId       String
-  rezept         Rezept   @relation(fields: [rezeptId], references: [id])
-  esserIds       String[] @default([])
-  esserFaktor    Float    @default(1)
-  extraPortionen Float    @default(0) // z.B. Gäste an dem Tag, zusätzlich zu den ausgewählten Essern
-  gelockt        Boolean  @default(false)
+  id                        String   @id @default(cuid())
+  wocheStart                DateTime // Samstag der jeweiligen Woche
+  tag                       DateTime
+  rezeptId                  String
+  rezept                    Rezept   @relation(fields: [rezeptId], references: [id])
+  esserIds                  String[] @default([])
+  esserFaktor               Float    @default(1)
+  extraPortionen            Float    @default(0) // z.B. Gäste an dem Tag, zusätzlich zu den ausgewählten Essern
+  gelockt                   Boolean  @default(false)
+  // Fix-Batch 92 (Florians Wunsch): verhindert Doppel-Versand der Push-Erinnerung "morgen ist
+  // das noch nicht eingekauft" (siehe pruefeUndSendeErinnerungen in dashboard/actions.ts).
+  einkaufErinnerungGesendet Boolean  @default(false)
 
   herkuenfte EssensplanHerkunft[]
 }
@@ -513,15 +516,17 @@ model EssensplanEintrag {
 // draufaddiert hätte — jetzt exakt dieselbe Logik wie beim Hauptgericht (gelockt, erst nach
 // Entsperren mit Entfernen/Behalten-Abfrage wieder änderbar/löschbar).
 model ExtraMahlzeit {
-  id          String   @id @default(cuid())
-  wocheStart  DateTime // Samstag der jeweiligen Woche, wie bei EssensplanEintrag
-  tag         DateTime
-  bezeichnung String // frei, z.B. "Frühstück", "Mittags-Snack", "Zusätzliches warmes Essen"
-  rezeptId    String
-  rezept      Rezept   @relation(fields: [rezeptId], references: [id])
-  faktor      Float    @default(1) // bezieht sich direkt auf die im Rezept geschriebene Menge
-  gelockt     Boolean  @default(false)
-  createdAt   DateTime @default(now())
+  id                        String   @id @default(cuid())
+  wocheStart                DateTime // Samstag der jeweiligen Woche, wie bei EssensplanEintrag
+  tag                       DateTime
+  bezeichnung               String // frei, z.B. "Frühstück", "Mittags-Snack", "Zusätzliches warmes Essen"
+  rezeptId                  String
+  rezept                    Rezept   @relation(fields: [rezeptId], references: [id])
+  faktor                    Float    @default(1) // bezieht sich direkt auf die im Rezept geschriebene Menge
+  gelockt                   Boolean  @default(false)
+  // Fix-Batch 92: siehe Kommentar bei EssensplanEintrag.einkaufErinnerungGesendet.
+  einkaufErinnerungGesendet Boolean  @default(false)
+  createdAt                 DateTime @default(now())
 
   herkuenfte ExtraMahlzeitHerkunft[]
 }
@@ -647,12 +652,15 @@ model Hausproblem {
 // Statische Referenzdaten (aus src/lib/schulferienDaten.ts, jährlich per Deploy neu
 // synchronisiert — analog dem Dienstkatalog-Vorlage-Mechanismus), nicht in der App editierbar.
 model Schulferien {
-  id         String   @id @default(cuid())
-  bundesland String
-  schuljahr  String // z.B. "2026/2027"
-  typ        String // HERBST | WEIHNACHTEN | WINTER | OSTERN | PFINGSTEN | SOMMER
-  start      DateTime
-  ende       DateTime
+  id                 String   @id @default(cuid())
+  bundesland         String
+  schuljahr          String // z.B. "2026/2027"
+  typ                String // HERBST | WEIHNACHTEN | WINTER | OSTERN | PFINGSTEN | SOMMER
+  start              DateTime
+  ende               DateTime
+  // Fix-Batch 92 (Florians Wunsch): verhindert Doppel-Versand der 7-Tage-Vorher-Push-
+  // Erinnerung (siehe pruefeUndSendeErinnerungen in dashboard/actions.ts).
+  erinnerungGesendet Boolean  @default(false)
 
   @@unique([bundesland, schuljahr, typ])
 }

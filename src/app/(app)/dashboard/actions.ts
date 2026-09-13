@@ -60,6 +60,73 @@ async function pruefeUndSendeErinnerungen() {
     });
     await prisma.schulEintrag.update({ where: { id: s.id }, data: { lerntippGesendet: true } });
   }
+
+  // Fix-Batch 92 (Florians Wunsch): Push-Erinnerung an die Eltern, wenn für ein MORGEN
+  // geplantes Gericht (Hauptgericht oder Zusatzmahlzeit) noch keine Zutaten auf die
+  // Einkaufsliste übernommen wurden — dieselbe Prüfung wie die "⚠️ Noch nicht eingekauft"-
+  // Warnung (Fix-Batch 87), hier zusätzlich aktiv als Push statt nur passiv angezeigt.
+  const morgen = new Date(heute);
+  morgen.setDate(morgen.getDate() + 1);
+  const uebermorgen = new Date(morgen);
+  uebermorgen.setDate(uebermorgen.getDate() + 1);
+
+  const morgigerEintrag = await prisma.essensplanEintrag.findFirst({
+    where: { tag: { gte: morgen, lt: uebermorgen }, einkaufErinnerungGesendet: false },
+    include: { rezept: true, _count: { select: { herkuenfte: true } } },
+  });
+  if (morgigerEintrag) {
+    if (morgigerEintrag._count.herkuenfte === 0) {
+      await sendePushAnEltern({
+        title: "Einkaufs-Erinnerung 🛒",
+        body: `Für morgen ist "${morgigerEintrag.rezept.name}" geplant, aber die Zutaten sind noch nicht auf der Einkaufsliste.`,
+        url: "/essensplan",
+      });
+    }
+    await prisma.essensplanEintrag.update({ where: { id: morgigerEintrag.id }, data: { einkaufErinnerungGesendet: true } });
+  }
+
+  const morgigeExtras = await prisma.extraMahlzeit.findMany({
+    where: { tag: { gte: morgen, lt: uebermorgen }, einkaufErinnerungGesendet: false },
+    include: { rezept: true, _count: { select: { herkuenfte: true } } },
+  });
+  for (const extra of morgigeExtras) {
+    if (extra._count.herkuenfte === 0) {
+      await sendePushAnEltern({
+        title: "Einkaufs-Erinnerung 🛒",
+        body: `Für morgen ist "${extra.bezeichnung}: ${extra.rezept.name}" geplant, aber die Zutaten sind noch nicht auf der Einkaufsliste.`,
+        url: "/essensplan",
+      });
+    }
+    await prisma.extraMahlzeit.update({ where: { id: extra.id }, data: { einkaufErinnerungGesendet: true } });
+  }
+
+  // Fix-Batch 92 (Florians Wunsch): Push 7 Tage vor Ferienbeginn, analog zur bereits
+  // bestehenden Geburtstags-Erinnerung — der Countdown stand bisher nur auf der Schule-Seite,
+  // ohne aktive Benachrichtigung.
+  const FERIEN_LABEL: Record<string, string> = {
+    HERBST: "Herbstferien",
+    WEIHNACHTEN: "Weihnachtsferien",
+    WINTER: "Winterferien",
+    OSTERN: "Osterferien",
+    PFINGSTEN: "Pfingstferien",
+    SOMMER: "Sommerferien",
+  };
+  const in8Tagen = new Date(in7Tagen);
+  in8Tagen.setDate(in8Tagen.getDate() + 1);
+  const baldigeFerien = await prisma.schulferien.findMany({
+    where: { start: { gte: in7Tagen, lt: in8Tagen }, erinnerungGesendet: false },
+  });
+  for (const ferien of baldigeFerien) {
+    const betroffeneKinder = await prisma.person.findMany({ where: { aktiv: true, bundesland: ferien.bundesland } });
+    if (betroffeneKinder.length > 0) {
+      await sendePushAnEltern({
+        title: "Ferien in einer Woche 🏖️",
+        body: `${FERIEN_LABEL[ferien.typ] ?? ferien.typ} beginnen in 7 Tagen (${betroffeneKinder.map((k) => k.name).join(", ")}).`,
+        url: "/schule",
+      });
+    }
+    await prisma.schulferien.update({ where: { id: ferien.id }, data: { erinnerungGesendet: true } });
+  }
 }
 
 export async function getDashboardDaten() {

@@ -6,6 +6,7 @@ import { logAenderung } from "@/lib/history";
 import { erkenneKategorie } from "@/lib/kategorisierung";
 import { erkenneArtikelAusSprache, type ErkannterArtikel } from "@/lib/spracheErkennung";
 import { erkenneEinkaufslisteAusBild, type ErkannterListenArtikel } from "@/lib/einkaufslisteErkennung";
+import { sendePushAnEltern } from "@/lib/push";
 import { revalidatePath } from "next/cache";
 
 // Spracheingabe fürs Artikel-/Wunsch-Formular (Fix-Batch 30) — für Eltern (Artikel direkt
@@ -395,12 +396,20 @@ export async function deleteArtikel(id: string) {
 }
 
 // Kind: Wunsch einreichen
+// Fix-Batch 92 (Florians Wunsch): Eltern bekamen bisher keine aktive Benachrichtigung für neue
+// Einkaufswünsche (nur fürs Dashboard sichtbar) — analog zur bereits bestehenden Push-
+// Benachrichtigung bei neu eingereichten Noten (siehe schule/actions.ts, einreichenNote).
 export async function submitWunsch(data: { artikelName: string; menge?: string; notiz?: string }) {
   const person = await requirePerson();
   const wunsch = await prisma.einkaufsWunsch.create({
     data: { artikelName: data.artikelName, menge: data.menge, notiz: data.notiz || null, kindId: person.id },
   });
   await logAenderung({ entityTyp: "EINKAUFS_WUNSCH", entityId: wunsch.id, aktion: "eingereicht", neuerWert: wunsch.artikelName, geaendertVonId: person.id });
+  await sendePushAnEltern({
+    title: "Neuer Einkaufswunsch",
+    body: `${person.name} wünscht sich: ${wunsch.artikelName}${wunsch.menge ? ` (${wunsch.menge})` : ""}`,
+    url: "/einkaufsliste",
+  });
   revalidatePath("/einkaufsliste");
 }
 

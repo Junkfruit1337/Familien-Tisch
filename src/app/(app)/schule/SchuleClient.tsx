@@ -22,6 +22,7 @@ import Spracheingabe from "@/components/Spracheingabe";
 import { erkenneSparzielIcon } from "@/lib/sparzielIcon";
 import SeitenTitel from "@/components/SeitenTitel";
 import LernHilfe from "@/components/LernHilfe";
+import VerlaufChart from "@/components/VerlaufChart";
 import { BEREICH_FARBEN } from "@/lib/bereichFarben";
 
 type Note = {
@@ -942,6 +943,17 @@ export default function SchuleClient({
                 </span>
               </summary>
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {/* Fix-Batch 92 (Florians Wunsch): Notenverlauf über die Zeit als kleines
+                    Diagramm — ergänzt den bereits bestehenden Trendpfeil um den tatsächlichen
+                    Verlauf. Zeigt die echten Notenwerte (1 = beste Note), die Beschriftung
+                    darunter zeigt die tatsächliche erste/letzte Note klar an. */}
+                {genehmigt.length >= 2 && (
+                  <VerlaufChart
+                    punkte={[...genehmigt]
+                      .sort((a, b) => new Date(a.datum).getTime() - new Date(b.datum).getTime())
+                      .map((n) => ({ label: new Date(n.datum).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" }), wert: n.note }))}
+                  />
+                )}
                 {notenDesFachs.map((n) =>
                   neueinreichungId === n.id ? (
                     <div key={n.id} style={{ display: "flex", flexDirection: "column", gap: 8, borderTop: "1px solid var(--border)", paddingTop: 8 }}>
@@ -1119,6 +1131,20 @@ export default function SchuleClient({
       <details>
         <summary style={{ cursor: "pointer", color: "var(--text-muted)" }}>Verlauf Taschengeld</summary>
         <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 8 }}>
+          {/* Fix-Batch 92 (Florians Wunsch): kleines Diagramm des Kontostand-Verlaufs, direkt
+              in diesem ohnehin schon aufklappbaren Bereich für Interessierte. */}
+          {(() => {
+            const chronologisch = [...kind.taschengeld].reverse();
+            let laufenderStand = kind.kontostand;
+            for (const t of kind.taschengeld) {
+              laufenderStand -= t.typ === "GUTSCHRIFT" ? t.betrag : -t.betrag;
+            }
+            const punkte = chronologisch.map((t) => {
+              laufenderStand += t.typ === "GUTSCHRIFT" ? t.betrag : -t.betrag;
+              return { label: new Date(t.createdAt).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" }), wert: laufenderStand };
+            });
+            return <VerlaufChart punkte={punkte} einheit=" €" />;
+          })()}
           {kind.taschengeld.map((t) => (
             <div key={t.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 14, gap: 8 }}>
               <span>
