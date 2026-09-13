@@ -11,6 +11,9 @@ export const BEREICH_FARBEN = {
   aufgaben: "#6b8f5a",
   einkaufsliste: "#c98a68",
   schule: "#8a6fa9",
+  // Fix-Batch 97 (Florians Wunsch): eigener Reiter für die THG-Schul-App (Stundenplan/
+  // Vertretungsplan) — bewusst eine eigene, von "schule" (Lila) klar unterscheidbare Farbe.
+  thg: "#5c6f9a",
   dienstplan: "#4f8a8b",
   essensplan: "#d9822b",
   einstellungen: "#8a7f6c",

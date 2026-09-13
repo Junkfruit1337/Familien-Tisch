@@ -12,7 +12,9 @@ import {
   verdichteZubereitung,
   findeRezeptImInternet,
   schlageRezeptZuBeschreibungVor,
+  pruefeZutatenZubereitungAbgleich,
   type ErkanntesRezept,
+  type ZutatenZubereitungAbgleich,
 } from "@/lib/rezeptErkennung";
 import { istGueltigeKategorie } from "@/lib/rezeptKategorien";
 import { parseZutatZeile, skaliereZeile } from "@/lib/zutatenSkalierung";
@@ -197,6 +199,24 @@ export async function verdichteZubereitungVorschau(
   } catch (err) {
     console.error("Verdichten der Zubereitung fehlgeschlagen:", err);
     const fehler = err instanceof Error ? err.message : "Unbekannter Fehler beim Verdichten.";
+    return { ok: false, fehler };
+  }
+}
+
+// Fix-Batch 97 (Florians Wunsch): prüft, ob die in der Zubereitung genannten Mengen zur
+// Zutatenliste passen (z.B. eine Zutat, die in mehreren Schritten mit Teilmengen verwendet
+// wird) — reine Vorschau, ersetzt die Zubereitung erst nach ausdrücklicher Bestätigung.
+export async function pruefeZutatenZubereitungVorschau(
+  zutaten: string,
+  zubereitung: string
+): Promise<{ ok: true; ergebnis: ZutatenZubereitungAbgleich } | { ok: false; fehler: string }> {
+  await requireParent();
+  try {
+    const ergebnis = await pruefeZutatenZubereitungAbgleich(zutaten, zubereitung);
+    return { ok: true, ergebnis };
+  } catch (err) {
+    console.error("Zutaten/Zubereitung-Abgleich fehlgeschlagen:", err);
+    const fehler = err instanceof Error ? err.message : "Unbekannter Fehler beim Abgleichen.";
     return { ok: false, fehler };
   }
 }

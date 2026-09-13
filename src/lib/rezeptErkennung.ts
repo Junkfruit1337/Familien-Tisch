@@ -271,3 +271,57 @@ export async function schreibeRezeptUm(
     "Konnte das Rezept nicht umschreiben. Bitte erneut versuchen oder die Felder manuell anpassen."
   );
 }
+
+export type ZutatenZubereitungAbgleich = {
+  konsistent: boolean;
+  hinweis: string;
+  korrigierteZubereitung?: string;
+};
+
+// Fix-Batch 97 (Florians Wunsch): Zutaten nennen die GESAMTMENGE (z.B. "2 Stück Zwiebel"), die
+// Zubereitung kann dieselbe Zutat aber auf mehrere Schritte mit eigenen Teilmengen aufteilen
+// (z.B. "1 Zwiebel ins Gericht, die andere separat als Röstzwiebeln") — das ist völlig normal
+// und soll nicht angetastet werden, SOLANGE die Teilmengen in Summe zur Zutatenliste passen.
+// Prüft genau das rein logisch (keine neue Erfindung von Schritten) und schlägt nur bei einem
+// echten Widerspruch eine korrigierte Zubereitung vor. Bewusst eine manuell auslösbare
+// Vorschau-Funktion (wie "Anleitung kürzer fassen" nebenan) statt eines automatischen Laufs bei
+// jeder Zutaten-Änderung — passt zum bestehenden Muster "günstig/manuell statt versteckte
+// KI-Kosten bei jedem Speichern".
+export async function pruefeZutatenZubereitungAbgleich(zutaten: string, zubereitung: string): Promise<ZutatenZubereitungAbgleich> {
+  const apiKey = holeApiKey();
+  const client = new Anthropic({ apiKey });
+  const prompt =
+    "Hier ist die Zutatenliste eines Rezepts (nennt die GESAMTMENGE je Zutat) und die dazugehörige Zubereitung:\n\n" +
+    `Zutaten:\n${zutaten}\n\nZubereitung:\n${zubereitung}\n\n` +
+    "Prüfe rein logisch, ob die in der Zubereitung genannten (Teil-)Mengen je Zutat in Summe zur jeweiligen Gesamtmenge in der " +
+    "Zutatenliste passen. Es ist normal und KEIN Fehler, wenn eine Zutat in der Zubereitung auf mehrere Schritte mit " +
+    'unterschiedlichen Teilmengen aufgeteilt wird (z. B. "1 Zwiebel ins Gericht, die andere separat als Röstzwiebeln") — ' +
+    "solange die Teilmengen zusammen der Gesamtmenge entsprechen. Ein echter Widerspruch liegt nur vor, wenn die Summe " +
+    "klar von der Zutatenliste abweicht oder eine in der Zubereitung verwendete Zutat/Menge in der Zutatenliste fehlt. " +
+    "Erfinde dabei keine neuen Zubereitungsschritte hinzu — bei einer Korrektur nur die Mengenangaben so anpassen, dass sie " +
+    "zur Zutatenliste passen, Struktur und restlichen Text unverändert lassen.\n\n" +
+    "Antworte AUSSCHLIESSLICH mit einem JSON-Objekt, ohne Markdown-Codeblock, ohne weiteren Text, in genau diesem Format:\n" +
+    '{"konsistent": true oder false, "hinweis": "kurze Erklärung, was geprüft/gefunden wurde", ' +
+    '"korrigierteZubereitung": "nur falls konsistent=false: die korrigierte Zubereitung, sonst weglassen"}';
+
+  const response = await client.messages.create({
+    model: "claude-sonnet-5",
+    max_tokens: 1500,
+    messages: [{ role: "user", content: prompt }],
+  });
+  const textBlock = response.content.find((b): b is Anthropic.TextBlock => b.type === "text");
+  const raw = (textBlock?.text ?? "").trim().replace(/^```(json)?/i, "").replace(/```$/, "").trim();
+  try {
+    const daten = JSON.parse(raw) as Record<string, unknown>;
+    if (typeof daten.konsistent === "boolean" && typeof daten.hinweis === "string") {
+      return {
+        konsistent: daten.konsistent,
+        hinweis: daten.hinweis,
+        korrigierteZubereitung: typeof daten.korrigierteZubereitung === "string" ? daten.korrigierteZubereitung : undefined,
+      };
+    }
+  } catch {
+    // fällt durch zur Fehlermeldung unten
+  }
+  throw new Error("Konnte den Abgleich nicht durchführen. Bitte erneut versuchen.");
+}

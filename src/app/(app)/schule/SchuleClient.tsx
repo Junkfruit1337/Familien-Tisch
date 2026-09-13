@@ -111,6 +111,13 @@ function istImLaufendenSchuljahr(datumIso: string): boolean {
   return datum >= start && datum <= ende;
 }
 
+// Fix-Batch 97 (Florians Wunsch): auch Notenfotos moderat komprimieren — Handyfotos sind laut
+// Florian "in zu guter Qualität", Note und Fach müssen aber weiterhin klar lesbar bleiben.
+// Bewusst weniger stark komprimiert als die reinen "nur ungefähr erkennen"-Fotos (Ticket/
+// Hausproblem/Termin-Anhänge, siehe EinstellungenClient.tsx/KalenderClient.tsx) — hier zählt
+// Lesbarkeit kleiner Zahlen/Schrift, dafür bleibt die Auflösung höher, nur die JPEG-Qualität
+// sinkt spürbar (die meiste Dateigröße steckt ohnehin in Kompressionsartefakten, nicht in der
+// reinen Auflösung).
 function resizeBildAufBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const bild = new Image();
@@ -119,7 +126,7 @@ function resizeBildAufBase64(file: File): Promise<string> {
     reader.onload = () => {
       bild.onerror = reject;
       bild.onload = () => {
-        const maxBreite = 1000;
+        const maxBreite = 900;
         const skalierung = Math.min(1, maxBreite / bild.width);
         const canvas = document.createElement("canvas");
         canvas.width = bild.width * skalierung;
@@ -127,7 +134,7 @@ function resizeBildAufBase64(file: File): Promise<string> {
         const ctx = canvas.getContext("2d");
         if (!ctx) return reject(new Error("Canvas nicht verfügbar"));
         ctx.drawImage(bild, 0, 0, canvas.width, canvas.height);
-        resolve(canvas.toDataURL("image/jpeg", 0.72));
+        resolve(canvas.toDataURL("image/jpeg", 0.6));
       };
       bild.src = reader.result as string;
     };

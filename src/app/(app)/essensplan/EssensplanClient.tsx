@@ -24,6 +24,7 @@ import {
   updateRezept,
   schlageSaisonaleIdeeVor,
   verdichteZubereitungVorschau,
+  pruefeZutatenZubereitungVorschau,
   schreibeRezeptUmVorschau,
   pruefeAusgewogenheitDerWoche,
   findeRezeptImInternetVorschau,
@@ -266,6 +267,10 @@ export default function EssensplanClient({
   const [umschreibeVorschau, setUmschreibeVorschau] = useState<ErkanntesRezeptClient | null>(null);
   const [umschreibenLaeuft, setUmschreibenLaeuft] = useState(false);
   const [verdichtenLaeuft, setVerdichtenLaeuft] = useState(false);
+  // Fix-Batch 97 (Florians Wunsch): Mengen in der Zubereitung (z.B. eine Zutat, die auf mehrere
+  // Schritte mit Teilmengen aufgeteilt wird) mit der Zutatenliste abgleichen lassen.
+  const [abgleichLaeuft, setAbgleichLaeuft] = useState(false);
+  const [abgleichHinweis, setAbgleichHinweis] = useState<string | null>(null);
 
   // Fix-Batch 75 (Florians Wunsch: Formular übersichtlicher/minimiert) — ein Textfeld für
   // alle KI-Wege (eigenes Rezept diktieren, Idee vorschlagen lassen, saisonal, Websuche),
@@ -894,6 +899,35 @@ export default function EssensplanClient({
                     >
                       {verdichtenLaeuft ? "Wird verdichtet …" : "🪄 Anleitung kürzer fassen"}
                     </button>
+                    <button
+                      className="btn-secondary"
+                      style={{ fontSize: 12, padding: "4px 10px", alignSelf: "flex-start" }}
+                      disabled={abgleichLaeuft || !rezeptZutatenEntwurf.trim() || !rezeptZubereitungEntwurf.trim()}
+                      onClick={() =>
+                        startTransition(async () => {
+                          setAbgleichLaeuft(true);
+                          setAbgleichHinweis(null);
+                          try {
+                            const ergebnis = await pruefeZutatenZubereitungVorschau(rezeptZutatenEntwurf, rezeptZubereitungEntwurf);
+                            if (!ergebnis.ok) {
+                              alert(ergebnis.fehler);
+                              return;
+                            }
+                            setAbgleichHinweis(ergebnis.ergebnis.hinweis);
+                            if (!ergebnis.ergebnis.konsistent && ergebnis.ergebnis.korrigierteZubereitung) {
+                              setRezeptZubereitungEntwurf(ergebnis.ergebnis.korrigierteZubereitung);
+                            }
+                          } finally {
+                            setAbgleichLaeuft(false);
+                          }
+                        })
+                      }
+                    >
+                      {abgleichLaeuft ? "Wird abgeglichen …" : "🔍 Mengen mit Zutaten abgleichen"}
+                    </button>
+                    {abgleichHinweis && (
+                      <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>{abgleichHinweis}</p>
+                    )}
                     <div style={{ display: "flex", gap: 6 }}>
                       <button
                         className="btn"
@@ -909,12 +943,20 @@ export default function EssensplanClient({
                               zubereitung: rezeptZubereitungEntwurf || undefined,
                             });
                             setBearbeiteRezeptId(null);
+                            setAbgleichHinweis(null);
                           });
                         }}
                       >
                         Speichern
                       </button>
-                      <button className="btn-secondary" style={{ fontSize: 12, padding: "4px 10px" }} onClick={() => setBearbeiteRezeptId(null)}>
+                      <button
+                        className="btn-secondary"
+                        style={{ fontSize: 12, padding: "4px 10px" }}
+                        onClick={() => {
+                          setBearbeiteRezeptId(null);
+                          setAbgleichHinweis(null);
+                        }}
+                      >
                         Abbrechen
                       </button>
                     </div>
@@ -939,6 +981,7 @@ export default function EssensplanClient({
                           setBearbeiteRezeptId(r.id);
                           setRezeptZutatenEntwurf(r.zutaten);
                           setRezeptZubereitungEntwurf(r.zubereitung ?? "");
+                          setAbgleichHinweis(null);
                         }}
                       >
                         ✎ Zutaten/Zubereitung bearbeiten
