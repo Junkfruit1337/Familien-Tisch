@@ -7,10 +7,12 @@ import {
   generiereUebungsaufgabenVorschau,
   erklaereThemaVorschau,
   generiereUebungsaufgabenZuThemaVorschau,
+  pruefeUebungsantwortVorschau,
 } from "@/app/(app)/schule/actions";
 import Spracheingabe from "@/components/Spracheingabe";
 
-type Uebungsaufgabe = { frage: string; antwort: string };
+type Uebungsaufgabe = { frage: string; antwort: string; optionen?: string[] };
+type Verdict = { korrekt: boolean; erklaerung: string };
 type Modus = "SPICKZETTEL" | "ERKLAEREN" | "UEBEN";
 
 // Bewusst kleiner als bei Rezept-/Notenfotos — hier reicht die Auflösung locker, kleinere
@@ -102,17 +104,51 @@ function ThemaEingabe({ disabled, onSenden, platzhalter }: { disabled: boolean; 
 // Übungsmodus bewusst als eigene Vollbild-Überlagerung (Florians ausdrücklicher Wunsch:
 // "lässt alles andere verschwinden, dass man nicht abgelenkt wird") — kein normaler Card-
 // Abschnitt zwischen den restigen Schule-Inhalten.
+// Fix-Batch 110 (Florians Bug-Meldung: Schwierigkeit "nicht abgestimmt", nicht intuitiv
+// anklickbar wie bei "Anton", "richtig oder falsch sieht man nicht genau", zwei verwirrende
+// Buttons die gleichzeitig "war ich richtig" UND "weiter" bedeuten mussten): komplett
+// überarbeiteter Ablauf — bei Multiple-Choice-Aufgaben (`optionen`) antippen EINER Option
+// prüft sofort automatisch und zeigt richtig/falsch farblich an; bei offenen Aufgaben prüft
+// jetzt die KI die Antwort wirklich (statt sie nur selbst einschätzen zu lassen). Danach in
+// beiden Fällen GENAU EIN eindeutiger "Weiter"-Button, keine zwei nebeneinander mit
+// unterschiedlicher Bedeutung mehr.
 function UebungsUeberlagerung({ aufgaben, onSchliessen }: { aufgaben: Uebungsaufgabe[]; onSchliessen: () => void }) {
   const [index, setIndex] = useState(0);
   const [eigeneAntwort, setEigeneAntwort] = useState("");
-  const [aufgedeckt, setAufgedeckt] = useState(false);
+  const [ausgewaehlteOption, setAusgewaehlteOption] = useState<string | null>(null);
+  const [verdict, setVerdict] = useState<Verdict | null>(null);
+  const [pruefeLaeuft, setPruefeLaeuft] = useState(false);
   const [richtigGeloest, setRichtigGeloest] = useState<boolean[]>([]);
   const aktuelle = aufgaben[index];
 
-  function naechste(warRichtig: boolean) {
-    setRichtigGeloest((prev) => [...prev, warRichtig]);
+  function optionAngeklickt(option: string) {
+    if (verdict) return;
+    setAusgewaehlteOption(option);
+    const korrekt = option === aktuelle.antwort;
+    setVerdict({ korrekt, erklaerung: korrekt ? "Richtig!" : `Nicht ganz — richtig wäre: ${aktuelle.antwort}` });
+  }
+
+  async function antwortPruefen() {
+    if (!eigeneAntwort.trim()) return;
+    setPruefeLaeuft(true);
+    try {
+      const ergebnis = await pruefeUebungsantwortVorschau(aktuelle.frage, aktuelle.antwort, eigeneAntwort);
+      if (!ergebnis.ok) {
+        alert(ergebnis.fehler);
+        return;
+      }
+      setVerdict({ korrekt: ergebnis.korrekt, erklaerung: ergebnis.erklaerung });
+    } finally {
+      setPruefeLaeuft(false);
+    }
+  }
+
+  function naechste() {
+    if (!verdict) return;
+    setRichtigGeloest((prev) => [...prev, verdict.korrekt]);
     setEigeneAntwort("");
-    setAufgedeckt(false);
+    setAusgewaehlteOption(null);
+    setVerdict(null);
     setIndex((i) => i + 1);
   }
 
@@ -130,32 +166,80 @@ function UebungsUeberlagerung({ aufgaben, onSchliessen }: { aufgaben: Uebungsauf
             Aufgabe {index + 1} von {aufgaben.length}
           </span>
           <p style={{ fontSize: 16, margin: 0 }}>{aktuelle.frage}</p>
-          <textarea
-            rows={3}
-            placeholder="Deine Antwort …"
-            value={eigeneAntwort}
-            onChange={(e) => setEigeneAntwort(e.target.value)}
-            disabled={aufgedeckt}
-          />
-          {!aufgedeckt ? (
-            <button className="btn" disabled={!eigeneAntwort.trim()} onClick={() => setAufgedeckt(true)}>
-              Antwort prüfen
-            </button>
+
+          {aktuelle.optionen && aktuelle.optionen.length > 0 ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {aktuelle.optionen.map((option) => {
+                const istRichtigeAntwort = option === aktuelle.antwort;
+                const istAusgewaehlt = option === ausgewaehlteOption;
+                let hintergrund = "var(--surface-alt)";
+                let rahmen = "1px solid var(--border)";
+                if (verdict) {
+                  if (istRichtigeAntwort) {
+                    hintergrund = "var(--success-soft)";
+                    rahmen = "1px solid var(--success)";
+                  } else if (istAusgewaehlt) {
+                    hintergrund = "var(--danger-soft)";
+                    rahmen = "1px solid var(--danger)";
+                  }
+                }
+                return (
+                  <button
+                    key={option}
+                    onClick={() => optionAngeklickt(option)}
+                    disabled={!!verdict}
+                    style={{
+                      textAlign: "left",
+                      padding: "12px 14px",
+                      borderRadius: "var(--radius)",
+                      border: rahmen,
+                      background: hintergrund,
+                      fontSize: 15,
+                      cursor: verdict ? "default" : "pointer",
+                    }}
+                  >
+                    {option}
+                    {verdict && istRichtigeAntwort && " ✓"}
+                    {verdict && istAusgewaehlt && !istRichtigeAntwort && " ✕"}
+                  </button>
+                );
+              })}
+            </div>
           ) : (
             <>
-              <div style={{ background: "var(--surface-alt)", borderRadius: "var(--radius)", padding: 10 }}>
-                <strong style={{ fontSize: 13 }}>Lösung</strong>
-                <p style={{ margin: "4px 0 0", fontSize: 14 }}>{aktuelle.antwort}</p>
-              </div>
-              <p style={{ fontSize: 13, color: "var(--text-muted)", margin: 0 }}>Hast du es richtig gelöst?</p>
-              <div style={{ display: "flex", gap: 8 }}>
-                <button className="btn" style={{ flex: 1 }} onClick={() => naechste(true)}>
-                  ✅ Richtig
+              <textarea
+                rows={3}
+                placeholder="Deine Antwort …"
+                value={eigeneAntwort}
+                onChange={(e) => setEigeneAntwort(e.target.value)}
+                disabled={!!verdict || pruefeLaeuft}
+              />
+              {!verdict && (
+                <button className="btn" disabled={!eigeneAntwort.trim() || pruefeLaeuft} onClick={antwortPruefen}>
+                  {pruefeLaeuft ? "Wird geprüft …" : "Antwort prüfen"}
                 </button>
-                <button className="btn-secondary" style={{ flex: 1 }} onClick={() => naechste(false)}>
-                  ❌ Nochmal üben
-                </button>
+              )}
+            </>
+          )}
+
+          {verdict && (
+            <>
+              <div
+                style={{
+                  background: verdict.korrekt ? "var(--success-soft)" : "var(--danger-soft)",
+                  borderRadius: "var(--radius)",
+                  padding: 10,
+                }}
+              >
+                <strong style={{ fontSize: 14 }}>{verdict.korrekt ? "✅ Richtig!" : "❌ Nicht ganz"}</strong>
+                <p style={{ margin: "4px 0 0", fontSize: 14 }}>{verdict.erklaerung}</p>
+                {!verdict.korrekt && !aktuelle.optionen?.length && (
+                  <p style={{ margin: "6px 0 0", fontSize: 13, color: "var(--text-muted)" }}>Lösung: {aktuelle.antwort}</p>
+                )}
               </div>
+              <button className="btn" onClick={naechste}>
+                {index + 1 < aufgaben.length ? "Weiter zur nächsten Aufgabe" : "Fertig"}
+              </button>
             </>
           )}
         </div>

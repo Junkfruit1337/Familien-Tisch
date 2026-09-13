@@ -12,6 +12,7 @@ import {
   erklaereThema,
   generiereUebungsaufgaben,
   generiereUebungsaufgabenZuThema,
+  pruefeUebungsantwort,
   type Uebungsaufgabe,
 } from "@/lib/lernhilfe";
 
@@ -608,16 +609,37 @@ export async function erklaereAufgabeVorschau(
   }
 }
 
+// Fix-Batch 110 (Florians Bug-Meldung: Aufgaben "nicht abgestimmt auf das Kind"): die
+// Klassenstufe der eingeloggten Person (steht bereits im Personen-Datensatz) fließt jetzt in
+// den Prompt ein, damit die KI Thema/Zahlen wirklich passend zum Kenntnisstand wählt.
 export async function generiereUebungsaufgabenVorschau(
   fotoDataUrl: string
 ): Promise<{ ok: true; aufgaben: Uebungsaufgabe[] } | { ok: false; fehler: string }> {
-  await requirePerson();
+  const person = await requirePerson();
   try {
-    const aufgaben = await generiereUebungsaufgaben(fotoDataUrl);
+    const aufgaben = await generiereUebungsaufgaben(fotoDataUrl, person.klassenstufe);
     return { ok: true, aufgaben };
   } catch (err) {
     console.error("Übungsaufgaben-Erstellung fehlgeschlagen:", err);
     const fehler = err instanceof Error ? err.message : "Unbekannter Fehler bei der Übungsaufgaben-Erstellung.";
+    return { ok: false, fehler };
+  }
+}
+
+// Fix-Batch 110 (Florians Bug-Meldung: "richtig oder falsch, das sieht man nicht so genau"):
+// echte automatische Prüfung der Freitext-Antwort statt reinem Selbst-Einschätzen.
+export async function pruefeUebungsantwortVorschau(
+  frage: string,
+  richtigeAntwort: string,
+  nutzerAntwort: string
+): Promise<{ ok: true; korrekt: boolean; erklaerung: string } | { ok: false; fehler: string }> {
+  await requirePerson();
+  try {
+    const ergebnis = await pruefeUebungsantwort(frage, richtigeAntwort, nutzerAntwort);
+    return { ok: true, ...ergebnis };
+  } catch (err) {
+    console.error("Antwort-Prüfung fehlgeschlagen:", err);
+    const fehler = err instanceof Error ? err.message : "Unbekannter Fehler bei der Antwort-Prüfung.";
     return { ok: false, fehler };
   }
 }
@@ -641,9 +663,9 @@ export async function erklaereThemaVorschau(
 export async function generiereUebungsaufgabenZuThemaVorschau(
   thema: string
 ): Promise<{ ok: true; aufgaben: Uebungsaufgabe[] } | { ok: false; fehler: string }> {
-  await requirePerson();
+  const person = await requirePerson();
   try {
-    const aufgaben = await generiereUebungsaufgabenZuThema(thema);
+    const aufgaben = await generiereUebungsaufgabenZuThema(thema, person.klassenstufe);
     return { ok: true, aufgaben };
   } catch (err) {
     console.error("Übungsaufgaben-Erstellung (Thema) fehlgeschlagen:", err);

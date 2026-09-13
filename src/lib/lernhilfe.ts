@@ -109,11 +109,26 @@ export async function erklaereThema(thema: string): Promise<string> {
   return text.trim();
 }
 
-export type Uebungsaufgabe = { frage: string; antwort: string };
+// Fix-Batch 110 (Florians Bug-Meldung: Schwierigkeit "nicht abgestimmt auf das Kind", großer
+// Sprung zwischen Aufgabe 2 und 3; Wunsch nach anklickbaren Antworten statt nur Freitext, wie
+// bei der Lern-App "Anton"): `optionen` ist eine neue, optionale Multiple-Choice-Liste — die
+// KI befüllt sie, wenn plausible, eindeutig falsche/richtige Auswahlmöglichkeiten zur Aufgabe
+// passen (deutlich "anklickbarer" und sofort auswertbar, ohne KI-Aufruf beim Prüfen). Bei rein
+// offenen Aufgaben (z. B. "erkläre in eigenen Worten") bleibt `optionen` leer/undefined, dann
+// zeigt die Oberfläche weiterhin ein Freitextfeld.
+export type Uebungsaufgabe = { frage: string; antwort: string; optionen?: string[] };
 
 const UEBUNGSAUFGABEN_FORMAT =
   "Antworte AUSSCHLIESSLICH mit einem JSON-Array, ohne Markdown-Codeblock, ohne weiteren Text, in genau diesem Format:\n" +
-  '[{"frage": "Aufgabentext", "antwort": "kurze Lösung"}, {"frage": "...", "antwort": "..."}, {"frage": "...", "antwort": "..."}]';
+  '[{"frage": "Aufgabentext", "antwort": "kurze, korrekte Lösung", "optionen": ["...", "...", "...", "..."]}, {"frage": "...", "antwort": "...", "optionen": [...]}, {"frage": "...", "antwort": "...", "optionen": [...]}]\n' +
+  'Für "optionen": IMMER GENAU 4 Antwortmöglichkeiten liefern, wenn die Aufgabe eine klar abgrenzbare Antwort hat (praktisch bei fast jeder Schul-/Rechenaufgabe möglich) — eine davon muss WORTWÖRTLICH mit "antwort" übereinstimmen, die anderen drei sind plausible, aber eindeutig falsche Ablenker (z. B. typische Rechenfehler), in zufälliger Reihenfolge. Nur bei wirklich offenen Aufgaben (z. B. "erkläre mit eigenen Worten", Aufsatz-artig) darf "optionen" ein leeres Array sein.';
+
+// Grade-/Niveau-Hinweis für den Prompt — sorgt dafür, dass alle 3 Aufgaben zum tatsächlichen
+// Kenntnisstand des Kindes passen, statt zufällig zu schwer/leicht zu sein.
+function klassenstufeHinweis(klassenstufe: number | null | undefined): string {
+  if (!klassenstufe) return "";
+  return ` Das Kind geht in die ${klassenstufe}. Klasse — wähle Thema und Zahlen so, dass alle 3 Aufgaben zu diesem Kenntnisstand passen.`;
+}
 
 function parseUebungsaufgaben(raw: string): Uebungsaufgabe[] {
   const bereinigt = raw.trim().replace(/^```(json)?/i, "").replace(/```$/, "").trim();
@@ -126,10 +141,16 @@ function parseUebungsaufgaben(raw: string): Uebungsaufgabe[] {
   if (!Array.isArray(daten)) throw new Error("Konnte keine Übungsaufgaben erstellen. Bitte erneut versuchen.");
   const aufgaben = daten
     .filter((d): d is Record<string, unknown> => typeof d === "object" && d !== null)
-    .map((d) => ({
-      frage: typeof d.frage === "string" ? d.frage : "",
-      antwort: typeof d.antwort === "string" ? d.antwort : "",
-    }))
+    .map((d) => {
+      const antwort = typeof d.antwort === "string" ? d.antwort : "";
+      // Nur übernehmen, wenn die korrekte Antwort auch wirklich unter den Optionen ist —
+      // sonst wäre die Aufgabe nie richtig anklickbar lösbar, dann lieber Freitext anzeigen.
+      const optionen =
+        Array.isArray(d.optionen) && d.optionen.every((o) => typeof o === "string") && d.optionen.includes(antwort)
+          ? (d.optionen as string[])
+          : undefined;
+      return { frage: typeof d.frage === "string" ? d.frage : "", antwort, optionen };
+    })
     .filter((a) => a.frage.trim() && a.antwort.trim());
   if (aufgaben.length === 0) throw new Error("Konnte keine Übungsaufgaben erstellen. Bitte erneut versuchen.");
   return aufgaben;
@@ -137,14 +158,15 @@ function parseUebungsaufgaben(raw: string): Uebungsaufgabe[] {
 
 // Übungsmodus (Foto): erzeugt NEUE, andere Aufgaben mit demselben Konzept (andere Zahlen/
 // Beispiele), rührt die Lösung der abgebildeten Original-Aufgabe gar nicht an.
-export async function generiereUebungsaufgaben(fotoDataUrl: string): Promise<Uebungsaufgabe[]> {
+export async function generiereUebungsaufgaben(fotoDataUrl: string, klassenstufe?: number | null): Promise<Uebungsaufgabe[]> {
   const prompt =
     "Auf diesem Foto ist eine Hausaufgabe oder Übungsaufgabe eines Schulkindes.\n" +
     "Erkenne, welche Art von Aufgabe/welches Konzept das ist, und erstelle GENAU 3 NEUE Übungsaufgaben desselben Typs " +
     "(gleiches Konzept/gleiche Methode wie im Foto, aber ANDERE Zahlen/Wörter/Beispiele als im Original — NICHT die " +
-    "abgebildete Aufgabe selbst wiederholen oder lösen), leicht ansteigend im Schwierigkeitsgrad, mit je einer kurzen, korrekten Lösung.\n" +
+    "abgebildete Aufgabe selbst wiederholen oder lösen). Alle 3 Aufgaben sollen ETWA GLEICH SCHWER sein (höchstens minimal " +
+    `ansteigend) — KEINE großen Sprünge im Schwierigkeitsgrad zwischen den Aufgaben.${klassenstufeHinweis(klassenstufe)}\n` +
     UEBUNGSAUFGABEN_FORMAT;
-  const raw = await rufeVisionAuf(fotoDataUrl, prompt, 1200);
+  const raw = await rufeVisionAuf(fotoDataUrl, prompt, 1500);
   return parseUebungsaufgaben(raw);
 }
 
@@ -152,13 +174,41 @@ export async function generiereUebungsaufgaben(fotoDataUrl: string): Promise<Ueb
 // ein Thema statt ein Foto zu machen. Falls die Beschreibung eigentlich schon eine konkrete
 // Aufgabe mit festen Zahlen ist, wird trotzdem nur ANALOG geübt (andere Zahlen), nie diese
 // konkrete Aufgabe als "Übungsaufgabe" zurückgegeben.
-export async function generiereUebungsaufgabenZuThema(thema: string): Promise<Uebungsaufgabe[]> {
+export async function generiereUebungsaufgabenZuThema(thema: string, klassenstufe?: number | null): Promise<Uebungsaufgabe[]> {
   const prompt =
     `Ein Schulkind hat per Sprache oder Text folgendes Thema beschrieben, zu dem es üben möchte:\n"${thema}"\n\n` +
-    "Erstelle GENAU 3 NEUE Übungsaufgaben zu diesem Thema, leicht ansteigend im Schwierigkeitsgrad, mit je einer kurzen, korrekten Lösung. " +
+    "Erstelle GENAU 3 NEUE Übungsaufgaben zu diesem Thema. Alle 3 Aufgaben sollen ETWA GLEICH SCHWER sein (höchstens minimal " +
+    `ansteigend) — KEINE großen Sprünge im Schwierigkeitsgrad zwischen den Aufgaben.${klassenstufeHinweis(klassenstufe)} ` +
     "Falls die Beschreibung bereits eine konkrete Aufgabe mit festen Zahlen enthält, verwende ANDERE Zahlen/Beispiele für die " +
     "Übungsaufgaben (nicht dieselbe Aufgabe wiederholen).\n" +
     UEBUNGSAUFGABEN_FORMAT;
-  const raw = await rufeTextAuf(prompt, 1200);
+  const raw = await rufeTextAuf(prompt, 1500);
   return parseUebungsaufgaben(raw);
+}
+
+// Fix-Batch 110 (Florians Bug-Meldung: "richtig oder falsch, das sieht man nicht so genau"):
+// bei Freitext-Aufgaben (kein `optionen`-Multiple-Choice möglich) prüft jetzt die KI die
+// Antwort des Kindes wirklich, statt nur die Lösung anzuzeigen und das Kind selbst raten zu
+// lassen, ob es richtig war. Erkennt dabei auch gleichwertige Schreibweisen (z. B. "0,833..."
+// vs. "5/6") als richtig, statt stur Zeichen zu vergleichen.
+export type Antwortpruefung = { korrekt: boolean; erklaerung: string };
+
+export async function pruefeUebungsantwort(frage: string, richtigeAntwort: string, nutzerAntwort: string): Promise<Antwortpruefung> {
+  const prompt =
+    `Aufgabe: "${frage}"\nMusterlösung: "${richtigeAntwort}"\nAntwort des Kindes: "${nutzerAntwort}"\n\n` +
+    "Prüfe, ob die Antwort des Kindes inhaltlich richtig ist (auch bei anderer, aber gleichwertiger Schreibweise, z. B. " +
+    "Dezimalzahl statt Bruch, andere Reihenfolge bei einer Aufzählung, Rundungstoleranz bei Kommazahlen). " +
+    "Antworte AUSSCHLIESSLICH mit einem JSON-Objekt, ohne Markdown-Codeblock, ohne weiteren Text:\n" +
+    '{"korrekt": true oder false, "erklaerung": "1 kurzer, freundlicher Satz auf Deutsch — bei falscher Antwort mit einem Hinweis, was der Fehler war"}';
+  const raw = await rufeTextAuf(prompt, 300);
+  const bereinigt = raw.trim().replace(/^```(json)?/i, "").replace(/```$/, "").trim();
+  try {
+    const daten = JSON.parse(bereinigt);
+    if (typeof daten.korrekt === "boolean" && typeof daten.erklaerung === "string") {
+      return { korrekt: daten.korrekt, erklaerung: daten.erklaerung };
+    }
+  } catch {
+    // fällt unten durch zum Fehler
+  }
+  throw new Error("Konnte die Antwort nicht prüfen. Bitte erneut versuchen.");
 }
