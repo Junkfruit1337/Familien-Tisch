@@ -33,6 +33,7 @@ import {
 } from "../dienstplan/actions";
 import PushBenachrichtigungen from "@/components/PushBenachrichtigungen";
 import DesignAuswahl from "@/components/DesignAuswahl";
+import IcsImportSektion from "@/components/IcsImportSektion";
 import NotengewichtungSektion from "@/components/NotengewichtungSektion";
 import TutorialModal from "@/components/TutorialModal";
 import Spracheingabe from "@/components/Spracheingabe";
@@ -1553,6 +1554,11 @@ export default function EinstellungenClient({
       {/* Fix-Batch 82 (Florians Bug-Meldung): Design-Vorlage passte inhaltlich nicht zu
           "Benachrichtigungen & Verlauf" — jetzt eigener, eigenständiger Bereich. */}
       <DesignAuswahl />
+
+      {/* Fix-Batch 101 (Florians Feedback): ICS-Import passiert höchstens ein paar Mal beim
+          Umzug von einer anderen Kalender-App — gehört hier hin statt prominent oben auf der
+          täglich genutzten Kalender-Seite (stand dort bisher, siehe Fix-Batch 96). */}
+      {istEltern && <IcsImportSektion personen={personen.map((p) => ({ id: p.id, name: p.name }))} />}
 
       <details>
         <summary style={{ cursor: "pointer", fontWeight: 600 }}>🔔 Benachrichtigungen &amp; Verlauf</summary>

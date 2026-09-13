@@ -580,12 +580,17 @@ export default function SchuleClient({
       {istEltern && (
         <details className="card">
           <summary style={{ cursor: "pointer", fontWeight: 600 }}>🏫 THG-App</summary>
-          <p style={{ fontSize: 13, color: "var(--text-muted)" }}>
-            Stundenplan, Vertretungsplan &amp; Co. der Schule. Mit den Buttons unten das Kind auswählen, dessen
-            THG-App angezeigt werden soll. Achtung: Es ist überall dieselbe Anmeldung — wechselt ihr das Kind, bleibt
-            die zuletzt angemeldete Person aktiv, bis sich jemand im Fenster abmeldet und die/der Nächste sich
-            anmeldet.
-          </p>
+          <p style={{ fontSize: 13, color: "var(--text-muted)" }}>Stundenplan, Vertretungsplan &amp; Co. der Schule.</p>
+          {/* Fix-Batch 101 (Florians Feedback, live bestätigt: "egal auf wen ich klicke, bin ich
+              bei Emma angemeldet"): der frühere kleine, mutede Hinweistext ging unter — jetzt
+              als auffällige Warnbox direkt über den Buttons, damit klar ist, dass diese NICHT
+              zwischen Konten wechseln (nur ein gemeinsamer Login für alle drei, ausdrücklich
+              Florians gewählte Option gegenüber Proxy-Lösung/Entfernen). */}
+          <div style={{ background: "var(--warning-soft)", borderRadius: "var(--radius)", padding: 10, fontSize: 13, marginBottom: 8 }}>
+            ⚠️ Diese Buttons sind nur eine Sprungmarke, KEIN Konten-Wechsel — es gibt nur EINE gemeinsame Anmeldung für
+            alle drei Kinder. Um ein anderes Kind zu sehen: unten im Fenster erst beim aktuell angemeldeten Kind
+            abmelden, dann als das gewünschte Kind neu anmelden.
+          </div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
             {kinder.map((k) => (
               <button
