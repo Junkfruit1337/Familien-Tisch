@@ -1,10 +1,11 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { requirePerson } from "@/lib/auth";
+import { requirePerson, requireParent } from "@/lib/auth";
 import { logAenderung } from "@/lib/history";
 import { erkenneTerminKategorie } from "@/lib/terminkategorisierung";
 import { erkenneTerminAusSprache, type ErkannterTermin } from "@/lib/spracheErkennung";
+import { parseIcsDatei, type IcsVorschauEreignis } from "@/lib/icsImport";
 import { revalidatePath } from "next/cache";
 import { randomUUID } from "crypto";
 
@@ -414,4 +415,48 @@ export async function listSchulEintraegeFuerKalender() {
   const person = await requirePerson();
   const where = person.rolle === "ELTERN" ? {} : { personId: person.id };
   return prisma.schulEintrag.findMany({ where, include: { person: true, fach: true }, orderBy: { datum: "asc" } });
+}
+
+// ---------- ICS-Import (Fix-Batch 96, Florians Wunsch: Umzug von Faminice) ----------
+// Nur Vorschau — es wird noch nichts gespeichert, siehe icsImport.ts für die Begründung, warum
+// das Parsen selbst deterministisch (nicht primär per KI) läuft.
+export async function parseIcsVorschau(icsText: string) {
+  await requireParent();
+  return parseIcsDatei(icsText);
+}
+
+// Übernimmt die in der Vorschau bestätigten Ereignisse als eigenständige Termine — bewusst
+// OHNE seriesId/gruppeId (auch bei ursprünglich wiederkehrenden Faminice-Terminen, die hier ja
+// schon einzeln aufgelöst ankommen), damit jeder importierte Termin unabhängig bearbeitbar/
+// löschbar ist, ohne versehentlich eine ganze "Serie" zu betreffen, die es in Familientisch nie
+// als solche gab.
+export async function importiereIcsTermine(personId: string | null, ereignisse: IcsVorschauEreignis[]) {
+  const person = await requireParent();
+  let anzahl = 0;
+  for (const e of ereignisse) {
+    if (!e.titel?.trim() || !e.start) continue;
+    const kategorie = erkenneTerminKategorie(e.titel);
+    await prisma.termin.create({
+      data: {
+        titel: e.titel.trim(),
+        start: new Date(e.start),
+        ende: e.ende ? new Date(e.ende) : null,
+        ganztaegig: e.ganztaegig,
+        kategorie,
+        personId,
+        erstelltVonId: person.id,
+      },
+    });
+    anzahl++;
+  }
+  await logAenderung({
+    entityTyp: "TERMIN",
+    entityId: "ics-import",
+    aktion: "erstellt",
+    neuerWert: `ICS-Import (${anzahl}×)`,
+    geaendertVonId: person.id,
+  });
+  revalidatePath("/kalender");
+  revalidatePath("/dashboard");
+  return anzahl;
 }

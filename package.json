@@ -15,6 +15,7 @@
     "@prisma/client": "5.20.0",
     "bcryptjs": "2.4.3",
     "next": "14.2.35",
+    "node-ical": "^0.27.1",
     "react": "18.3.1",
     "react-dom": "18.3.1",
     "server-only": "0.0.1",
