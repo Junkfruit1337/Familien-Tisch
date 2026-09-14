@@ -124,7 +124,23 @@ type ExtraMahlzeitEintrag = {
 };
 const EXTRA_MAHLZEIT_VORSCHLAEGE = ["Frühstück", "Mittags-Snack", "Zusätzliches warmes Essen"];
 
-const WOCHEN_LABEL = ["Diese Woche", "Nächste Woche", "Übernächste Woche"];
+// Fix-Batch 114 (Florians Wunsch): bisher nur diese/nächste/übernächste Woche ansehbar
+// (offset 0-2, feste 3-Einträge-Liste) — jetzt auch rückwärts in vergangene Wochen blätterbar
+// (offset kann negativ werden), daher ein Label für JEDEN Offset statt einer festen Liste.
+// Wie weit rückwärts blätterbar — bewusst begrenzt (statt unendlich), damit man nicht endlos
+// in Wochen von vor dem eigentlichen App-Start blättern kann; 12 Wochen (~3 Monate) sind
+// deutlich mehr als Florians "ein paar Wochen zurück" und leicht erhöhbar, falls gewünscht.
+const WOCHE_OFFSET_MIN = -12;
+
+function wochenLabel(offset: number): string {
+  if (offset === 0) return "Diese Woche";
+  if (offset === 1) return "Nächste Woche";
+  if (offset === 2) return "Übernächste Woche";
+  if (offset === -1) return "Letzte Woche";
+  if (offset === -2) return "Vorletzte Woche";
+  if (offset < 0) return `Vor ${Math.abs(offset)} Wochen`;
+  return `In ${offset} Wochen`;
+}
 
 type Ausgewogenheit = { fleischGerichte: number; gesamtGerichte: number; hinweis: string | null };
 type ErkanntesRezeptClient = { name: string; zutaten: string; zubereitung: string; portionen: number | null; kategorie: string; quelle?: string | null };
@@ -339,7 +355,7 @@ export default function EssensplanClient({
   }
 
   function wechsleWoche(neuerOffset: number) {
-    if (neuerOffset < 0 || neuerOffset > 2) return;
+    if (neuerOffset < WOCHE_OFFSET_MIN || neuerOffset > 2) return;
     setOffset(neuerOffset);
     startTransition(() => ladeWoche(neuerOffset));
   }
@@ -399,11 +415,11 @@ export default function EssensplanClient({
       <SeitenTitel icon="🍽️" farbe={BEREICH_FARBEN.essensplan}>Essensplan</SeitenTitel>
 
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <button className="btn-secondary" style={{ padding: "6px 12px" }} disabled={offset === 0} onClick={() => wechsleWoche(offset - 1)}>
+        <button className="btn-secondary" style={{ padding: "6px 12px" }} disabled={offset <= WOCHE_OFFSET_MIN} onClick={() => wechsleWoche(offset - 1)}>
           ‹
         </button>
         <div style={{ textAlign: "center" }}>
-          <div style={{ fontWeight: 600 }}>{WOCHEN_LABEL[offset]}</div>
+          <div style={{ fontWeight: 600 }}>{wochenLabel(offset)}</div>
           <div style={{ fontSize: 13, color: "var(--text-muted)" }}>
             {new Date(plan.wocheStart).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" })} – {new Date(plan.wocheEnde).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" })}
           </div>
