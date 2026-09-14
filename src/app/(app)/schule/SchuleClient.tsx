@@ -112,6 +112,22 @@ function istImLaufendenSchuljahr(datumIso: string): boolean {
   return datum >= start && datum <= ende;
 }
 
+// Fix-Batch 113 (Florians Wunsch): Notenübersicht auf einen Blick — Farbe/Emoji nach
+// deutscher Notenskala (1 = beste Note). Grenzen bewusst grob (nicht pro Zehntel), damit die
+// Kachel-Optik nicht bei jeder Kommastelle "flackert".
+function notenFarbe(schnitt: number | null): string {
+  if (schnitt === null) return "var(--text-muted)";
+  if (schnitt <= 2) return "var(--success)";
+  if (schnitt <= 3) return "var(--warning)";
+  return "var(--danger)";
+}
+function notenEmoji(schnitt: number): string {
+  if (schnitt <= 1.5) return "🌟";
+  if (schnitt <= 2.5) return "🙂";
+  if (schnitt <= 3.5) return "😐";
+  return "💪";
+}
+
 // Fix-Batch 97 (Florians Wunsch): auch Notenfotos moderat komprimieren — Handyfotos sind laut
 // Florian "in zu guter Qualität", Note und Fach müssen aber weiterhin klar lesbar bleiben.
 // Bewusst weniger stark komprimiert als die reinen "nur ungefähr erkennen"-Fotos (Ticket/
@@ -556,39 +572,96 @@ export default function SchuleClient({
   // Fix-Batch 107 (Florians Wunsch): "Noten je Fach" als eigene Variable statt inline, damit
   // sie weiter oben (direkt nach "Noten zur Genehmigung", vor dem Kontostand) platziert werden
   // kann, ohne den riesigen JSX-Block an zwei Stellen duplizieren zu müssen.
+  // Fix-Batch 113 (Florians Wunsch): "auf einen Blick alle Fächer sehen" — Statistik pro Fach
+  // jetzt EINMAL berechnet und für zwei Darstellungen wiederverwendet: die neue Kachel-
+  // Übersicht (alle Fächer, auch ganz ohne Note) und die bestehende, aufklappbare Detailliste
+  // (unverändert nur Fächer mit mindestens einer Note).
+  const fachStats = kind.faecher.map((f) => {
+    const notenDesFachs = kind.noten.filter((n) => n.fachId === f.id);
+    // Durchschnitt zählt nur Noten des laufenden Schuljahres (Fix-Batch 27) —
+    // ältere Noten bleiben in der Liste sichtbar, fließen aber nicht mehr in den Ø ein.
+    const genehmigt = notenDesFachs.filter((n) => n.status === "GENEHMIGT" && istImLaufendenSchuljahr(n.datum));
+    const summeGewicht = genehmigt.reduce((s, n) => s + n.gewichtung, 0);
+    const schnitt = summeGewicht > 0 ? genehmigt.reduce((s, n) => s + n.note * n.gewichtung, 0) / summeGewicht : null;
+    // Fix-Batch 62 (Florians Wunsch): einfacher Trendpfeil, ob sich der Schnitt zuletzt
+    // eher verbessert (Note wird zahlenmäßig kleiner) oder verschlechtert hat — Vergleich
+    // ältere Hälfte vs. jüngere Hälfte der genehmigten Noten dieses Schuljahres. Braucht
+    // mindestens 4 Noten, sonst wäre das Signal zu wackelig.
+    const trend = (() => {
+      if (genehmigt.length < 4) return null;
+      const sortiert = [...genehmigt].sort((a, b) => new Date(a.datum).getTime() - new Date(b.datum).getTime());
+      const mitte = Math.floor(sortiert.length / 2);
+      const avg = (arr: typeof sortiert) => {
+        const g = arr.reduce((s, n) => s + n.gewichtung, 0);
+        return g > 0 ? arr.reduce((s, n) => s + n.note * n.gewichtung, 0) / g : null;
+      };
+      const alt = avg(sortiert.slice(0, mitte));
+      const neu = avg(sortiert.slice(mitte));
+      if (alt === null || neu === null) return null;
+      const diff = neu - alt;
+      if (diff <= -0.3) return "besser" as const;
+      if (diff >= 0.3) return "schlechter" as const;
+      return "stabil" as const;
+    })();
+    return { fach: f, notenDesFachs, genehmigt, schnitt, trend };
+  });
+
+  function springeZuFach(fachId: string) {
+    const el = document.getElementById(`fach-${fachId}`);
+    if (!el) return;
+    (el as HTMLDetailsElement).open = true;
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+
   const notenJeFachSektion = (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      {/* Fix-Batch 113 (Florians Wunsch): "wie eine Tabelle — Fach klein oben, Note groß
+          darunter, alle Fächer auf einen Blick", für Kinder und Eltern bewusst unterschiedlich
+          gestaltet — Kinder bekommen größere, verspielte Kacheln mit Emoji, Eltern eine
+          kompaktere, dichtere Übersicht mit Trendpfeil (mehr fürs schnelle Überwachen als
+          fürs Motivieren). Antippen springt zum jeweiligen Fach in der Detailliste unten. */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <strong>📊 Notenübersicht</strong>
+        <div style={{ display: "grid", gridTemplateColumns: `repeat(auto-fill, minmax(${istEltern ? 76 : 92}px, 1fr))`, gap: istEltern ? 6 : 10 }}>
+          {fachStats.map(({ fach, schnitt, trend }) => (
+            <button
+              key={fach.id}
+              onClick={() => springeZuFach(fach.id)}
+              className="card"
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: 2,
+                padding: istEltern ? "6px 4px" : "12px 6px",
+                cursor: "pointer",
+                border: "none",
+                fontFamily: "inherit",
+              }}
+            >
+              <span style={{ fontSize: istEltern ? 11 : 12, color: "var(--text-muted)", textAlign: "center" }}>{fach.name}</span>
+              <strong style={{ fontSize: istEltern ? 18 : 26, color: notenFarbe(schnitt) }}>{schnitt !== null ? schnitt.toFixed(2) : "–"}</strong>
+              {!istEltern && schnitt !== null && <span style={{ fontSize: 16 }}>{notenEmoji(schnitt)}</span>}
+              {istEltern && trend && (
+                <span
+                  style={{
+                    fontSize: 11,
+                    color: trend === "besser" ? "var(--success)" : trend === "schlechter" ? "var(--danger)" : "var(--text-muted)",
+                  }}
+                >
+                  {trend === "besser" ? "↗" : trend === "schlechter" ? "↘" : "→"}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
       <strong>Noten je Fach</strong>
-      {kind.faecher.map((f) => {
-        const notenDesFachs = kind.noten.filter((n) => n.fachId === f.id);
-        if (notenDesFachs.length === 0) return null;
-        // Durchschnitt zählt nur Noten des laufenden Schuljahres (Fix-Batch 27) —
-        // ältere Noten bleiben in der Liste sichtbar, fließen aber nicht mehr in den Ø ein.
-        const genehmigt = notenDesFachs.filter((n) => n.status === "GENEHMIGT" && istImLaufendenSchuljahr(n.datum));
-        const summeGewicht = genehmigt.reduce((s, n) => s + n.gewichtung, 0);
-        const schnitt = summeGewicht > 0 ? genehmigt.reduce((s, n) => s + n.note * n.gewichtung, 0) / summeGewicht : null;
-        // Fix-Batch 62 (Florians Wunsch): einfacher Trendpfeil, ob sich der Schnitt zuletzt
-        // eher verbessert (Note wird zahlenmäßig kleiner) oder verschlechtert hat — Vergleich
-        // ältere Hälfte vs. jüngere Hälfte der genehmigten Noten dieses Schuljahres. Braucht
-        // mindestens 4 Noten, sonst wäre das Signal zu wackelig.
-        const trend = (() => {
-          if (genehmigt.length < 4) return null;
-          const sortiert = [...genehmigt].sort((a, b) => new Date(a.datum).getTime() - new Date(b.datum).getTime());
-          const mitte = Math.floor(sortiert.length / 2);
-          const avg = (arr: typeof sortiert) => {
-            const g = arr.reduce((s, n) => s + n.gewichtung, 0);
-            return g > 0 ? arr.reduce((s, n) => s + n.note * n.gewichtung, 0) / g : null;
-          };
-          const alt = avg(sortiert.slice(0, mitte));
-          const neu = avg(sortiert.slice(mitte));
-          if (alt === null || neu === null) return null;
-          const diff = neu - alt;
-          if (diff <= -0.3) return "besser" as const;
-          if (diff >= 0.3) return "schlechter" as const;
-          return "stabil" as const;
-        })();
+      {fachStats.filter(({ notenDesFachs }) => notenDesFachs.length > 0).map(({ fach: f, notenDesFachs, genehmigt, schnitt, trend }) => {
         return (
-          <details key={f.id} className="card">
+          <details key={f.id} id={`fach-${f.id}`} className="card">
             <summary style={{ cursor: "pointer", display: "flex", justifyContent: "space-between" }}>
               <span>{f.name}</span>
               <span style={{ color: "var(--text-muted)", fontWeight: 400, display: "flex", alignItems: "center", gap: 4 }}>
@@ -777,6 +850,7 @@ export default function SchuleClient({
           <span>Noch keine Noten.</span>
         </div>
       )}
+      </div>
     </div>
   );
 

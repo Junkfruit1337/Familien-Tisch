@@ -101,6 +101,7 @@ export const TUTORIAL_KAPITEL: TutorialKapitel[] = [
     farbe: BEREICH_FARBEN.schule,
     nutzen: "Noten, Taschengeld und Sparziele im Blick — für Kinder und Eltern gleichermaßen.",
     punkte: [
+      "Notenübersicht: alle Fächer auf einen Blick als Kacheln, antippen öffnet die Details",
       "Noten eintragen, Durchschnitt wird automatisch berechnet",
       "Taschengeld-Verlauf und Sparziel-Fortschritt",
       "Anstehende Arbeiten/HÜ-Kontrollen mit Lerntipps",
