@@ -505,26 +505,13 @@ export default function SchuleClient({
 
   if (!kind) return <p>Noch keine Kinder angelegt.</p>;
 
-  // Fix-Batch 51: "Noten zur Genehmigung" folgt jetzt der Kind-Auswahl oben (vorher wurden
-  // hier immer ALLE Kinder gepoolt angezeigt, unabhängig vom ausgewählten Reiter).
-  const offeneNoten = istEltern ? kind.noten.filter((n) => n.status === "OFFEN").map((n) => ({ ...n, kindName: kind.name })) : [];
-
-  // Fix-Batch 107 (Florians Wunsch): zusätzlich zur Kind-bezogenen Ansicht oben eine gepoolte
-  // "Für alle Kinder"-Übersicht — was über ALLE Kinder hinweg ansteht, ohne jeden Reiter
-  // einzeln durchklicken zu müssen. Nur lesend/als Sprungmarke (per Klick auf den Kind-Namen
-  // zum jeweiligen Reiter springen) — die eigentliche Genehmigen/Ablehnen-Aktion bleibt unten
-  // im Kind-bezogenen Abschnitt, keine doppelte Logik.
+  // Fix-Batch 115 (Florians Wunsch): "Noten zur Genehmigung" ist jetzt IMMER kindunabhängig
+  // gepoolt oben auf der Seite (voll funktionsfähig — Genehmigen/Ablehnen direkt dort, kein
+  // Wechsel zum Kind-Reiter mehr nötig), nicht mehr nur eine lesende Vorschau mit Sprungmarke.
   const alleOffenenNoten = istEltern
     ? kinder
         .flatMap((k) => k.noten.filter((n) => n.status === "OFFEN").map((n) => ({ ...n, kindId: k.id, kindName: k.name, kindFarbe: k.farbe })))
         .sort((a, b) => new Date(a.datum).getTime() - new Date(b.datum).getTime())
-    : [];
-  const heuteMitternacht = new Date(new Date().toDateString());
-  const naechsteSchulEintraege = istEltern
-    ? [...schulEintraege]
-        .filter((e) => new Date(e.datum) >= heuteMitternacht)
-        .sort((a, b) => new Date(a.datum).getTime() - new Date(b.datum).getTime())
-        .slice(0, 5)
     : [];
 
   async function spracheErkannt(text: string) {
@@ -864,106 +851,37 @@ export default function SchuleClient({
         <ThgVollbild compact />
       </div>
 
-      {/* Fix-Batch 107 (Florians Wunsch): "Für alle Kinder"-Übersicht ganz oben, noch vor der
-          Kind-Auswahl — auf einen Blick, was über alle Kinder hinweg ansteht, statt jeden
-          Reiter einzeln durchklicken zu müssen. Auf einen Eintrag tippen springt zum
-          jeweiligen Kind-Reiter (dort läuft die eigentliche Genehmigen/Ablehnen-Aktion). */}
-      {istEltern && kinder.length > 1 && (naechsteSchulEintraege.length > 0 || alleOffenenNoten.length > 0) && (
-        <div className="card" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          <strong>📋 Für alle Kinder</strong>
-          {naechsteSchulEintraege.length > 0 && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              <span style={{ fontSize: 12, color: "var(--text-muted)" }}>Nächste Arbeiten &amp; HÜs</span>
-              {naechsteSchulEintraege.map((e) => (
-                <button
-                  key={e.id}
-                  onClick={() => setAusgewaehlt(e.personId)}
-                  style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, background: "none", border: "none", padding: "4px 0", textAlign: "left", cursor: "pointer", color: "var(--text)" }}
-                >
-                  <span style={{ width: 10, height: 10, borderRadius: "50%", background: e.personFarbe, flexShrink: 0 }} />
-                  <span style={{ flex: 1 }}>
-                    {e.personName}: {ART_LABEL[e.art] ?? e.art}
-                    {e.fachName ? ` (${e.fachName})` : ""} — {e.titel}
-                  </span>
-                  <span style={{ color: "var(--text-muted)", fontSize: 12, flexShrink: 0 }}>
-                    {new Date(e.datum).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" })}
-                  </span>
-                </button>
-              ))}
-            </div>
-          )}
-          {alleOffenenNoten.length > 0 && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              <span style={{ fontSize: 12, color: "var(--text-muted)", display: "flex", alignItems: "center", gap: 6 }}>
-                Noten zur Genehmigung <span className="pill pill-offen">{alleOffenenNoten.length}</span>
-              </span>
-              {alleOffenenNoten.map((n) => (
-                <button
-                  key={n.id}
-                  onClick={() => setAusgewaehlt(n.kindId)}
-                  style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, background: "none", border: "none", padding: "4px 0", textAlign: "left", cursor: "pointer", color: "var(--text)" }}
-                >
-                  <span style={{ width: 10, height: 10, borderRadius: "50%", background: n.kindFarbe, flexShrink: 0 }} />
-                  <span style={{ flex: 1 }}>
-                    {n.kindName} — {n.fachName}: Note {n.note}
-                  </span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Fix-Batch 53 (Florians Feedback): die Kind-Auswahl steht jetzt GANZ OBEN, direkt
-          unter dem Titel — vorher stand die Klasse/Bundesland-Zeile schon oben (unklar wessen
-          Klasse gemeint war), dann eine eigene Kind-Filterleiste in "Arbeiten & HÜs", und erst
-          darunter die eigentliche, für den Rest der Seite maßgebliche Kind-Auswahl. Jetzt gibt
-          es nur noch EINE Auswahl, die alles darunter steuert (auch "Arbeiten & HÜs"). */}
-      {istEltern && kinder.length > 1 && (
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          {kinder.map((k) => (
-            <button
-              key={k.id}
-              className="btn-secondary"
-              style={{ background: ausgewaehlt === k.id ? k.farbe : undefined, color: ausgewaehlt === k.id ? "#fff" : undefined }}
-              onClick={() => setAusgewaehlt(k.id)}
-            >
-              {k.name}
-              {k.klasse || k.klassenstufe ? ` (${k.klassenstufe ?? ""}${k.klasse ?? ""})` : ""}
-            </button>
-          ))}
-        </div>
-      )}
-      {(kind.klasse || kind.klassenstufe) && (
-        <p style={{ margin: "-8px 0 0", fontSize: 13, color: "var(--text-muted)" }}>
-          {klasseAnzeige(kind.klassenstufe, kind.klasse)}
-          {kind.bundesland ? ` · ${kind.bundesland}` : ""}
-        </p>
-      )}
-
-      {feier && <Feier onEnde={() => setFeier(false)} />}
-      {grossesBild && <BildModal src={grossesBild} onClose={() => setGrossesBild(null)} />}
-
-      {/* Fix-Batch 107 (Florians Wunsch): "was ansteht" ist jetzt der prominenteste Abschnitt.
-          Fix-Batch 109: kein <details>/<summary> mehr drumherum — war ohnehin immer
-          aufgeklappt und erzeugte nur einen verwirrenden Leerraum zum eigenen Titel der
-          Sektion; jetzt eine schlichte Karte. */}
+      {/* Fix-Batch 115 (Florians Bug-Meldung: die alte "Für alle Kinder"-Übersicht war nur ein
+          Vorschau-Teaser, der zum jeweiligen Kind-Reiter sprang — "man muss dann runtergehen
+          in den unteren Bereich" — genehmigen/ablehnen ging dort NICHT direkt. Jetzt sind
+          beide Bereiche hier oben voll funktionsfähig und kindunabhängig: "Arbeiten & HÜs"
+          zeigt/verwaltet ALLE Kinder gepoolt (dieselbe Komponente wie unten, nur ohne
+          Kind-Filter), "Noten zur Genehmigung" erlaubt direktes Anschauen/Genehmigen/Ablehnen
+          ohne erst zum Kind-Reiter wechseln zu müssen — dieselbe Logik wie die bisherige
+          Detailliste, nur über alle Kinder statt nur das ausgewählte. Die redundanten
+          kind-bezogenen Duplikate dieser beiden Bereiche sind weiter unten entsprechend
+          entfernt (nur noch für Kinder sichtbar, die ja ohnehin nur ihre eigenen Sachen
+          sehen). Bewusst NICHT mehr an "kinder.length > 1" geknüpft — auch bei nur einem Kind
+          ist das die alleinige, stabile Stelle für diese beiden Themen. */}
+      {istEltern && (
       <div className="card">
         <SchulEintraegeSektion
           istEltern={istEltern}
           eigeneId={eigeneId}
           kinder={kinder.map((k) => ({ id: k.id, name: k.name, farbe: k.farbe, faecher: k.faecher }))}
           eintraege={schulEintraege}
-          ausgewaehlteKindId={istEltern ? kind.id : undefined}
+          ausgewaehlteKindId={undefined}
         />
       </div>
+      )}
 
-      {istEltern && offeneNoten.length > 0 && (
-        <details className="card">
-          <summary style={{ cursor: "pointer", fontWeight: 600 }}>Noten zur Genehmigung ({offeneNoten.length})</summary>
-          <div style={{ marginTop: 10 }}>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 8 }}>
-            {offeneNoten.map((n) => (
+      {istEltern && alleOffenenNoten.length > 0 && (
+        <div className="card card-action">
+          <strong style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            Noten zur Genehmigung <span className="pill pill-offen">{alleOffenenNoten.length}</span>
+          </strong>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 10 }}>
+            {alleOffenenNoten.map((n) => (
               <div
                 key={n.id}
                 id={`note-${n.id}`}
@@ -973,7 +891,7 @@ export default function SchuleClient({
                 {korrekturId === n.id ? (
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                     <span style={{ fontSize: 13, color: "var(--text-muted)" }}>
-                      {(n as any).kindName} — {n.fachName} ({ART_LABEL[n.art]})
+                      {n.kindName} — {n.fachName} ({ART_LABEL[n.art]})
                     </span>
                     <select value={korrekturNote} onChange={(e) => setKorrekturNote(Number(e.target.value))}>
                       {[1, 2, 3, 4, 5, 6].map((v) => (
@@ -1015,7 +933,7 @@ export default function SchuleClient({
                       )}
                       <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
                         <span style={{ fontWeight: 600 }}>
-                          {(n as any).kindName} — {n.fachName}: Note {n.note}
+                          {n.kindName} — {n.fachName}: Note {n.note}
                         </span>
                         <span style={{ fontSize: 13, color: "var(--text-muted)" }}>
                           {ART_LABEL[n.art]} · {new Date(n.datum).toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit", year: "numeric" })}
@@ -1047,9 +965,55 @@ export default function SchuleClient({
               </div>
             ))}
           </div>
-          </div>
-        </details>
+        </div>
       )}
+
+      {/* Fix-Batch 53 (Florians Feedback): die Kind-Auswahl steht jetzt GANZ OBEN, direkt
+          unter dem Titel — vorher stand die Klasse/Bundesland-Zeile schon oben (unklar wessen
+          Klasse gemeint war), dann eine eigene Kind-Filterleiste in "Arbeiten & HÜs", und erst
+          darunter die eigentliche, für den Rest der Seite maßgebliche Kind-Auswahl. Jetzt gibt
+          es nur noch EINE Auswahl, die alles darunter steuert (auch "Arbeiten & HÜs"). */}
+      {istEltern && kinder.length > 1 && (
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {kinder.map((k) => (
+            <button
+              key={k.id}
+              className="btn-secondary"
+              style={{ background: ausgewaehlt === k.id ? k.farbe : undefined, color: ausgewaehlt === k.id ? "#fff" : undefined }}
+              onClick={() => setAusgewaehlt(k.id)}
+            >
+              {k.name}
+              {k.klasse || k.klassenstufe ? ` (${k.klassenstufe ?? ""}${k.klasse ?? ""})` : ""}
+            </button>
+          ))}
+        </div>
+      )}
+      {(kind.klasse || kind.klassenstufe) && (
+        <p style={{ margin: "-8px 0 0", fontSize: 13, color: "var(--text-muted)" }}>
+          {klasseAnzeige(kind.klassenstufe, kind.klasse)}
+          {kind.bundesland ? ` · ${kind.bundesland}` : ""}
+        </p>
+      )}
+
+      {feier && <Feier onEnde={() => setFeier(false)} />}
+      {grossesBild && <BildModal src={grossesBild} onClose={() => setGrossesBild(null)} />}
+
+      {/* Fix-Batch 115: "Arbeiten & HÜs" und "Noten zur Genehmigung" für Eltern jetzt nur noch
+          oben, gepoolt über alle Kinder (siehe dort) — hier für Eltern nicht mehr dupliziert.
+          Kinder sehen weiterhin ihre eigene, per-Kind gefilterte Ansicht (u. a. weil nur sie
+          hier selbst neue Einträge anlegen dürfen). */}
+      {!istEltern && (
+      <div className="card">
+        <SchulEintraegeSektion
+          istEltern={istEltern}
+          eigeneId={eigeneId}
+          kinder={kinder.map((k) => ({ id: k.id, name: k.name, farbe: k.farbe, faecher: k.faecher }))}
+          eintraege={schulEintraege}
+          ausgewaehlteKindId={istEltern ? kind.id : undefined}
+        />
+      </div>
+      )}
+
 
       {/* Fix-Batch 107 (Florians Wunsch): "Noten je Fach" steht jetzt VOR dem Kontostand —
           Noten sind der tägliche Bezug, Kontostand/Sparziel eher am Rande. */}
