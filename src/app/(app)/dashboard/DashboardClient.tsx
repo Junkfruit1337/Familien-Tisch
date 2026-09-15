@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import SeitenTitel from "@/components/SeitenTitel";
 import { BEREICH_FARBEN } from "@/lib/bereichFarben";
+import PersonChip from "@/components/PersonChip";
 
 const ART_LABEL: Record<string, string> = {
   KLASSENARBEIT: "Arbeit",
@@ -22,7 +23,7 @@ type HeutigesGericht = { bezeichnung: string; rezeptName: string; zutaten: strin
 type Daten = {
   person: { name: string; rolle: string };
   heutigeGerichte: HeutigesGericht[];
-  schulEintraege: { id: string; titel: string; fachName: string | null; datum: string; personName: string; tageBis: number; lerntipp: string | null }[];
+  schulEintraege: { id: string; titel: string; fachName: string | null; datum: string; personName: string; personFarbe: string; tageBis: number; lerntipp: string | null }[];
   termineHeute: { id: string; titel: string; start: string; personName: string }[];
   offeneAufgaben: number;
   offeneNoten: { id: string; kindName: string; fachName: string; art: string; note: number; datum: string; notiz: string | null; fotoBase64: string | null }[];
@@ -233,19 +234,31 @@ export default function DashboardClient({ daten, istEltern }: { daten: Daten; is
             <span>Nichts Anstehendes.</span>
           </div>
         )}
+        {/* Fix-Batch 118 (Florians Wunsch: "wie in Schule aufbauen" — Fach ist wichtiger als
+            Thema): Fach steht jetzt als Überschrift, Kind-Name prominent mit Farb-Chip;
+            Thema (und ggf. Lerntipp) stehen erst nach dem Antippen, für mehr Fokus wie beim
+            entsprechenden Bereich auf der Schule-Seite (Fix-Batch 117). */}
         {daten.schulEintraege.map((s) => (
-          <div key={s.id} style={{ marginTop: 8, borderTop: "1px solid var(--border)", paddingTop: 8 }}>
-            <div style={{ fontWeight: 700, fontSize: "var(--font-md)" }}>
-              {new Date(s.datum).toLocaleDateString("de-DE", { weekday: "long", day: "2-digit", month: "2-digit" })}
+          <details key={s.id} style={{ marginTop: 8, borderTop: "1px solid var(--border)", paddingTop: 8 }}>
+            <summary style={{ cursor: "pointer" }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                {istEltern && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <PersonChip name={s.personName} farbe={s.personFarbe} size={18} />
+                    <span style={{ fontWeight: 700, fontSize: 13, color: s.personFarbe }}>{s.personName}</span>
+                  </div>
+                )}
+                <div style={{ fontWeight: 700, fontSize: "var(--font-md)" }}>{s.fachName ?? s.titel}</div>
+                <div style={{ fontSize: "var(--font-sm)", color: "var(--text-muted)" }}>
+                  {new Date(s.datum).toLocaleDateString("de-DE", { weekday: "long", day: "2-digit", month: "2-digit" })} · noch {s.tageBis} Tag(e)
+                </div>
+              </div>
+            </summary>
+            <div style={{ fontSize: "var(--font-sm)" }}>
+              {s.fachName ? s.titel : null}
+              {s.lerntipp && <div style={{ marginTop: 4 }}>💡 {s.lerntipp}</div>}
             </div>
-            <div style={{ fontWeight: 600, marginTop: 2 }}>
-              {s.titel}
-              {s.fachName && <span style={{ color: "var(--text-muted)", fontWeight: 400 }}> · {s.fachName}</span>}
-              {istEltern && <span style={{ color: "var(--text-muted)", fontWeight: 400 }}> · {s.personName}</span>}
-            </div>
-            <div style={{ fontSize: "var(--font-sm)", color: "var(--text-muted)" }}>noch {s.tageBis} Tag(e)</div>
-            {s.lerntipp && <div style={{ fontSize: "var(--font-sm)", marginTop: 4 }}>💡 {s.lerntipp}</div>}
-          </div>
+          </details>
         ))}
       </div>
 

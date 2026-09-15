@@ -235,6 +235,7 @@ export async function getDashboardDaten() {
         fachName: s.fachName,
         datum: s.datum.toISOString(),
         personName: s.person.name,
+        personFarbe: s.person.farbe,
         tageBis,
         lerntipp: person.rolle === "KIND" ? lerntipp(tageBis) : null,
       };
