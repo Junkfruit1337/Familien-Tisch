@@ -379,57 +379,58 @@ export default function KalenderClient({
     const bearbeitbar = t.typ === "termin" && (istEltern || istEigenerTermin);
     const loeschbar = t.typ === "termin" && (istEltern || t.erstelltVonId === eigeneId);
     const icon = t.typ === "aufgabe" ? "📌 " : t.typ === "schule" ? "🎓 " : t.typ === "geburtstag" ? "" : "";
+    const zusammenfassung = (
+      <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+        <div style={{ fontWeight: 600, textDecoration: t.typ === "aufgabe" && t.erledigt ? "line-through" : undefined }}>
+          {icon}
+          {t.titel}
+          {t.seriesId ? " 🔁" : ""}
+        </div>
+        <div style={{ fontSize: 13, color: "var(--text-muted)" }}>
+          {/* Fix-Batch 89 (Florians Wunsch): mehrtägige Termine zeigen den ganzen Zeitraum
+              statt nur den Starttag, sobald Start- und Enddatum auseinanderliegen. */}
+          {t.ende && isoDatum(t.ende) !== isoDatum(t.start) ? (
+            <>
+              {new Date(t.start).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" })}
+              {" – "}
+              {new Date(t.ende).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" })}
+            </>
+          ) : t.ganztaegig ? (
+            new Date(t.start).toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit" })
+          ) : (
+            new Date(t.start).toLocaleString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })
+          )}
+          {t.typ !== "geburtstag" && (
+            <>
+              {" · "}
+              {t.personen.length > 0 ? (
+                t.personen.map((p, i) => (
+                  <span key={p.id}>
+                    {i > 0 && ", "}
+                    <span style={{ color: p.farbe, fontWeight: 600 }}>{p.name}</span>
+                  </span>
+                ))
+              ) : (
+                <span style={{ fontWeight: 600 }}>Familie</span>
+              )}
+            </>
+          )}
+          {t.typ === "aufgabe" && <span> · Aufgabe</span>}
+          {t.typ === "schule" && <span> · Schule</span>}
+        </div>
+      </div>
+    );
+    // Fix-Batch 121 (Florians Bug-Meldung: Listenansicht "maximal unübersichtlich", Buttons
+    // rutschen teilweise aus dem Rahmen): wie schon bei "Arbeiten & HÜs" in Schule (Fix-Batch
+    // 116) sind Anhänge, Packliste, Bearbeiten/Löschen jetzt erst nach Antippen sichtbar
+    // (<details>), statt permanent nebeneinander gequetscht — in der Übersicht zählen nur
+    // Titel, Datum und Person(en).
     return (
-      <div
-        key={t.id}
-        className="card"
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          opacity: t.typ === "aufgabe" && t.erledigt ? 0.6 : 1,
-        }}
-      >
-        <div>
-          <div style={{ fontWeight: 600, textDecoration: t.typ === "aufgabe" && t.erledigt ? "line-through" : undefined }}>
-            {icon}
-            {t.titel}
-            {t.seriesId ? " 🔁" : ""}
-          </div>
-          <div style={{ fontSize: 13, color: "var(--text-muted)" }}>
-            {/* Fix-Batch 89 (Florians Wunsch): mehrtägige Termine zeigen den ganzen Zeitraum
-                statt nur den Starttag, sobald Start- und Enddatum auseinanderliegen. */}
-            {t.ende && isoDatum(t.ende) !== isoDatum(t.start) ? (
-              <>
-                {new Date(t.start).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" })}
-                {" – "}
-                {new Date(t.ende).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" })}
-              </>
-            ) : t.ganztaegig ? (
-              new Date(t.start).toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit" })
-            ) : (
-              new Date(t.start).toLocaleString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })
-            )}
-            {t.typ !== "geburtstag" && (
-              <>
-                {" · "}
-                {t.personen.length > 0 ? (
-                  t.personen.map((p, i) => (
-                    <span key={p.id}>
-                      {i > 0 && ", "}
-                      <span style={{ color: p.farbe, fontWeight: 600 }}>{p.name}</span>
-                    </span>
-                  ))
-                ) : (
-                  <span style={{ fontWeight: 600 }}>Familie</span>
-                )}
-              </>
-            )}
-            {t.typ === "aufgabe" && <span> · Aufgabe</span>}
-            {t.typ === "schule" && <span> · Schule</span>}
-          </div>
+      <details key={t.id} className="card" style={{ opacity: t.typ === "aufgabe" && t.erledigt ? 0.6 : 1 }}>
+        <summary style={{ cursor: "pointer", listStyle: "none" }}>{zusammenfassung}</summary>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 10 }}>
           {t.anhaenge.length > 0 && (
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
               {t.anhaenge.map((a, i) =>
                 a.startsWith("data:application/pdf") ? (
                   <a
@@ -459,7 +460,7 @@ export default function KalenderClient({
               und bearbeitbar, die diesen Termin ohnehin sehen (gemeinsame Familien-Aufgabe,
               keine private Info wie bei den Anhängen weiter oben). */}
           {t.typ === "termin" && (
-            <details style={{ marginTop: 6 }}>
+            <details>
               <summary style={{ cursor: "pointer", fontSize: 12, color: "var(--text-muted)" }}>
                 📋 Packliste{t.checklistenpunkte.length > 0 ? ` (${t.checklistenpunkte.filter((c) => c.erledigt).length}/${t.checklistenpunkte.length})` : ""}
               </summary>
@@ -511,7 +512,7 @@ export default function KalenderClient({
             </details>
           )}
           {loeschAuswahl?.id === t.id && (
-            <div style={{ display: "flex", gap: 6, marginTop: 8, alignItems: "center", fontSize: 12, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 12, flexWrap: "wrap" }}>
               <span>Nur diesen Termin oder {t.gruppeId && !t.seriesId ? "alle Personen" : "die ganze Serie"} löschen?</span>
               <button
                 className="btn-secondary"
@@ -543,22 +544,22 @@ export default function KalenderClient({
             </div>
           )}
           {istEltern && t.typ === "termin" && !loeschAuswahl && <HistorieVerlauf entityTyp="TERMIN" entityId={t.id} />}
+          {!loeschAuswahl && (bearbeitbar || loeschbar) && (
+            <div style={{ display: "flex", gap: 8 }}>
+              {bearbeitbar && (
+                <button className="btn-secondary" style={{ fontSize: 12, padding: "4px 8px" }} onClick={() => bearbeitenStarten(t)}>
+                  ✎ Bearbeiten
+                </button>
+              )}
+              {loeschbar && (
+                <button className="btn-secondary" style={{ fontSize: 12, padding: "4px 8px" }} onClick={() => loeschKlick(t)}>
+                  🗑 Löschen
+                </button>
+              )}
+            </div>
+          )}
         </div>
-        {!loeschAuswahl && (bearbeitbar || loeschbar) && (
-          <div style={{ display: "flex", gap: 6 }}>
-            {bearbeitbar && (
-              <button className="btn-secondary" style={{ fontSize: 13 }} onClick={() => bearbeitenStarten(t)}>
-                Bearbeiten
-              </button>
-            )}
-            {loeschbar && (
-              <button className="btn-secondary" style={{ fontSize: 13 }} onClick={() => loeschKlick(t)}>
-                Löschen
-              </button>
-            )}
-          </div>
-        )}
-      </div>
+      </details>
     );
   }
 
