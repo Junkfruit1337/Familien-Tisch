@@ -248,6 +248,7 @@ export async function getDashboardDaten() {
       fachName: n.fach.name,
       art: n.art,
       note: n.note,
+      tendenz: n.tendenz,
       datum: n.datum.toISOString(),
       notiz: n.notiz,
       fotoBase64: n.fotoBase64,

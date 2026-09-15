@@ -33,12 +33,46 @@ type Note = {
   fachName: string;
   art: string;
   note: number;
+  // Fix-Batch 120 (Florians Wunsch): rein informative Tendenz (z. B. mündliche Note
+  // "zwischen" zwei ganzen Noten) — ändert nie die Zahl selbst, fließt bewusst NICHT in
+  // Notenschnitt oder Taschengeld ein.
+  tendenz: "PLUS" | "MINUS" | null;
   datum: string;
   status: string;
   notiz: string | null;
   gewichtung: number;
   fotoBase64: string | null;
 };
+
+function formatNote(note: number, tendenz?: "PLUS" | "MINUS" | null): string {
+  return `${note}${tendenz === "PLUS" ? "+" : tendenz === "MINUS" ? "−" : ""}`;
+}
+
+// Kompakte Drei-Tasten-Auswahl für die Tendenz — bewusst NEBEN der Noten-Auswahl, nicht als
+// Teil davon, damit klar bleibt: das ist ein separates, rein informatives Merkmal.
+function TendenzAuswahl({ wert, onChange }: { wert: "PLUS" | "MINUS" | null; onChange: (v: "PLUS" | "MINUS" | null) => void }) {
+  return (
+    <div style={{ display: "flex", gap: 4 }}>
+      {(["MINUS", null, "PLUS"] as const).map((option) => (
+        <button
+          key={option ?? "keine"}
+          type="button"
+          className="btn-secondary"
+          style={{
+            flex: 1,
+            padding: "6px 0",
+            fontWeight: 700,
+            background: wert === option ? "var(--accent)" : undefined,
+            color: wert === option ? "var(--accent-contrast)" : undefined,
+          }}
+          onClick={() => onChange(option)}
+        >
+          {option === "PLUS" ? "+" : option === "MINUS" ? "−" : "keine"}
+        </button>
+      ))}
+    </div>
+  );
+}
 type Transaktion = { id: string; betrag: number; typ: string; grund: string | null; createdAt: string };
 type FerienEintrag = { typ: string; start: string; ende: string; tageBis: number };
 type FerienUebersicht = { bundesland: string; schuljahr: string; ferien: FerienEintrag[]; naechste: FerienEintrag | null } | null;
@@ -482,6 +516,7 @@ export default function SchuleClient({
   const [fachId, setFachId] = useState("");
   const [art, setArt] = useState("KLASSENARBEIT");
   const [noteWert, setNoteWert] = useState(1);
+  const [noteTendenz, setNoteTendenz] = useState<"PLUS" | "MINUS" | null>(null);
   const [datum, setDatum] = useState(new Date().toISOString().slice(0, 10));
   const [notiz, setNotiz] = useState("");
   const [foto, setFoto] = useState<string | null>(null);
@@ -495,9 +530,11 @@ export default function SchuleClient({
   const [grossesBild, setGrossesBild] = useState<string | null>(null);
   const [korrekturId, setKorrekturId] = useState<string | null>(null);
   const [korrekturNote, setKorrekturNote] = useState(1);
+  const [korrekturTendenz, setKorrekturTendenz] = useState<"PLUS" | "MINUS" | null>(null);
   const [korrekturNotiz, setKorrekturNotiz] = useState("");
   const [neueinreichungId, setNeueinreichungId] = useState<string | null>(null);
   const [neueinreichungNote, setNeueinreichungNote] = useState(1);
+  const [neueinreichungTendenz, setNeueinreichungTendenz] = useState<"PLUS" | "MINUS" | null>(null);
   const [neueinreichungNotiz, setNeueinreichungNotiz] = useState("");
   const [spracheVerarbeitung, setSpracheVerarbeitung] = useState(false);
   // Deep-Link vom Dashboard aus (Fix-Batch 49): "?highlight=<id>" springt direkt zur
@@ -558,9 +595,10 @@ export default function SchuleClient({
     if (istDuplikat && !confirm("Für dieses Fach/diese Art gibt es an diesem Tag schon eine Note. Trotzdem speichern?")) {
       return;
     }
-    const ergebnis = await einreichenNote({ fachId, art, note: noteWert, datum, notiz: notiz || undefined, fotoBase64: foto ?? undefined });
+    const ergebnis = await einreichenNote({ fachId, art, note: noteWert, tendenz: noteTendenz ?? undefined, datum, notiz: notiz || undefined, fotoBase64: foto ?? undefined });
     setNotiz("");
     setFoto(null);
+    setNoteTendenz(null);
     if (ergebnis.istKindEinreichung && (ergebnis.note === 1 || ergebnis.note === 2)) {
       setFeier(true);
     }
@@ -600,7 +638,11 @@ export default function SchuleClient({
       if (diff >= 0.3) return "schlechter" as const;
       return "stabil" as const;
     })();
-    return { fach: f, notenDesFachs, genehmigt, schnitt, trend };
+    // Fix-Batch 120 (Florians Wunsch): Auszählung, wie oft dieses Fach im laufenden
+    // Schuljahr ein "+"/"−" bekam — rein informativ, fließt nicht in schnitt ein.
+    const plusCount = genehmigt.filter((n) => n.tendenz === "PLUS").length;
+    const minusCount = genehmigt.filter((n) => n.tendenz === "MINUS").length;
+    return { fach: f, notenDesFachs, genehmigt, schnitt, trend, plusCount, minusCount };
   });
 
   function springeZuFach(fachId: string) {
@@ -656,13 +698,19 @@ export default function SchuleClient({
 
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
       <strong>Noten je Fach</strong>
-      {fachStats.filter(({ notenDesFachs }) => notenDesFachs.length > 0).map(({ fach: f, notenDesFachs, genehmigt, schnitt, trend }) => {
+      {fachStats.filter(({ notenDesFachs }) => notenDesFachs.length > 0).map(({ fach: f, notenDesFachs, genehmigt, schnitt, trend, plusCount, minusCount }) => {
         return (
           <details key={f.id} id={`fach-${f.id}`} className="card">
             <summary style={{ cursor: "pointer", display: "flex", justifyContent: "space-between" }}>
               <span>{f.name}</span>
               <span style={{ color: "var(--text-muted)", fontWeight: 400, display: "flex", alignItems: "center", gap: 4 }}>
                 {schnitt !== null ? `Ø ${schnitt.toFixed(2)} · ${genehmigt.length} Note(n)` : "noch keine genehmigte Note"}
+                {(plusCount > 0 || minusCount > 0) && (
+                  <span style={{ fontSize: 11 }}>
+                    {plusCount > 0 && `· ${plusCount}× +`}
+                    {minusCount > 0 && `· ${minusCount}× −`}
+                  </span>
+                )}
                 {trend === "besser" && <span title="Zuletzt verbessert" style={{ color: "var(--success)" }}>↗</span>}
                 {trend === "schlechter" && <span title="Zuletzt verschlechtert" style={{ color: "var(--danger)" }}>↘</span>}
                 {trend === "stabil" && <span title="Zuletzt stabil" style={{ color: "var(--text-muted)" }}>→</span>}
@@ -690,6 +738,7 @@ export default function SchuleClient({
                         </option>
                       ))}
                     </select>
+                    <TendenzAuswahl wert={neueinreichungTendenz} onChange={setNeueinreichungTendenz} />
                     <input placeholder="Notiz (optional)" value={neueinreichungNotiz} onChange={(e) => setNeueinreichungNotiz(e.target.value)} />
                     <div style={{ display: "flex", gap: 6 }}>
                       <button
@@ -697,7 +746,7 @@ export default function SchuleClient({
                         style={{ padding: "6px 10px" }}
                         onClick={() =>
                           startTransition(async () => {
-                            await erneutEinreichen(n.id, { note: neueinreichungNote, notiz: neueinreichungNotiz || undefined });
+                            await erneutEinreichen(n.id, { note: neueinreichungNote, tendenz: neueinreichungTendenz, notiz: neueinreichungNotiz || undefined });
                             setNeueinreichungId(null);
                           })
                         }
@@ -718,6 +767,7 @@ export default function SchuleClient({
                         </option>
                       ))}
                     </select>
+                    <TendenzAuswahl wert={korrekturTendenz} onChange={setKorrekturTendenz} />
                     <input placeholder="Thema" value={korrekturNotiz} onChange={(e) => setKorrekturNotiz(e.target.value)} />
                     <div style={{ display: "flex", gap: 6 }}>
                       <button
@@ -726,7 +776,7 @@ export default function SchuleClient({
                         onClick={() =>
                           startTransition(async () => {
                             try {
-                              await korrigiereNote(n.id, { note: korrekturNote, notiz: korrekturNotiz || undefined });
+                              await korrigiereNote(n.id, { note: korrekturNote, tendenz: korrekturTendenz, notiz: korrekturNotiz || undefined });
                               setKorrekturId(null);
                             } catch (e: any) {
                               alert(e.message);
@@ -753,7 +803,7 @@ export default function SchuleClient({
                         gap: 8,
                       }}
                     >
-                      <span style={{ fontWeight: 700, fontSize: 16 }}>{n.note}</span>
+                      <span style={{ fontWeight: 700, fontSize: 16 }}>{formatNote(n.note, n.tendenz)}</span>
                       <span style={{ fontSize: 13, color: "var(--text-muted)" }}>
                         {ART_LABEL[n.art]} · {new Date(n.datum).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" })}
                         {n.fotoBase64 ? " · 📷" : ""}
@@ -783,6 +833,7 @@ export default function SchuleClient({
                             onClick={() => {
                               setNeueinreichungId(n.id);
                               setNeueinreichungNote(n.note);
+                              setNeueinreichungTendenz(n.tendenz);
                               setNeueinreichungNotiz(n.notiz ?? "");
                             }}
                           >
@@ -797,6 +848,7 @@ export default function SchuleClient({
                               onClick={() => {
                                 setKorrekturId(n.id);
                                 setKorrekturNote(n.note);
+                                setKorrekturTendenz(n.tendenz);
                                 setKorrekturNotiz(n.notiz ?? "");
                               }}
                             >
@@ -910,6 +962,7 @@ export default function SchuleClient({
                         </option>
                       ))}
                     </select>
+                    <TendenzAuswahl wert={korrekturTendenz} onChange={setKorrekturTendenz} />
                     <input placeholder="Notiz" value={korrekturNotiz} onChange={(e) => setKorrekturNotiz(e.target.value)} />
                     <div style={{ display: "flex", gap: 6 }}>
                       <button
@@ -917,7 +970,7 @@ export default function SchuleClient({
                         style={{ padding: "6px 10px" }}
                         onClick={() =>
                           startTransition(async () => {
-                            await korrigiereNote(n.id, { note: korrekturNote, notiz: korrekturNotiz || undefined });
+                            await korrigiereNote(n.id, { note: korrekturNote, tendenz: korrekturTendenz, notiz: korrekturNotiz || undefined });
                             setKorrekturId(null);
                           })
                         }
@@ -943,7 +996,7 @@ export default function SchuleClient({
                       )}
                       <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
                         <span style={{ fontWeight: 600 }}>
-                          {n.kindName} — {n.fachName}: Note {n.note}
+                          {n.kindName} — {n.fachName}: Note {formatNote(n.note, n.tendenz)}
                         </span>
                         <span style={{ fontSize: 13, color: "var(--text-muted)" }}>
                           {ART_LABEL[n.art]} · {new Date(n.datum).toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit", year: "numeric" })}
@@ -958,6 +1011,7 @@ export default function SchuleClient({
                         onClick={() => {
                           setKorrekturId(n.id);
                           setKorrekturNote(n.note);
+                          setKorrekturTendenz(n.tendenz);
                           setKorrekturNotiz(n.notiz ?? "");
                         }}
                       >
@@ -1215,6 +1269,7 @@ export default function SchuleClient({
               </option>
             ))}
           </select>
+          <TendenzAuswahl wert={noteTendenz} onChange={setNoteTendenz} />
           <input type="date" value={datum} onChange={(e) => setDatum(e.target.value)} />
           <input placeholder="Thema (Pflichtfeld, z. B. Bruchrechnung)" value={notiz} onChange={(e) => setNotiz(e.target.value)} />
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>

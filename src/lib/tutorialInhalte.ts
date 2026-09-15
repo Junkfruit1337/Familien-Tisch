@@ -103,6 +103,7 @@ export const TUTORIAL_KAPITEL: TutorialKapitel[] = [
     punkte: [
       "Notenübersicht: alle Fächer auf einen Blick als Kacheln, antippen öffnet die Details",
       "Noten eintragen, Durchschnitt wird automatisch berechnet",
+      "Bei mündlichen Noten „zwischen zwei Noten“ zusätzlich + oder − eintragen — rein informativ, zählt nicht in Schnitt oder Taschengeld",
       "Taschengeld-Verlauf und Sparziel-Fortschritt",
       "Anstehende Arbeiten/HÜ-Kontrollen mit Lerntipps",
       "THG-App (Stundenplan/Vertretungsplan) per Knopf oben öffnen",

@@ -12,6 +12,13 @@ const ART_LABEL: Record<string, string> = {
   EPOCHALNOTE: "Epo",
 };
 
+// Fix-Batch 120 (Florians Wunsch): manche Noten stehen "zwischen" zwei ganzen Noten (z. B.
+// mündlich) — Tendenz wird rein informativ als "+"/"−" angehängt, ändert aber nie die Zahl
+// selbst (fließt bewusst nicht in Notenschnitt/Taschengeld ein, siehe schule/actions.ts).
+function formatNote(note: number, tendenz?: "PLUS" | "MINUS" | null): string {
+  return `${note}${tendenz === "PLUS" ? "+" : tendenz === "MINUS" ? "−" : ""}`;
+}
+
 const TICKET_STATUS_LABEL: Record<string, string> = {
   EINGEREICHT: "Eingereicht",
   GENEHMIGT: "Genehmigt",
@@ -26,7 +33,7 @@ type Daten = {
   schulEintraege: { id: string; titel: string; fachName: string | null; datum: string; personName: string; personFarbe: string; tageBis: number; lerntipp: string | null }[];
   termineHeute: { id: string; titel: string; start: string; personName: string }[];
   offeneAufgaben: number;
-  offeneNoten: { id: string; kindName: string; fachName: string; art: string; note: number; datum: string; notiz: string | null; fotoBase64: string | null }[];
+  offeneNoten: { id: string; kindName: string; fachName: string; art: string; note: number; tendenz: "PLUS" | "MINUS" | null; datum: string; notiz: string | null; fotoBase64: string | null }[];
   offeneWuensche: { id: string; kindName: string; artikelName: string; menge: string | null; createdAt: string }[];
   meineOffenenTickets: { id: string; titel: string; status: string }[];
 };
@@ -76,7 +83,7 @@ export default function DashboardClient({ daten, istEltern }: { daten: Daten; is
                   )}
                   <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
                     <span style={{ fontWeight: 600 }}>
-                      {n.kindName} — {n.fachName}: Note {n.note}
+                      {n.kindName} — {n.fachName}: Note {formatNote(n.note, n.tendenz)}
                     </span>
                     <span style={{ fontSize: 13, color: "var(--text-muted)" }}>
                       {ART_LABEL[n.art] ?? n.art} · {new Date(n.datum).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" })}

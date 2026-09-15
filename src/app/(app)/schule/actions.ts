@@ -195,6 +195,7 @@ export async function einreichenNote(data: {
   fachId: string;
   art: string;
   note: number;
+  tendenz?: "PLUS" | "MINUS" | null;
   datum: string;
   notiz?: string;
   fotoBase64?: string;
@@ -219,6 +220,7 @@ export async function einreichenNote(data: {
       fachId: data.fachId,
       art: data.art as any,
       note: data.note,
+      tendenz: data.tendenz ?? null,
       datum: new Date(data.datum),
       notiz: data.notiz,
       fotoBase64: data.fotoBase64,
@@ -262,7 +264,10 @@ export async function einreichenNote(data: {
 
 // Fix-Batch 30: Eltern dürfen jede offene Note korrigieren, ein Kind nur seine eigene —
 // und auch nur, solange sie noch nicht genehmigt/abgelehnt wurde (Florians Wunsch).
-export async function korrigiereNote(id: string, data: { note?: number; datum?: string; notiz?: string; fachId?: string }) {
+export async function korrigiereNote(
+  id: string,
+  data: { note?: number; tendenz?: "PLUS" | "MINUS" | null; datum?: string; notiz?: string; fachId?: string }
+) {
   const person = await requirePerson();
   const bestehend = await prisma.note.findUnique({ where: { id } });
   if (!bestehend) throw new Error("Note nicht gefunden.");
@@ -273,6 +278,10 @@ export async function korrigiereNote(id: string, data: { note?: number; datum?: 
   if (data.note !== undefined && data.note !== bestehend.note) {
     updateData.note = data.note;
     await logAenderung({ entityTyp: "NOTE", entityId: id, aktion: "korrigiert", feld: "note", alterWert: String(bestehend.note), neuerWert: String(data.note), geaendertVonId: person.id });
+  }
+  if (data.tendenz !== undefined && data.tendenz !== bestehend.tendenz) {
+    updateData.tendenz = data.tendenz;
+    await logAenderung({ entityTyp: "NOTE", entityId: id, aktion: "korrigiert", feld: "tendenz", alterWert: bestehend.tendenz, neuerWert: data.tendenz, geaendertVonId: person.id });
   }
   if (data.datum) {
     const neuesDatum = new Date(data.datum);
@@ -295,7 +304,10 @@ export async function korrigiereNote(id: string, data: { note?: number; datum?: 
   revalidatePath("/schule");
 }
 
-export async function erneutEinreichen(id: string, data?: { note?: number; datum?: string; notiz?: string; fotoBase64?: string }) {
+export async function erneutEinreichen(
+  id: string,
+  data?: { note?: number; tendenz?: "PLUS" | "MINUS" | null; datum?: string; notiz?: string; fotoBase64?: string }
+) {
   const person = await requirePerson();
   const bestehend = await prisma.note.findUnique({ where: { id } });
   if (!bestehend) throw new Error("Note nicht gefunden.");
@@ -306,6 +318,7 @@ export async function erneutEinreichen(id: string, data?: { note?: number; datum
     where: { id },
     data: {
       note: data?.note ?? bestehend.note,
+      tendenz: data?.tendenz !== undefined ? data.tendenz : bestehend.tendenz,
       datum: data?.datum ? new Date(data.datum) : bestehend.datum,
       notiz: data?.notiz ?? bestehend.notiz,
       fotoBase64: data?.fotoBase64 ?? bestehend.fotoBase64,

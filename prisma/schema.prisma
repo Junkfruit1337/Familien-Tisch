@@ -314,6 +314,13 @@ enum NoteStatus {
   ABGELEHNT
 }
 
+// Fix-Batch 120: rein informative Tendenz (z. B. mündliche Note "zwischen" zwei Noten) —
+// bewusst kein Einfluss auf Notenschnitt/Taschengeld, siehe Kommentar am Note-Modell.
+enum NotenTendenz {
+  PLUS
+  MINUS
+}
+
 // Voreinstellung für die Gewichtung, mit der neue Noten eines Fachs/einer Art
 // automatisch angelegt werden (Frage 21). Pro Kind + Fach + Art einzeln einstellbar,
 // mit Übertragen-Funktion auf andere Fächer/Kinder in der UI.
@@ -337,6 +344,12 @@ model Note {
   fach             Fach       @relation(fields: [fachId], references: [id])
   art              NoteArt
   note             Int
+  // Fix-Batch 120 (Florians Wunsch): manche Noten stehen "zwischen" zwei ganzen Noten
+  // (z. B. mündlich) — Tendenz +/- wird rein informativ mitgeführt, fließt bewusst NICHT in
+  // den Notenschnitt oder die Taschengeld-Berechnung ein (beide rechnen weiterhin nur mit
+  // `note`), dient nur der Auszählung "wie oft stand das Kind zwischen zwei Noten" am
+  // Schuljahresende.
+  tendenz          NotenTendenz?
   datum            DateTime
   notiz            String?
   gewichtung       Float      @default(1)

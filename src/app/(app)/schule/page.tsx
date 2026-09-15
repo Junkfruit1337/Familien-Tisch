@@ -40,6 +40,7 @@ export default async function SchulePage() {
           fachName: n.fach.name,
           art: n.art,
           note: n.note,
+          tendenz: n.tendenz,
           datum: n.datum.toISOString(),
           status: n.status,
           notiz: n.notiz,
