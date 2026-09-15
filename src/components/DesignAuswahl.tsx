@@ -6,6 +6,7 @@ import { DESIGN_THEMES, DESIGN_KEY, type DesignThemeId } from "@/lib/designTheme
 // Fix-Batch 72: reine Vorschau-Werte fürs Auswahl-Menü selbst (Ecken/Schatten der Kachel-
 // Buttons hier), damit man den Stil-Unterschied schon vor dem Antippen sieht — unabhängig
 // von den echten CSS-Overrides in globals.css, die erst NACH der Auswahl app-weit greifen.
+// Fix-Batch 119: zwei neue Vorlagen ergänzt (minze, koenigsblau).
 const VORSCHAU_STIL: Record<DesignThemeId, { radius: number; schatten: string }> = {
   standard: { radius: 14, schatten: "0 1px 2px rgba(58,51,42,0.12)" },
   ozean: { radius: 18, schatten: "0 3px 8px rgba(27,138,138,0.18)" },
@@ -17,13 +18,15 @@ const VORSCHAU_STIL: Record<DesignThemeId, { radius: number; schatten: string }>
   himmel: { radius: 20, schatten: "0 2px 6px rgba(47,143,214,0.12)" },
   honig: { radius: 14, schatten: "0 2px 6px rgba(214,158,31,0.22)" },
   pastell: { radius: 24, schatten: "0 3px 8px rgba(231,143,179,0.18)" },
+  minze: { radius: 20, schatten: "0 3px 8px rgba(47,168,127,0.18)" },
+  koenigsblau: { radius: 10, schatten: "0 3px 8px rgba(45,79,160,0.2)" },
 };
 
-// Fix-Batch 70/72 (Florians Wunsch, in Fix-Batch 72 präzisiert: "nicht einfach nur eine
-// Farbe, sondern wirklich ein anderes Design") — 10 Design-Vorlagen mit eigener Farbe UND
-// eigener Stil-Persönlichkeit (Ecken/Schatten), jede Person wählt für sich selbst im eigenen
-// Browser (wie der Hell/Dunkel-Schalter, kein Sync über die Familie). Für Kinder UND Eltern
-// gleichermaßen sichtbar.
+// Fix-Batch 70/72/119 (Florians Wunsch, zuletzt: "im hellen Modus sieht man kaum einen
+// Unterschied... bitte richtig kreativ werden") — Design-Vorlagen mit eigener Farbe, eigener
+// Stil-Persönlichkeit (Ecken/Schatten) UND jetzt einer vollständigen eigenen Farbpalette
+// (siehe globals.css). Jede Person wählt für sich selbst im eigenen Browser (wie der
+// Hell/Dunkel-Schalter, kein Sync über die Familie). Für Kinder UND Eltern sichtbar.
 export default function DesignAuswahl() {
   const [aktuell, setAktuell] = useState<DesignThemeId>("standard");
 
@@ -47,8 +50,12 @@ export default function DesignAuswahl() {
       <summary style={{ cursor: "pointer", fontWeight: 600 }}>🎨 Design-Vorlage</summary>
       <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
         <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 4px" }}>
-          Nur für dieses Gerät — jede Person kann ihren eigenen Stil wählen. Farbe UND Optik (Ecken, Schatten) ändern sich.
+          Nur für dieses Gerät — jede Person kann ihren eigenen Stil wählen. Jede Vorlage hat eine eigene Farbpalette, Optik (Ecken, Schatten) und teils eine eigene Schriftart.
         </p>
+        {/* Fix-Batch 119: die Vorschau-Kachel nutzt jetzt feste, pro Vorlage hinterlegte Farben
+            (vorschauBg/vorschauText) statt var(--surface)/var(--text) — sonst hätten in dieser
+            Liste ALLE Kacheln die Farbe der GERADE aktiven Vorlage gezeigt, egal welche Option
+            sie eigentlich darstellen sollten. */}
         {DESIGN_THEMES.map((t) => {
           const stil = VORSCHAU_STIL[t.id];
           const aktiv = t.id === aktuell;
@@ -62,8 +69,8 @@ export default function DesignAuswahl() {
                 gap: 10,
                 padding: "8px 10px",
                 borderRadius: stil.radius,
-                border: aktiv ? `2px solid ${t.vorschauFarbe}` : "1px solid var(--border)",
-                background: "var(--surface)",
+                border: aktiv ? `2px solid ${t.vorschauFarbe}` : "1px solid transparent",
+                background: t.vorschauBg,
                 boxShadow: stil.schatten,
                 cursor: "pointer",
                 fontFamily: "inherit",
@@ -87,10 +94,10 @@ export default function DesignAuswahl() {
                 {aktiv ? "✓" : t.emoji}
               </span>
               <span style={{ display: "flex", flexDirection: "column" }}>
-                <span style={{ fontSize: 14, fontWeight: 600, color: "var(--text)" }}>
+                <span style={{ fontSize: 14, fontWeight: 600, color: t.vorschauText }}>
                   {t.emoji} {t.name}
                 </span>
-                <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{t.stil}</span>
+                <span style={{ fontSize: 11, color: t.vorschauText, opacity: 0.75 }}>{t.stil}</span>
               </span>
             </button>
           );

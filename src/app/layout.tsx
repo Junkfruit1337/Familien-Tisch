@@ -1,5 +1,15 @@
 import type { Metadata, Viewport } from "next";
+import { Quicksand, Manrope } from "next/font/google";
 import "./globals.css";
+
+// Fix-Batch 119 (Florians Wunsch: Design-Vorlagen "deutlich mehr verändern", "richtig
+// kreativ werden"): zwei zusätzliche Schriftfamilien neben der bisherigen System-Schrift,
+// per Design-Vorlage zugeordnet (siehe globals.css `--font-family` je `[data-design]`) —
+// über next/font selbst gehostet (keine Laufzeit-Abhängigkeit von Google, kein Layout-Sprung).
+// Quicksand: rund/verspielt für die verspielten Vorlagen (Beere, Pastell, Honig, ...).
+// Manrope: klar/modern-geometrisch für die kühlen/ruhigen Vorlagen (Ozean, Himmel, ...).
+const quicksand = Quicksand({ subsets: ["latin"], weight: ["500", "600", "700"], variable: "--font-rund" });
+const manrope = Manrope({ subsets: ["latin"], weight: ["400", "600", "700", "800"], variable: "--font-modern" });
 
 export const metadata: Metadata = {
   title: "Familientisch",
@@ -27,7 +37,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="de">
+    <html lang="de" className={`${quicksand.variable} ${manrope.variable}`}>
       <body>{children}</body>
     </html>
   );
