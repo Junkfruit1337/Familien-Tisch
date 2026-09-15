@@ -56,7 +56,7 @@ export const TUTORIAL_KAPITEL: TutorialKapitel[] = [
       "Termine für die ganze Familie oder nur einzelne Personen anlegen, auch über mehrere Tage",
       "Wiederkehrende Termine (täglich, wöchentlich, monatlich, ...)",
       "Geburtstage erscheinen automatisch jedes Jahr",
-      "Anhänge (Foto/PDF) und eine Packliste je Termin",
+      "Anhänge (Foto/PDF) und eine Notiz je Termin",
     ],
   },
   {

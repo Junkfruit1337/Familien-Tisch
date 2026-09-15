@@ -125,7 +125,11 @@ enum Wiederholung {
 model Termin {
   id                 String          @id @default(cuid())
   titel              String
-  beschreibung       String?
+  // Fix-Batch 122 (Florians Wunsch): freies Notizfeld statt der entfernten strukturierten
+  // Packliste (Fix-Batch 92) — z. B. "Sonnencreme und Röntgenbilder mitnehmen", ohne eigene
+  // Checkliste. War vorher als ungenutztes `beschreibung`-Feld angelegt, jetzt umbenannt und
+  // tatsächlich verdrahtet.
+  notiz              String?
   start              DateTime
   ende               DateTime?
   ganztaegig         Boolean         @default(false)
@@ -148,21 +152,6 @@ model Termin {
   erstelltVon        Person          @relation("TerminErsteller", fields: [erstelltVonId], references: [id])
   createdAt          DateTime        @default(now())
   updatedAt          DateTime        @updatedAt
-
-  checklistenpunkte TerminChecklistenpunkt[]
-}
-
-// Fix-Batch 92 (Florians Wunsch): Packliste/Checkliste an einen Termin anhängen (z.B. für
-// Ausflüge/Ferien) — bewusst für alle sichtbar/bearbeitbar, die den Termin ohnehin sehen bzw.
-// bearbeiten dürfen (anders als Termin.anhaenge, die bewusst enger sichtbar sind), da eine
-// Packliste typischerweise eine gemeinsame Familien-Aufgabe ist.
-model TerminChecklistenpunkt {
-  id        String   @id @default(cuid())
-  terminId  String
-  termin    Termin   @relation(fields: [terminId], references: [id], onDelete: Cascade)
-  text      String
-  erledigt  Boolean  @default(false)
-  createdAt DateTime @default(now())
 }
 
 // ---------- Aufgaben ----------

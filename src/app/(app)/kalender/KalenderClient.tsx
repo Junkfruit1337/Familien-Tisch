@@ -8,9 +8,6 @@ import {
   deleteTermin,
   erkenneTerminAusText,
   pruefeTerminKonflikt,
-  addChecklistenpunkt,
-  toggleChecklistenpunkt,
-  deleteChecklistenpunkt,
 } from "./actions";
 import { erkenneTerminKategorie, TERMIN_KATEGORIE_LABEL } from "@/lib/terminkategorisierung";
 import HistorieVerlauf from "@/components/HistorieVerlauf";
@@ -35,7 +32,7 @@ type Termin = {
   gruppeId: string | null;
   erstelltVonId: string | null;
   anhaenge: string[];
-  checklistenpunkte: { id: string; text: string; erledigt: boolean }[];
+  notiz: string | null;
 };
 type Person = { id: string; name: string; farbe: string };
 
@@ -174,10 +171,11 @@ export default function KalenderClient({
   const [wiederholung, setWiederholung] = useState("KEINE");
   const [wiederholungBis, setWiederholungBis] = useState("");
   const [anhaengeEntwurf, setAnhaengeEntwurf] = useState<string[]>([]);
+  // Fix-Batch 122 (Florians Wunsch, als Ersatz für die entfernte Packliste): freies Notizfeld
+  // je Termin, z. B. "was mitzunehmen ist" — bewusst unstrukturierter Text statt einer eigenen
+  // Checkliste.
+  const [notizEntwurf, setNotizEntwurf] = useState("");
   const [grossesBild, setGrossesBild] = useState<string | null>(null);
-  // Fix-Batch 92 (Florians Wunsch): Packliste/Checkliste je Termin — Entwurfstext für ein
-  // neues Checklisten-Item, pro Termin getrennt gehalten.
-  const [checklisteNeuerPunkt, setChecklisteNeuerPunkt] = useState<Record<string, string>>({});
   // Fix-Batch 95 (Florians Wunsch): wiederkehrenden Termin nachträglich als GANZE Serie
   // bearbeiten können (bisher nur der Titel/die Zeit des einen angeklickten Einzeltermins).
   const [bearbeitenSerieMoeglich, setBearbeitenSerieMoeglich] = useState(false);
@@ -273,6 +271,7 @@ export default function KalenderClient({
     setStart("");
     setEnde("");
     setAnhaengeEntwurf([]);
+    setNotizEntwurf("");
     setBearbeitenSerieMoeglich(false);
     setFuerGanzeSerie(false);
     setGanztaegig(false);
@@ -289,11 +288,19 @@ export default function KalenderClient({
     setStart(t.ganztaegig ? isoDatum(t.start) : t.start.slice(0, 16));
     setEnde(t.ende ? (t.ganztaegig ? isoDatum(t.ende) : t.ende.slice(0, 16)) : "");
     setAnhaengeEntwurf(t.anhaenge);
+    setNotizEntwurf(t.notiz ?? "");
     setWiederholung("KEINE");
     setWiederholungBis("");
     setBearbeitenSerieMoeglich(!!(t.seriesId || t.gruppeId));
     setFuerGanzeSerie(false);
     setZeigeFormular(true);
+    // Fix-Batch 122 (Florians Bug-Meldung: "es passiert nichts, wenn ich auf Bearbeiten
+    // klicke") — das Formular öffnet sich oben auf der Seite; war die Liste weiter
+    // heruntergescrollt, blieb das für Florian unsichtbar und wirkte wie ein toter Knopf.
+    // Jetzt wird nach dem Öffnen automatisch dorthin gescrollt.
+    setTimeout(() => {
+      document.getElementById("termin-formular")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 50);
   }
 
   async function spracheErkannt(text: string) {
@@ -336,7 +343,7 @@ export default function KalenderClient({
         if (fuerGanzeSerie) {
           await updateTerminSerie(bearbeitenId, titel);
         } else {
-          await updateTermin(bearbeitenId, { titel, start: startWert, ende: endeWert, anhaenge: anhaengeEntwurf });
+          await updateTermin(bearbeitenId, { titel, start: startWert, ende: endeWert, anhaenge: anhaengeEntwurf, notiz: notizEntwurf || undefined });
         }
       } else {
         // Fix-Batch 63 (Terminkonflikt-Check): vor dem Anlegen prüfen, ob am selben Tag für
@@ -357,6 +364,7 @@ export default function KalenderClient({
           wiederholung,
           wiederholungBis: wiederholungBis || undefined,
           anhaenge: anhaengeEntwurf,
+          notiz: notizEntwurf || undefined,
         });
       }
       formularZuruecksetzen();
@@ -456,60 +464,8 @@ export default function KalenderClient({
               )}
             </div>
           )}
-          {/* Fix-Batch 92 (Florians Wunsch): Packliste/Checkliste — bewusst für alle sichtbar
-              und bearbeitbar, die diesen Termin ohnehin sehen (gemeinsame Familien-Aufgabe,
-              keine private Info wie bei den Anhängen weiter oben). */}
-          {t.typ === "termin" && (
-            <details>
-              <summary style={{ cursor: "pointer", fontSize: 12, color: "var(--text-muted)" }}>
-                📋 Packliste{t.checklistenpunkte.length > 0 ? ` (${t.checklistenpunkte.filter((c) => c.erledigt).length}/${t.checklistenpunkte.length})` : ""}
-              </summary>
-              <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 6 }}>
-                {t.checklistenpunkte.map((c) => (
-                  <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
-                    <input type="checkbox" checked={c.erledigt} onChange={() => startTransition(() => toggleChecklistenpunkt(c.id))} />
-                    <span style={{ flex: 1, textDecoration: c.erledigt ? "line-through" : undefined, color: c.erledigt ? "var(--text-muted)" : undefined }}>
-                      {c.text}
-                    </span>
-                    <button
-                      className="btn-icon"
-                      style={{ width: 20, height: 20, fontSize: 11 }}
-                      title="Entfernen"
-                      onClick={() => startTransition(() => deleteChecklistenpunkt(c.id))}
-                    >
-                      ✕
-                    </button>
-                  </div>
-                ))}
-                <div style={{ display: "flex", gap: 6 }}>
-                  <input
-                    placeholder="Neuer Punkt, z. B. Sonnencreme"
-                    value={checklisteNeuerPunkt[t.id] ?? ""}
-                    onChange={(e) => setChecklisteNeuerPunkt((prev) => ({ ...prev, [t.id]: e.target.value }))}
-                    style={{ flex: 1, fontSize: 13 }}
-                    onKeyDown={(e) => {
-                      if (e.key !== "Enter") return;
-                      const text = checklisteNeuerPunkt[t.id]?.trim();
-                      if (!text) return;
-                      startTransition(() => addChecklistenpunkt(t.id, text));
-                      setChecklisteNeuerPunkt((prev) => ({ ...prev, [t.id]: "" }));
-                    }}
-                  />
-                  <button
-                    className="btn-secondary"
-                    style={{ fontSize: 12, padding: "4px 10px" }}
-                    onClick={() => {
-                      const text = checklisteNeuerPunkt[t.id]?.trim();
-                      if (!text) return;
-                      startTransition(() => addChecklistenpunkt(t.id, text));
-                      setChecklisteNeuerPunkt((prev) => ({ ...prev, [t.id]: "" }));
-                    }}
-                  >
-                    + Hinzufügen
-                  </button>
-                </div>
-              </div>
-            </details>
+          {t.notiz && (
+            <div style={{ fontSize: 13, whiteSpace: "pre-wrap", color: "var(--text-muted)" }}>📝 {t.notiz}</div>
           )}
           {loeschAuswahl?.id === t.id && (
             <div style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 12, flexWrap: "wrap" }}>
@@ -588,7 +544,7 @@ export default function KalenderClient({
       </div>
 
       {zeigeFormular && (
-        <div className="card" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        <div id="termin-formular" className="card" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           <strong style={{ fontSize: 14 }}>{bearbeitenId ? "Termin bearbeiten" : "Neuer Termin"}</strong>
           {!bearbeitenId && <Spracheingabe onErgebnis={spracheErkannt} disabled={spracheVerarbeitung} />}
           {spracheVerarbeitung && <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>Spracheingabe wird verarbeitet …</p>}
@@ -668,6 +624,19 @@ export default function KalenderClient({
                 </>
               )}
             </>
+          )}
+          {/* Fix-Batch 122 (Florians Wunsch, als Ersatz für die entfernte Packliste): freies
+              Notizfeld statt einer eigenen Checkliste — z. B. "Sonnencreme mitnehmen". */}
+          {!fuerGanzeSerie && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <span style={{ fontSize: 12, color: "var(--text-muted)" }}>Notiz (optional, z. B. was mitzunehmen ist)</span>
+              <textarea
+                value={notizEntwurf}
+                onChange={(e) => setNotizEntwurf(e.target.value)}
+                rows={2}
+                style={{ resize: "vertical", fontFamily: "inherit" }}
+              />
+            </div>
           )}
           {/* Fix-Batch 90 (Florians Nachfrage): Kamera-Direktaufnahme ergänzt — vorher gab es
               nur einen generischen Datei-Picker, der je nach Browser/OS nicht zuverlässig die

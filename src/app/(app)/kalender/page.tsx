@@ -39,7 +39,7 @@ export default async function KalenderPage() {
     gruppeId: t.gruppeId,
     erstelltVonId: t.erstelltVonId,
     anhaenge: t.anhaenge,
-    checklistenpunkte: t.checklistenpunkte,
+    notiz: t.notiz,
   }));
 
   const aufgabenEintraege = aufgaben.map((a) => ({
@@ -57,7 +57,7 @@ export default async function KalenderPage() {
     gruppeId: null,
     erstelltVonId: null,
     anhaenge: [] as string[],
-    checklistenpunkte: [] as { id: string; text: string; erledigt: boolean }[],
+    notiz: null,
   }));
 
   const schulEintraegeEintraege = schulEintraege.map((s) => ({
@@ -75,7 +75,7 @@ export default async function KalenderPage() {
     gruppeId: null,
     erstelltVonId: null,
     anhaenge: [] as string[],
-    checklistenpunkte: [] as { id: string; text: string; erledigt: boolean }[],
+    notiz: null,
   }));
 
   const geburtstagsEintraege = geburtstage.map((g) => ({
@@ -93,7 +93,7 @@ export default async function KalenderPage() {
     gruppeId: null,
     erstelltVonId: null,
     anhaenge: [] as string[],
-    checklistenpunkte: [] as { id: string; text: string; erledigt: boolean }[],
+    notiz: null,
   }));
 
   const alleEintraege = [...terminEintraege, ...aufgabenEintraege, ...schulEintraegeEintraege, ...geburtstagsEintraege].sort(

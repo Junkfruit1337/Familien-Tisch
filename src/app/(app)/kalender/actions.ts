@@ -52,7 +52,7 @@ export async function listTermine() {
       : { OR: [{ personId: person.id }, { personId: null }] };
   const rows = await prisma.termin.findMany({
     where,
-    include: { person: true, checklistenpunkte: { orderBy: { createdAt: "asc" } } },
+    include: { person: true },
     orderBy: { start: "asc" },
   });
 
@@ -83,7 +83,7 @@ export async function listTermine() {
       erstelltVonId: r.erstelltVonId,
       personen: r.person ? [r.person] : [],
       anhaenge: anhaengeSichtbar([r.personId], r.erstelltVonId, person.id) ? r.anhaenge : [],
-      checklistenpunkte: r.checklistenpunkte.map((c) => ({ id: c.id, text: c.text, erledigt: c.erledigt })),
+      notiz: r.notiz,
     })),
     ...[...gruppen.values()].map((liste) => ({
       id: liste[0].id,
@@ -104,7 +104,7 @@ export async function listTermine() {
       )
         ? liste[0].anhaenge
         : [],
-      checklistenpunkte: liste[0].checklistenpunkte.map((c) => ({ id: c.id, text: c.text, erledigt: c.erledigt })),
+      notiz: liste[0].notiz,
     })),
   ];
 
@@ -227,6 +227,7 @@ export async function createTermin(data: {
   wiederholung?: string;
   wiederholungBis?: string;
   anhaenge?: string[];
+  notiz?: string;
 }) {
   const person = await requirePerson();
   const zielIds: (string | null)[] =
@@ -272,6 +273,7 @@ export async function createTermin(data: {
           wiederholungBis: unbegrenzt ? null : wiederholungBis,
           erstelltVonId: person.id,
           anhaenge: data.anhaenge ?? [],
+          notiz: data.notiz || null,
         },
       });
       erstellte.push(termin);
@@ -295,7 +297,7 @@ export async function createTermin(data: {
 // löschen und neu anlegen; das vereinfacht das Bearbeiten von Mehrfach-Personen-Terminen
 // (jede Zeile der Gruppe wird beim Bearbeiten einzeln mit denselben Titel-/Zeit-Werten
 // aktualisiert, ohne ihre individuelle Personen-Zuordnung anzufassen).
-export async function updateTermin(id: string, data: { titel: string; start: string; ende?: string; anhaenge?: string[] }) {
+export async function updateTermin(id: string, data: { titel: string; start: string; ende?: string; anhaenge?: string[]; notiz?: string }) {
   const person = await requirePerson();
   const termin = await prisma.termin.findUnique({ where: { id } });
   if (!termin) return;
@@ -311,6 +313,7 @@ export async function updateTermin(id: string, data: { titel: string; start: str
       ende: data.ende ? new Date(data.ende) : null,
       kategorie,
       anhaenge: data.anhaenge,
+      notiz: data.notiz || null,
     },
   });
   await logAenderung({
@@ -383,31 +386,6 @@ export async function deleteTermin(id: string, scope: "eins" | "serie" = "eins")
   }
   revalidatePath("/kalender");
   revalidatePath("/dashboard");
-}
-
-// ---------- Packliste/Checkliste je Termin (Fix-Batch 92, Florians Wunsch) ----------
-// Bewusst für alle sichtbar/bearbeitbar, die den Termin selbst schon sehen/bearbeiten dürfen —
-// eine Packliste ist typischerweise eine gemeinsame Familien-Aufgabe, keine private Information.
-
-export async function addChecklistenpunkt(terminId: string, text: string) {
-  await requirePerson();
-  if (!text.trim()) return;
-  await prisma.terminChecklistenpunkt.create({ data: { terminId, text: text.trim() } });
-  revalidatePath("/kalender");
-}
-
-export async function toggleChecklistenpunkt(id: string) {
-  await requirePerson();
-  const punkt = await prisma.terminChecklistenpunkt.findUnique({ where: { id } });
-  if (!punkt) return;
-  await prisma.terminChecklistenpunkt.update({ where: { id }, data: { erledigt: !punkt.erledigt } });
-  revalidatePath("/kalender");
-}
-
-export async function deleteChecklistenpunkt(id: string) {
-  await requirePerson();
-  await prisma.terminChecklistenpunkt.delete({ where: { id } }).catch(() => {});
-  revalidatePath("/kalender");
 }
 
 // Schul-Einträge (Klassenarbeiten/HÜ-Kontrollen) erscheinen automatisch im Kalender (read-only).
