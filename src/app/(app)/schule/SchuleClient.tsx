@@ -380,9 +380,10 @@ function SchulEintraegeSektion({
           // 2/3 der Zeilenbreite ein, kaum Platz für die eigentlichen Infos, Kind-Name kaum
           // sichtbar): Bearbeiten/Löschen sind jetzt hinter einem Antippen versteckt (<details>,
           // wie an anderen Stellen der App etabliert) statt permanent nebeneinander zu stehen.
-          // Der Kind-Name steht jetzt als eigene, farbige Zeile mit Chip ganz oben, statt klein
-          // am Ende einer Zeile angehängt zu sein.
-          const inhalt = (
+          // Fix-Batch 117 (Florians Feedback, direkt danach): "Fach ist wichtiger als Thema" —
+          // eingeklappt zählen nur Fach, Kind, Datum und "noch X Tage"; Thema und Art
+          // (Arbeit/HÜ) stehen erst nach dem Aufklappen, für mehr Fokus in der Übersicht.
+          const zusammenfassung = (
             <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
               {istEltern && (
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -390,75 +391,71 @@ function SchulEintraegeSektion({
                   <span style={{ fontWeight: 700, fontSize: 13, color: e.personFarbe }}>{e.personName}</span>
                 </div>
               )}
-              <div style={{ fontWeight: 700, fontSize: 15 }}>
-                {new Date(e.datum).toLocaleDateString("de-DE", { weekday: "long", day: "2-digit", month: "2-digit" })}
-              </div>
-              <div style={{ fontWeight: 600 }}>
-                {e.titel} {e.fachName && <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>· {e.fachName}</span>}
-              </div>
+              <div style={{ fontWeight: 700, fontSize: 16 }}>{e.fachName ?? e.titel}</div>
               <div style={{ fontSize: 13, color: "var(--text-muted)" }}>
-                {ART_LABEL[e.art]} · {text}
+                {new Date(e.datum).toLocaleDateString("de-DE", { weekday: "long", day: "2-digit", month: "2-digit" })} · {text}
               </div>
             </div>
           );
-          // Ohne Bearbeiten-Recht gibt es nichts zum Aufklappen — dann eine schlichte, nicht
-          // aufklappbare Karte statt eines Pfeils, der zu einem leeren Innenraum führen würde.
-          if (!darfBearbeiten) {
-            return (
-              <div key={e.id} className="card">
-                {inhalt}
-              </div>
-            );
-          }
           return (
             <details key={e.id} className="card">
-              <summary style={{ cursor: "pointer" }}>{inhalt}</summary>
-              {wirdBearbeitet ? (
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  <input value={bearbeitenThema} onChange={(ev) => setBearbeitenThema(ev.target.value)} placeholder="Thema" />
-                  <input type="date" value={bearbeitenDatum} onChange={(ev) => setBearbeitenDatum(ev.target.value)} />
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <button
-                      className="btn"
-                      style={{ padding: "6px 10px" }}
-                      onClick={() =>
-                        startTransition(async () => {
-                          await updateSchulEintrag(e.id, { thema: bearbeitenThema, datum: bearbeitenDatum });
-                          setBearbeiteId(null);
-                        })
-                      }
-                    >
-                      Speichern
-                    </button>
-                    <button className="btn-secondary" style={{ padding: "6px 10px" }} onClick={() => setBearbeiteId(null)}>
-                      Abbrechen
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div style={{ display: "flex", gap: 8 }}>
-                  <button
-                    className="btn-secondary"
-                    style={{ fontSize: 12, padding: "4px 8px" }}
-                    onClick={() => {
-                      setBearbeiteId(e.id);
-                      setBearbeitenThema(e.titel);
-                      setBearbeitenDatum(e.datum.slice(0, 10));
-                    }}
-                  >
-                    ✎ Bearbeiten
-                  </button>
-                  <button
-                    className="btn-secondary"
-                    style={{ fontSize: 12, padding: "4px 8px" }}
-                    onClick={() => {
-                      if (confirm(`"${e.titel}" wirklich löschen?`)) startTransition(() => deleteSchulEintrag(e.id));
-                    }}
-                  >
-                    🗑 Löschen
-                  </button>
+              <summary style={{ cursor: "pointer" }}>{zusammenfassung}</summary>
+              {!wirdBearbeitet && (
+                <div style={{ fontSize: 14, marginBottom: darfBearbeiten ? 8 : 0 }}>
+                  {/* Fach steht (falls vorhanden) schon oben in der Zusammenfassung als
+                      Überschrift — hier also nur noch Art + Thema, ohne das Fach zu
+                      wiederholen. Gibt es kein Fach, ist der Titel bereits die Überschrift
+                      oben, hier dann nur noch die Art, ohne den Titel doppelt zu zeigen. */}
+                  {e.fachName ? `${ART_LABEL[e.art]}: ${e.titel}` : ART_LABEL[e.art]}
                 </div>
               )}
+              {darfBearbeiten &&
+                (wirdBearbeitet ? (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    <input value={bearbeitenThema} onChange={(ev) => setBearbeitenThema(ev.target.value)} placeholder="Thema" />
+                    <input type="date" value={bearbeitenDatum} onChange={(ev) => setBearbeitenDatum(ev.target.value)} />
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <button
+                        className="btn"
+                        style={{ padding: "6px 10px" }}
+                        onClick={() =>
+                          startTransition(async () => {
+                            await updateSchulEintrag(e.id, { thema: bearbeitenThema, datum: bearbeitenDatum });
+                            setBearbeiteId(null);
+                          })
+                        }
+                      >
+                        Speichern
+                      </button>
+                      <button className="btn-secondary" style={{ padding: "6px 10px" }} onClick={() => setBearbeiteId(null)}>
+                        Abbrechen
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button
+                      className="btn-secondary"
+                      style={{ fontSize: 12, padding: "4px 8px" }}
+                      onClick={() => {
+                        setBearbeiteId(e.id);
+                        setBearbeitenThema(e.titel);
+                        setBearbeitenDatum(e.datum.slice(0, 10));
+                      }}
+                    >
+                      ✎ Bearbeiten
+                    </button>
+                    <button
+                      className="btn-secondary"
+                      style={{ fontSize: 12, padding: "4px 8px" }}
+                      onClick={() => {
+                        if (confirm(`"${e.titel}" wirklich löschen?`)) startTransition(() => deleteSchulEintrag(e.id));
+                      }}
+                    >
+                      🗑 Löschen
+                    </button>
+                  </div>
+                ))}
             </details>
           );
         })}
