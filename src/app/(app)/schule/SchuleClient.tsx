@@ -25,6 +25,7 @@ import LernHilfe from "@/components/LernHilfe";
 import VerlaufChart from "@/components/VerlaufChart";
 import { BEREICH_FARBEN } from "@/lib/bereichFarben";
 import ThgVollbild from "@/components/ThgVollbild";
+import PersonChip from "@/components/PersonChip";
 
 type Note = {
   id: string;
@@ -375,8 +376,43 @@ function SchulEintraegeSektion({
           const { text } = tageBisText(e.datum);
           const darfBearbeiten = istEltern || e.personId === eigeneId;
           const wirdBearbeitet = bearbeiteId === e.id;
+          // Fix-Batch 116 (Florians Bug-Meldung: "Bearbeiten"/"Löschen" nahmen nebeneinander
+          // 2/3 der Zeilenbreite ein, kaum Platz für die eigentlichen Infos, Kind-Name kaum
+          // sichtbar): Bearbeiten/Löschen sind jetzt hinter einem Antippen versteckt (<details>,
+          // wie an anderen Stellen der App etabliert) statt permanent nebeneinander zu stehen.
+          // Der Kind-Name steht jetzt als eigene, farbige Zeile mit Chip ganz oben, statt klein
+          // am Ende einer Zeile angehängt zu sein.
+          const inhalt = (
+            <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+              {istEltern && (
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <PersonChip name={e.personName} farbe={e.personFarbe} size={18} />
+                  <span style={{ fontWeight: 700, fontSize: 13, color: e.personFarbe }}>{e.personName}</span>
+                </div>
+              )}
+              <div style={{ fontWeight: 700, fontSize: 15 }}>
+                {new Date(e.datum).toLocaleDateString("de-DE", { weekday: "long", day: "2-digit", month: "2-digit" })}
+              </div>
+              <div style={{ fontWeight: 600 }}>
+                {e.titel} {e.fachName && <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>· {e.fachName}</span>}
+              </div>
+              <div style={{ fontSize: 13, color: "var(--text-muted)" }}>
+                {ART_LABEL[e.art]} · {text}
+              </div>
+            </div>
+          );
+          // Ohne Bearbeiten-Recht gibt es nichts zum Aufklappen — dann eine schlichte, nicht
+          // aufklappbare Karte statt eines Pfeils, der zu einem leeren Innenraum führen würde.
+          if (!darfBearbeiten) {
+            return (
+              <div key={e.id} className="card">
+                {inhalt}
+              </div>
+            );
+          }
           return (
-            <div key={e.id} className="card">
+            <details key={e.id} className="card">
+              <summary style={{ cursor: "pointer" }}>{inhalt}</summary>
               {wirdBearbeitet ? (
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                   <input value={bearbeitenThema} onChange={(ev) => setBearbeitenThema(ev.target.value)} placeholder="Thema" />
@@ -400,53 +436,30 @@ function SchulEintraegeSektion({
                   </div>
                 </div>
               ) : (
-                <>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                    <div>
-                      <div style={{ fontWeight: 700, fontSize: 16 }}>
-                        {new Date(e.datum).toLocaleDateString("de-DE", { weekday: "long", day: "2-digit", month: "2-digit" })}
-                      </div>
-                      <div style={{ fontWeight: 600, marginTop: 2 }}>
-                        {e.titel} {e.fachName && <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>· {e.fachName}</span>}
-                      </div>
-                      <div style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 2 }}>
-                        {ART_LABEL[e.art]} · {text}
-                        {istEltern && (
-                          <>
-                            {" · "}
-                            <span style={{ color: e.personFarbe, fontWeight: 600 }}>{e.personName}</span>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                    {darfBearbeiten && (
-                      <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-                        <button
-                          className="btn-secondary"
-                          style={{ fontSize: 12, padding: "4px 8px" }}
-                          onClick={() => {
-                            setBearbeiteId(e.id);
-                            setBearbeitenThema(e.titel);
-                            setBearbeitenDatum(e.datum.slice(0, 10));
-                          }}
-                        >
-                          ✎ Bearbeiten
-                        </button>
-                        <button
-                          className="btn-secondary"
-                          style={{ fontSize: 12, padding: "4px 8px" }}
-                          onClick={() => {
-                            if (confirm(`"${e.titel}" wirklich löschen?`)) startTransition(() => deleteSchulEintrag(e.id));
-                          }}
-                        >
-                          🗑 Löschen
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button
+                    className="btn-secondary"
+                    style={{ fontSize: 12, padding: "4px 8px" }}
+                    onClick={() => {
+                      setBearbeiteId(e.id);
+                      setBearbeitenThema(e.titel);
+                      setBearbeitenDatum(e.datum.slice(0, 10));
+                    }}
+                  >
+                    ✎ Bearbeiten
+                  </button>
+                  <button
+                    className="btn-secondary"
+                    style={{ fontSize: 12, padding: "4px 8px" }}
+                    onClick={() => {
+                      if (confirm(`"${e.titel}" wirklich löschen?`)) startTransition(() => deleteSchulEintrag(e.id));
+                    }}
+                  >
+                    🗑 Löschen
+                  </button>
+                </div>
               )}
-            </div>
+            </details>
           );
         })}
       </div>
