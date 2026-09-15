@@ -4,10 +4,11 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { logout } from "./actions";
-import { BEREICH_FARBEN } from "@/lib/bereichFarben";
-import { BEREICH_ICONS } from "@/lib/bereichIcons";
+import { BEREICH_FARBEN, type Bereich } from "@/lib/bereichFarben";
+import { BereichIcon } from "@/lib/bereichIcons";
 import PersonChip from "@/components/PersonChip";
 import { DESIGN_KEY } from "@/lib/designThemes";
+import { ICON_STIL_KEY, anwendenIconStil, type IconStil } from "@/lib/iconStil";
 
 type Person = { id: string; name: string; farbe: string; rolle: string };
 type Theme = "hell" | "dunkel";
@@ -27,18 +28,18 @@ function anwendenTheme(theme: Theme) {
 // zuerst), Kinder haben stattdessen Schule+Dienste direkt danach (ihr Alltag zuerst), beide
 // bekommen danach die jeweils andere Zweiergruppe. Heute bleibt vorne, Mehr ganz hinten, bei
 // beiden Rollen gleich. Kalender+Aufgaben bleiben für beide direkt nach Heute.
-// Fix-Batch 123 (Florians Bug-Meldung: die Tab-Icons sahen "katastrophal" aus, uneinheitlich
-// je nach Gerät): Emoji durch dasselbe lucide-Icon-Set ersetzt, das jetzt auch die Seiten-Header
-// verwenden (BEREICH_ICONS) — garantiert dieselbe Bildsprache oben wie unten.
+// Fix-Batch 123/124: Seiten-Header und Navigationsleiste teilen sich EIN Icon-Set je Bereich
+// (BereichIcon in bereichIcons.tsx) — hier nur der Bereichs-Schlüssel je Tab, Farbe/Icon-Stil
+// entscheidet BereichIcon selbst.
 const NAV_ITEMS = {
-  heute: { href: "/dashboard", label: "Heute", icon: BEREICH_ICONS.dashboard, farbe: BEREICH_FARBEN.dashboard },
-  kalender: { href: "/kalender", label: "Kalender", icon: BEREICH_ICONS.kalender, farbe: BEREICH_FARBEN.kalender },
-  aufgaben: { href: "/aufgaben", label: "Aufgaben", icon: BEREICH_ICONS.aufgaben, farbe: BEREICH_FARBEN.aufgaben },
-  schule: { href: "/schule", label: "Schule", icon: BEREICH_ICONS.schule, farbe: BEREICH_FARBEN.schule },
-  dienste: { href: "/dienstplan", label: "Dienste", icon: BEREICH_ICONS.dienstplan, farbe: BEREICH_FARBEN.dienstplan },
-  einkauf: { href: "/einkaufsliste", label: "Einkauf", icon: BEREICH_ICONS.einkaufsliste, farbe: BEREICH_FARBEN.einkaufsliste },
-  essen: { href: "/essensplan", label: "Essen", icon: BEREICH_ICONS.essensplan, farbe: BEREICH_FARBEN.essensplan },
-  mehr: { href: "/einstellungen", label: "Mehr", icon: BEREICH_ICONS.einstellungen, farbe: BEREICH_FARBEN.einstellungen },
+  heute: { href: "/dashboard", label: "Heute", bereich: "dashboard" as Bereich, farbe: BEREICH_FARBEN.dashboard },
+  kalender: { href: "/kalender", label: "Kalender", bereich: "kalender" as Bereich, farbe: BEREICH_FARBEN.kalender },
+  aufgaben: { href: "/aufgaben", label: "Aufgaben", bereich: "aufgaben" as Bereich, farbe: BEREICH_FARBEN.aufgaben },
+  schule: { href: "/schule", label: "Schule", bereich: "schule" as Bereich, farbe: BEREICH_FARBEN.schule },
+  dienste: { href: "/dienstplan", label: "Dienste", bereich: "dienstplan" as Bereich, farbe: BEREICH_FARBEN.dienstplan },
+  einkauf: { href: "/einkaufsliste", label: "Einkauf", bereich: "einkaufsliste" as Bereich, farbe: BEREICH_FARBEN.einkaufsliste },
+  essen: { href: "/essensplan", label: "Essen", bereich: "essensplan" as Bereich, farbe: BEREICH_FARBEN.essensplan },
+  mehr: { href: "/einstellungen", label: "Mehr", bereich: "einstellungen" as Bereich, farbe: BEREICH_FARBEN.einstellungen },
 } as const;
 
 // Fix-Batch 108 (Florians Wunsch): kein eigener THG-Reiter mehr — auch für Kinder nicht mehr
@@ -78,6 +79,11 @@ export default function AppShell({ person, children }: { person: Person; childre
     try {
       const design = localStorage.getItem(DESIGN_KEY);
       if (design) document.documentElement.setAttribute("data-design", design);
+    } catch {}
+
+    try {
+      const iconStil = localStorage.getItem(ICON_STIL_KEY) as IconStil | null;
+      if (iconStil) anwendenIconStil(iconStil);
     } catch {}
   }, []);
 
@@ -229,7 +235,7 @@ export default function AppShell({ person, children }: { person: Person; childre
                   transition: "background 0.15s ease",
                 }}
               >
-                <item.icon size={20} strokeWidth={2.2} />
+                <BereichIcon bereich={item.bereich} size={20} />
               </span>
               <span style={{ whiteSpace: "nowrap" }}>{item.label}</span>
             </Link>

@@ -108,6 +108,27 @@
   --shadow-md: 0 8px 20px rgba(0, 0, 0, 0.4), 0 2px 6px rgba(0, 0, 0, 0.3);
 }
 
+/* Fix-Batch 124 (Florians Wunsch): Icon-Stil (bunte Emoji vs. schlichte Symbole) je Bereich als
+   Stil-Wahl wie Hell/Dunkel und Design-Vorlage — BereichIcon (bereichIcons.tsx) rendert IMMER
+   beide Varianten ins DOM, hier rein über das "data-icon-stil"-Attribut auf <html> sichtbar
+   geschaltet. "Bunt" ist der Standard (keine Attribut-Bedingung nötig, siehe .icon-minimal
+   unten), "minimal" schaltet um. */
+.icon-bunt {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+.icon-minimal {
+  display: none;
+}
+:root[data-icon-stil="minimal"] .icon-bunt {
+  display: none;
+}
+:root[data-icon-stil="minimal"] .icon-minimal {
+  display: inline-flex;
+}
+
 * {
   box-sizing: border-box;
 }

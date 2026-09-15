@@ -35,9 +35,32 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 };
 
+// Fix-Batch 124 (Florians Bug-Meldung: "beim Refreshen wird kurz von hell auf dunkel
+// geswitcht und dann wieder zurück"): Theme/Design/Icon-Stil wurden bisher erst NACH dem
+// ersten Render in einem useEffect in AppShell angewendet — die Seite zeigte kurz die
+// System-Voreinstellung, bevor die eigentliche, gespeicherte Wahl griff. Dieses kleine,
+// blockierende Inline-Skript läuft im <head>, BEVOR irgendetwas gemalt wird, und setzt die
+// Attribute direkt aus localStorage — kein sichtbarer Zwischenzustand mehr möglich.
+const VORAB_SKRIPT = `
+(function () {
+  try {
+    var theme = localStorage.getItem("familientisch-theme");
+    var hell = theme ? theme === "hell" : !window.matchMedia("(prefers-color-scheme: dark)").matches;
+    document.documentElement.setAttribute("data-theme", hell ? "light" : "dark");
+    var design = localStorage.getItem("familientisch-design");
+    if (design) document.documentElement.setAttribute("data-design", design);
+    var iconStil = localStorage.getItem("familientisch-icon-stil");
+    if (iconStil) document.documentElement.setAttribute("data-icon-stil", iconStil);
+  } catch (e) {}
+})();
+`;
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="de" className={`${quicksand.variable} ${manrope.variable}`}>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: VORAB_SKRIPT }} />
+      </head>
       <body>{children}</body>
     </html>
   );

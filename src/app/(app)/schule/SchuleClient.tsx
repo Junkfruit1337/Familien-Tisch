@@ -21,7 +21,6 @@ import HistorieVerlauf from "@/components/HistorieVerlauf";
 import Spracheingabe from "@/components/Spracheingabe";
 import { erkenneSparzielIcon } from "@/lib/sparzielIcon";
 import SeitenTitel from "@/components/SeitenTitel";
-import { BEREICH_ICONS } from "@/lib/bereichIcons";
 import LernHilfe from "@/components/LernHilfe";
 import VerlaufChart from "@/components/VerlaufChart";
 import { BEREICH_FARBEN } from "@/lib/bereichFarben";
@@ -907,7 +906,7 @@ export default function SchuleClient({
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-        <SeitenTitel icon={BEREICH_ICONS.schule} farbe={BEREICH_FARBEN.schule}>Schule &amp; Taschengeld</SeitenTitel>
+        <SeitenTitel bereich="schule">Schule &amp; Taschengeld</SeitenTitel>
         {/* Fix-Batch 106 (Florians Wunsch): kompakter Button statt der ganzen THG-Karte, die
             hier zu viel Platz eingenommen hat. Fix-Batch 108: auch für Kinder hier (statt des
             entfernten eigenen THG-Reiters) — jeder meldet sich für sich selbst an. */}

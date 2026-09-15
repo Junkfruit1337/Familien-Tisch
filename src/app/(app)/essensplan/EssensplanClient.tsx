@@ -37,7 +37,6 @@ import {
   entsperreExtraMahlzeit,
 } from "./actions";
 import SeitenTitel from "@/components/SeitenTitel";
-import { BEREICH_ICONS } from "@/lib/bereichIcons";
 import Spracheingabe from "@/components/Spracheingabe";
 import { pruefeZutatenVollstaendig } from "@/lib/rezeptValidierung";
 import { REZEPT_KATEGORIEN } from "@/lib/rezeptKategorien";
@@ -413,7 +412,7 @@ export default function EssensplanClient({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <SeitenTitel icon={BEREICH_ICONS.essensplan} farbe={BEREICH_FARBEN.essensplan}>Essensplan</SeitenTitel>
+      <SeitenTitel bereich="essensplan">Essensplan</SeitenTitel>
 
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <button className="btn-secondary" style={{ padding: "6px 12px" }} disabled={offset <= WOCHE_OFFSET_MIN} onClick={() => wechsleWoche(offset - 1)}>

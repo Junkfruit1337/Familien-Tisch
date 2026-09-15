@@ -33,12 +33,12 @@ import {
 } from "../dienstplan/actions";
 import PushBenachrichtigungen from "@/components/PushBenachrichtigungen";
 import DesignAuswahl from "@/components/DesignAuswahl";
+import IconStilAuswahl from "@/components/IconStilAuswahl";
 import IcsImportSektion from "@/components/IcsImportSektion";
 import NotengewichtungSektion from "@/components/NotengewichtungSektion";
 import TutorialModal from "@/components/TutorialModal";
 import Spracheingabe from "@/components/Spracheingabe";
 import SeitenTitel from "@/components/SeitenTitel";
-import { BEREICH_ICONS } from "@/lib/bereichIcons";
 import { BEREICH_FARBEN } from "@/lib/bereichFarben";
 import { formatiereDatumUhrzeit } from "@/lib/datumFormat";
 
@@ -965,7 +965,7 @@ export default function EinstellungenClient({
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
         {grossesTicketBildModal}
         {tutorialOffen && <TutorialModal istEltern={istEltern} onClose={() => setTutorialOffen(false)} />}
-        <SeitenTitel icon={BEREICH_ICONS.einstellungen} farbe={BEREICH_FARBEN.einstellungen}>Einstellungen</SeitenTitel>
+        <SeitenTitel bereich="einstellungen">Einstellungen</SeitenTitel>
         <button className="btn-secondary" style={{ alignSelf: "flex-start" }} onClick={() => setTutorialOffen(true)}>
           📘 Einführung
         </button>
@@ -981,6 +981,7 @@ export default function EinstellungenClient({
         )}
         <p style={{ color: "var(--text-muted)" }}>Der Rest dieses Bereichs ist nur für Eltern.</p>
         <DesignAuswahl />
+        <IconStilAuswahl />
         <PushBenachrichtigungen />
       </div>
     );
@@ -990,7 +991,7 @@ export default function EinstellungenClient({
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       {grossesTicketBildModal}
       {tutorialOffen && <TutorialModal istEltern={istEltern} onClose={() => setTutorialOffen(false)} />}
-      <SeitenTitel icon={BEREICH_ICONS.einstellungen} farbe={BEREICH_FARBEN.einstellungen}>Einstellungen</SeitenTitel>
+      <SeitenTitel bereich="einstellungen">Einstellungen</SeitenTitel>
       <button className="btn-secondary" style={{ alignSelf: "flex-start" }} onClick={() => setTutorialOffen(true)}>
         📘 Einführung
       </button>
@@ -1566,6 +1567,7 @@ export default function EinstellungenClient({
       {/* Fix-Batch 82 (Florians Bug-Meldung): Design-Vorlage passte inhaltlich nicht zu
           "Benachrichtigungen & Verlauf" — jetzt eigener, eigenständiger Bereich. */}
       <DesignAuswahl />
+      <IconStilAuswahl />
 
       {/* Fix-Batch 101 (Florians Feedback): ICS-Import passiert höchstens ein paar Mal beim
           Umzug von einer anderen Kalender-App — gehört hier hin statt prominent oben auf der
