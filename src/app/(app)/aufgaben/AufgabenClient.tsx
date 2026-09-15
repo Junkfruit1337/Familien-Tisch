@@ -5,6 +5,7 @@ import { createAufgabe, toggleAufgabe, deleteAufgabe, erkenneAufgabeAusText } fr
 import HistorieVerlauf from "@/components/HistorieVerlauf";
 import Spracheingabe from "@/components/Spracheingabe";
 import SeitenTitel from "@/components/SeitenTitel";
+import { BEREICH_ICONS } from "@/lib/bereichIcons";
 import PersonChip from "@/components/PersonChip";
 import { BEREICH_FARBEN } from "@/lib/bereichFarben";
 
@@ -114,7 +115,7 @@ export default function AufgabenClient({
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <SeitenTitel icon="✅" farbe={BEREICH_FARBEN.aufgaben}>Aufgaben</SeitenTitel>
+        <SeitenTitel icon={BEREICH_ICONS.aufgaben} farbe={BEREICH_FARBEN.aufgaben}>Aufgaben</SeitenTitel>
         <button className="btn" onClick={() => setZeigeFormular((v) => !v)}>
           {zeigeFormular ? "Abbrechen" : "+ Neue Aufgabe"}
         </button>

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import SeitenTitel from "@/components/SeitenTitel";
+import { BEREICH_ICONS } from "@/lib/bereichIcons";
 import { BEREICH_FARBEN } from "@/lib/bereichFarben";
 import PersonChip from "@/components/PersonChip";
 
@@ -47,7 +48,7 @@ export default function DashboardClient({ daten, istEltern }: { daten: Daten; is
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <SeitenTitel icon="🏠" farbe={BEREICH_FARBEN.dashboard}>Hallo, {daten.person.name}!</SeitenTitel>
+      <SeitenTitel icon={BEREICH_ICONS.dashboard} farbe={BEREICH_FARBEN.dashboard}>Hallo, {daten.person.name}!</SeitenTitel>
 
       {grossesBild && (
         <div

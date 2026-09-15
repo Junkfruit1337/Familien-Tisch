@@ -14,6 +14,7 @@
     "@anthropic-ai/sdk": "^0.125.0",
     "@prisma/client": "5.20.0",
     "bcryptjs": "2.4.3",
+    "lucide-react": "^0.469.0",
     "next": "14.2.35",
     "node-ical": "^0.27.1",
     "react": "18.3.1",

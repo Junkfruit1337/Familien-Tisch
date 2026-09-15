@@ -14,6 +14,7 @@ import {
 } from "./actions";
 import HistorieVerlauf from "@/components/HistorieVerlauf";
 import SeitenTitel from "@/components/SeitenTitel";
+import { BEREICH_ICONS } from "@/lib/bereichIcons";
 import PersonChip from "@/components/PersonChip";
 import { BEREICH_FARBEN } from "@/lib/bereichFarben";
 
@@ -138,7 +139,7 @@ export default function DienstplanClient({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <SeitenTitel icon="🧹" farbe={BEREICH_FARBEN.dienstplan}>Dienstplan</SeitenTitel>
+      <SeitenTitel icon={BEREICH_ICONS.dienstplan} farbe={BEREICH_FARBEN.dienstplan}>Dienstplan</SeitenTitel>
 
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <button className="btn-secondary" style={{ padding: "6px 12px" }} onClick={() => wechsleWoche(-1)}>

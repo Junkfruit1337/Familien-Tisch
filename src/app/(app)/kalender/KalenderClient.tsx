@@ -13,6 +13,7 @@ import { erkenneTerminKategorie, TERMIN_KATEGORIE_LABEL } from "@/lib/terminkate
 import HistorieVerlauf from "@/components/HistorieVerlauf";
 import Spracheingabe from "@/components/Spracheingabe";
 import SeitenTitel from "@/components/SeitenTitel";
+import { BEREICH_ICONS } from "@/lib/bereichIcons";
 import PersonChip from "@/components/PersonChip";
 import { BEREICH_FARBEN } from "@/lib/bereichFarben";
 
@@ -531,7 +532,7 @@ export default function KalenderClient({
         </div>
       )}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <SeitenTitel icon="📅" farbe={BEREICH_FARBEN.kalender}>Kalender</SeitenTitel>
+        <SeitenTitel icon={BEREICH_ICONS.kalender} farbe={BEREICH_FARBEN.kalender}>Kalender</SeitenTitel>
         <button
           className="btn"
           onClick={() => {

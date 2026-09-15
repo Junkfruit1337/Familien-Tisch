@@ -28,6 +28,7 @@ import HistorieVerlauf from "@/components/HistorieVerlauf";
 import RezeptSucheFeld from "@/components/RezeptSucheFeld";
 import Spracheingabe from "@/components/Spracheingabe";
 import SeitenTitel from "@/components/SeitenTitel";
+import { BEREICH_ICONS } from "@/lib/bereichIcons";
 import { BEREICH_FARBEN } from "@/lib/bereichFarben";
 import { formatiereDatumUhrzeit } from "@/lib/datumFormat";
 
@@ -425,7 +426,7 @@ export default function EinkaufslisteClient({
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-        <SeitenTitel icon="🛒" farbe={BEREICH_FARBEN.einkaufsliste}>Einkaufsliste</SeitenTitel>
+        <SeitenTitel icon={BEREICH_ICONS.einkaufsliste} farbe={BEREICH_FARBEN.einkaufsliste}>Einkaufsliste</SeitenTitel>
         {istEltern && (
           <button
             className={einkaufsmodus ? "btn" : "btn-secondary"}
