@@ -14,6 +14,7 @@ import {
 } from "./actions";
 import HistorieVerlauf from "@/components/HistorieVerlauf";
 import SeitenTitel from "@/components/SeitenTitel";
+import { Icon } from "@/lib/uiIcons";
 import PersonChip from "@/components/PersonChip";
 import { BEREICH_FARBEN } from "@/lib/bereichFarben";
 
@@ -160,8 +161,18 @@ export default function DienstplanClient({
             <div key={t.id} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, fontSize: "var(--font-sm)" }}>
                 <span style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                  <span className="pill pill-info">{t.modus === "TAUSCH" ? "🔄 Tausch" : "➡️ Abgabe"}</span>
-                  {t.vonName} {t.modus === "TAUSCH" ? "↔" : "→"} {t.mitName}{" "}
+                  <span className="pill pill-info" style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                    {t.modus === "TAUSCH" ? (
+                      <>
+                        <Icon id="refresh" size={12} /> Tausch
+                      </>
+                    ) : (
+                      <>
+                        <Icon id="arrowRight" size={12} /> Abgabe
+                      </>
+                    )}
+                  </span>
+                  {t.vonName} {t.modus === "TAUSCH" ? <Icon id="swap" size={12} /> : <Icon id="arrowRight" size={12} />} {t.mitName}{" "}
                   {t.tag ? `am ${new Date(t.tag).toLocaleDateString("de-DE")}` : "(ganze Woche)"}
                 </span>
                 {istEltern && (
@@ -186,7 +197,11 @@ export default function DienstplanClient({
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
               <PersonChip name={s.kindName} farbe={s.kindFarbe} size={24} />
               <strong>{s.kindName}</strong>
-              {s.getauscht && <span className="pill pill-info">🔄 getauscht</span>}
+              {s.getauscht && (
+                <span className="pill pill-info" style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                  <Icon id="refresh" size={11} /> getauscht
+                </span>
+              )}
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               {s.dienste.map((d) =>
@@ -227,7 +242,7 @@ export default function DienstplanClient({
                             setDienstText(d.beschreibung ?? "");
                           }}
                         >
-                          ✎ Regeltext {d.beschreibung ? "bearbeiten" : "hinzufügen"}
+                          <Icon id="edit" size={12} /> Regeltext {d.beschreibung ? "bearbeiten" : "hinzufügen"}
                         </button>
                       )}
                     </div>
@@ -261,7 +276,9 @@ export default function DienstplanClient({
       </div>
 
       <div className="card">
-        <strong>🛁 Bad-Reihenfolge</strong>
+        <strong style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <Icon id="bath" /> Bad-Reihenfolge
+        </strong>
         {istEltern && (
           <p style={{ margin: "4px 0 8px", fontSize: "var(--font-xs)", color: "var(--text-muted)" }}>
             Zum Tauschen: zwei Namen in derselben Zeile nacheinander anklicken.
@@ -274,8 +291,16 @@ export default function DienstplanClient({
         <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginTop: 8 }}>
           {(["morgens", "abends"] as const).map((zeitpunkt) => (
             <div key={zeitpunkt} style={{ flex: "1 0 150px" }}>
-              <div style={{ fontSize: "var(--font-sm)", color: "var(--text-muted)", fontWeight: 600, marginBottom: 6 }}>
-                {zeitpunkt === "morgens" ? "☀️ Morgens" : "🌙 Abends"}
+              <div style={{ fontSize: "var(--font-sm)", color: "var(--text-muted)", fontWeight: 600, marginBottom: 6, display: "flex", alignItems: "center", gap: 4 }}>
+                {zeitpunkt === "morgens" ? (
+                  <>
+                    <Icon id="sun" size={13} /> Morgens
+                  </>
+                ) : (
+                  <>
+                    <Icon id="moon" size={13} /> Abends
+                  </>
+                )}
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                 {badplan[zeitpunkt].map((b, i) => {
@@ -386,7 +411,9 @@ export default function DienstplanClient({
 
       {istEltern && (
         <details className="card">
-          <summary style={{ fontWeight: 600 }}>🔁 Dienst abgeben oder tauschen</summary>
+          <summary style={{ fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
+            <Icon id="repeat" /> Dienst abgeben oder tauschen
+          </summary>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             <p style={{ margin: 0, fontSize: "var(--font-xs)", color: "var(--text-muted)" }}>
               Z. B. wenn ein Kind krank ist, im Urlaub ist, oder dauerhaft mit jemandem tauschen möchte.
@@ -462,11 +489,13 @@ export default function DienstplanClient({
       )}
 
       <details className="card">
-        <summary style={{ cursor: "pointer", fontWeight: 600 }}>🧴 Tagesroutinen &amp; Körperpflege-Plan</summary>
+        <summary style={{ cursor: "pointer", fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
+          <Icon id="routine" /> Tagesroutinen &amp; Körperpflege-Plan
+        </summary>
         <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 10 }}>
           {Object.keys(routinenNachKategorie).length === 0 && (
             <div className="empty-state">
-              <span className="empty-state-icon">🧴</span>
+              <span className="empty-state-icon"><Icon id="routine" size={28} /></span>
               <span>Noch keine Routinen hinterlegt.</span>
             </div>
           )}
@@ -506,11 +535,13 @@ export default function DienstplanClient({
       </details>
 
       <details className="card">
-        <summary style={{ cursor: "pointer", fontWeight: 600 }}>🕘 Dienste-Historie ({historie.length})</summary>
+        <summary style={{ cursor: "pointer", fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
+          <Icon id="history" /> Dienste-Historie ({historie.length})
+        </summary>
         <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 10 }}>
           {historie.length === 0 && (
             <div className="empty-state">
-              <span className="empty-state-icon">🕘</span>
+              <span className="empty-state-icon"><Icon id="history" size={28} /></span>
               <span>Noch keine Tausche erfasst.</span>
             </div>
           )}

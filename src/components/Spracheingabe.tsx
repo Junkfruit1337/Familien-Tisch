@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { Icon } from "@/lib/uiIcons";
 
 // Feature-Detection erst nach dem Mount (SSR-safe, analog dem Theme-Umschalter in AppShell) —
 // window/SpeechRecognition existiert serverseitig nicht, ein direkter Check würde einen
@@ -89,7 +90,15 @@ export default function Spracheingabe({
       onClick={laeuft ? stop : start}
       style={{ display: "flex", alignItems: "center", gap: 6, justifyContent: "center" }}
     >
-      {laeuft ? "🔴 Aufnahme läuft … (antippen zum Stoppen)" : "🎤 Per Sprache ausfüllen"}
+      {laeuft ? (
+        <>
+          <Icon id="recording" farbe="var(--danger)" /> Aufnahme läuft … (antippen zum Stoppen)
+        </>
+      ) : (
+        <>
+          <Icon id="mic" /> Per Sprache ausfüllen
+        </>
+      )}
     </button>
   );
 }

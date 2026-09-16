@@ -5,6 +5,7 @@ import { createAufgabe, toggleAufgabe, deleteAufgabe, erkenneAufgabeAusText } fr
 import HistorieVerlauf from "@/components/HistorieVerlauf";
 import Spracheingabe from "@/components/Spracheingabe";
 import SeitenTitel from "@/components/SeitenTitel";
+import { Icon } from "@/lib/uiIcons";
 import PersonChip from "@/components/PersonChip";
 import { BEREICH_FARBEN } from "@/lib/bereichFarben";
 
@@ -127,8 +128,8 @@ export default function AufgabenClient({
           <input placeholder="Neue Aufgabe" value={titel} onChange={(e) => setTitel(e.target.value)} />
           <input type="date" value={faelligkeit} onChange={(e) => setFaelligkeit(e.target.value)} />
           {!faelligkeit && (
-            <p style={{ margin: 0, fontSize: "var(--font-xs)", color: "var(--text-muted)" }}>
-              ℹ️ Ohne Fälligkeitsdatum erscheint diese Aufgabe nicht im Kalender.
+            <p style={{ margin: 0, fontSize: "var(--font-xs)", color: "var(--text-muted)", display: "flex", alignItems: "center", gap: 4 }}>
+              <Icon id="info" size={12} /> Ohne Fälligkeitsdatum erscheint diese Aufgabe nicht im Kalender.
             </p>
           )}
           {istEltern && (
@@ -219,9 +220,9 @@ export default function AufgabenClient({
               style={{ width: 20, height: 20, marginTop: 2 }}
             />
             <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 600 }}>
+              <div style={{ fontWeight: 600, display: "flex", alignItems: "center", gap: 4 }}>
                 {a.titel}
-                {a.seriesId && " 🔁"}
+                {a.seriesId && <Icon id="repeat" size={13} />}
               </div>
               <div style={{ fontSize: 13, color: "var(--text-muted)" }}>
                 {a.faelligkeit ? new Date(a.faelligkeit).toLocaleDateString("de-DE") : "ohne Fälligkeit"} · {a.personName}
@@ -269,14 +270,14 @@ export default function AufgabenClient({
                   if (confirm(`"${a.titel}" wirklich löschen?`)) loeschKlick(a);
                 }}
               >
-                🗑
+                <Icon id="delete" />
               </button>
             )}
           </div>
         ))}
         {offen.length === 0 && (
           <div className="empty-state">
-            <span className="empty-state-icon">🎉</span>
+            <span className="empty-state-icon"><Icon id="party" size={28} /></span>
             <span>Keine offenen Aufgaben.</span>
           </div>
         )}

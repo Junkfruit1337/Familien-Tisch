@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { DESIGN_THEMES, DESIGN_KEY, type DesignThemeId } from "@/lib/designThemes";
+import { Icon } from "@/lib/uiIcons";
 
 // Fix-Batch 72: reine Vorschau-Werte fürs Auswahl-Menü selbst (Ecken/Schatten der Kachel-
 // Buttons hier), damit man den Stil-Unterschied schon vor dem Antippen sieht — unabhängig
@@ -47,7 +48,9 @@ export default function DesignAuswahl() {
 
   return (
     <details>
-      <summary style={{ cursor: "pointer", fontWeight: 600 }}>🎨 Design-Vorlage</summary>
+      <summary style={{ cursor: "pointer", fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
+        <Icon id="design" /> Design-Vorlage
+      </summary>
       <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
         <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 4px" }}>
           Nur für dieses Gerät — jede Person kann ihren eigenen Stil wählen. Jede Vorlage hat eine eigene Farbpalette, Optik (Ecken, Schatten) und teils eine eigene Schriftart.

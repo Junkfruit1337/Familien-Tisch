@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useState } from "react";
 import SeitenTitel from "@/components/SeitenTitel";
+import { Icon } from "@/lib/uiIcons";
+import { BereichIcon } from "@/lib/bereichIcons";
 import { BEREICH_FARBEN } from "@/lib/bereichFarben";
 import PersonChip from "@/components/PersonChip";
 
@@ -61,7 +63,9 @@ export default function DashboardClient({ daten, istEltern }: { daten: Daten; is
 
       {istEltern && anfragenGesamt > 0 && (
         <div className="card card-action">
-          <strong>📥 Anfragen von den Kindern ({anfragenGesamt})</strong>
+          <strong style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <Icon id="import" /> Anfragen von den Kindern ({anfragenGesamt})
+          </strong>
           <p style={{ margin: "2px 0 0", fontSize: 12, color: "var(--text-muted)" }}>
             Antippen führt zum jeweiligen Bereich, wo ihr die Details seht und entscheiden könnt.
           </p>
@@ -113,7 +117,9 @@ export default function DashboardClient({ daten, istEltern }: { daten: Daten; is
 
       {daten.meineOffenenTickets.length > 0 && (
         <div className="card card-action">
-          <strong>🎫 Meine offenen Tickets ({daten.meineOffenenTickets.length})</strong>
+          <strong style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <Icon id="ticket" /> Meine offenen Tickets ({daten.meineOffenenTickets.length})
+          </strong>
           <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
             {daten.meineOffenenTickets.map((t) => (
               <Link
@@ -133,7 +139,9 @@ export default function DashboardClient({ daten, istEltern }: { daten: Daten; is
       )}
 
       <div className="card">
-        <strong>🍽️ Heute gibt's</strong>
+        <strong style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <BereichIcon bereich="essensplan" size={18} /> Heute gibt's
+        </strong>
         {daten.heutigeGerichte.length === 0 && (
           <div className="empty-state" style={{ padding: "var(--space-3) 0 0" }}>
             <span>Noch nicht geplant</span>
@@ -165,7 +173,11 @@ export default function DashboardClient({ daten, istEltern }: { daten: Daten; is
                   <span>
                     <strong style={{ fontSize: 13 }}>{g.bezeichnung}:</strong> {g.rezeptName}
                   </span>
-                  {!g.zutatenUebernommen && <span className="pill pill-offen">⚠️ Noch nicht eingekauft</span>}
+                  {!g.zutatenUebernommen && (
+                    <span className="pill pill-offen" style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                      <Icon id="warning" size={11} /> Noch nicht eingekauft
+                    </span>
+                  )}
                 </span>
                 <span style={{ color: "var(--accent)", fontSize: 16, flexShrink: 0 }}>→</span>
               </button>
@@ -190,7 +202,7 @@ export default function DashboardClient({ daten, istEltern }: { daten: Daten; is
                 <strong style={{ fontSize: "var(--font-md)" }}>{offenesGericht.rezeptName}</strong>
               </div>
               <button className="btn-icon" onClick={() => setOffenesGericht(null)} aria-label="Schließen">
-                ✕
+                <Icon id="close" />
               </button>
             </div>
             <div>
@@ -214,7 +226,9 @@ export default function DashboardClient({ daten, istEltern }: { daten: Daten; is
       )}
 
       <div className="card">
-        <strong>📅 Heute</strong>
+        <strong style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <BereichIcon bereich="kalender" size={18} /> Heute
+        </strong>
         {daten.termineHeute.length === 0 && (
           <div className="empty-state" style={{ padding: "var(--space-3) 0 0" }}>
             <span>Keine Termine heute.</span>
@@ -230,7 +244,9 @@ export default function DashboardClient({ daten, istEltern }: { daten: Daten; is
 
       <div className="card">
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <strong>🎓 Als Nächstes steht an</strong>
+          <strong style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <BereichIcon bereich="schule" size={18} /> Als Nächstes steht an
+          </strong>
           <Link href="/schule" style={{ fontSize: 12, color: "var(--accent)", textDecoration: "none" }}>
             Verwalten →
           </Link>
@@ -263,7 +279,11 @@ export default function DashboardClient({ daten, istEltern }: { daten: Daten; is
             </summary>
             <div style={{ fontSize: "var(--font-sm)" }}>
               {s.fachName ? s.titel : null}
-              {s.lerntipp && <div style={{ marginTop: 4 }}>💡 {s.lerntipp}</div>}
+              {s.lerntipp && (
+                <div style={{ marginTop: 4, display: "flex", alignItems: "center", gap: 4 }}>
+                  <Icon id="lightbulb" size={13} /> {s.lerntipp}
+                </div>
+              )}
             </div>
           </details>
         ))}

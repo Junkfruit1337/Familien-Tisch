@@ -13,7 +13,6 @@ import { BEREICH_FARBEN } from "./bereichFarben";
 
 export type TutorialKapitel = {
   id: string;
-  icon: string;
   titel: string;
   farbe: string;
   nutzen: string;
@@ -25,7 +24,6 @@ export type TutorialKapitel = {
 export const TUTORIAL_KAPITEL: TutorialKapitel[] = [
   {
     id: "willkommen",
-    icon: "👋",
     titel: "Willkommen bei Familientisch",
     farbe: BEREICH_FARBEN.dashboard,
     nutzen:
@@ -34,7 +32,6 @@ export const TUTORIAL_KAPITEL: TutorialKapitel[] = [
   },
   {
     id: "heute",
-    icon: "🏠",
     titel: "Heute",
     farbe: BEREICH_FARBEN.dashboard,
     nutzen: "Der erste Blick am Morgen — was heute wichtig ist, ohne erst durch jeden einzelnen Bereich zu klicken.",
@@ -48,7 +45,6 @@ export const TUTORIAL_KAPITEL: TutorialKapitel[] = [
   },
   {
     id: "kalender",
-    icon: "📅",
     titel: "Kalender",
     farbe: BEREICH_FARBEN.kalender,
     nutzen: "Alle Termine der Familie an einem Ort — statt in getrennten Kalendern oder Zetteln am Kühlschrank.",
@@ -61,7 +57,6 @@ export const TUTORIAL_KAPITEL: TutorialKapitel[] = [
   },
   {
     id: "aufgaben",
-    icon: "✅",
     titel: "Aufgaben",
     farbe: BEREICH_FARBEN.aufgaben,
     nutzen: "Wer macht was bis wann — damit nichts vergessen wird und nichts doppelt gemacht wird.",
@@ -69,7 +64,6 @@ export const TUTORIAL_KAPITEL: TutorialKapitel[] = [
   },
   {
     id: "essen",
-    icon: "🍽️",
     titel: "Essen",
     farbe: BEREICH_FARBEN.essensplan,
     nutzen: "Die Woche durchplanen, inklusive automatisch berechneter Mengen für alle, die mitessen.",
@@ -82,7 +76,6 @@ export const TUTORIAL_KAPITEL: TutorialKapitel[] = [
   },
   {
     id: "einkauf",
-    icon: "🛒",
     titel: "Einkauf",
     farbe: BEREICH_FARBEN.einkaufsliste,
     nutzen: "Die Einkaufsliste, die mitdenkt — Mengen werden zusammengezählt, Kategorien automatisch erkannt und dazugelernt.",
@@ -96,7 +89,6 @@ export const TUTORIAL_KAPITEL: TutorialKapitel[] = [
   },
   {
     id: "schule",
-    icon: "🎓",
     titel: "Schule",
     farbe: BEREICH_FARBEN.schule,
     nutzen: "Noten, Taschengeld und Sparziele im Blick — für Kinder und Eltern gleichermaßen.",
@@ -113,7 +105,6 @@ export const TUTORIAL_KAPITEL: TutorialKapitel[] = [
   },
   {
     id: "dienste",
-    icon: "🧹",
     titel: "Dienste",
     farbe: BEREICH_FARBEN.dienstplan,
     nutzen: "Wer ist diese Woche wofür zuständig — fair verteilt und bei Bedarf tauschbar.",
@@ -121,7 +112,6 @@ export const TUTORIAL_KAPITEL: TutorialKapitel[] = [
   },
   {
     id: "mehr",
-    icon: "⚙️",
     titel: "Mehr",
     farbe: BEREICH_FARBEN.einstellungen,
     nutzen: "Alles rund um die App selbst — Aussehen, Benachrichtigungen und Feedback.",

@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { logout } from "./actions";
 import { BEREICH_FARBEN, type Bereich } from "@/lib/bereichFarben";
 import { BereichIcon } from "@/lib/bereichIcons";
+import { Icon } from "@/lib/uiIcons";
 import PersonChip from "@/components/PersonChip";
 import { DESIGN_KEY } from "@/lib/designThemes";
 import { ICON_STIL_KEY, anwendenIconStil, type IconStil } from "@/lib/iconStil";
@@ -163,7 +164,7 @@ export default function AppShell({ person, children }: { person: Person; childre
             title="Hell/Dunkel umschalten"
             aria-label="Hell/Dunkel umschalten"
           >
-            {theme === "dunkel" ? "🌙" : "☀️"}
+            {theme === "dunkel" ? <Icon id="moon" /> : <Icon id="sun" />}
           </button>
           <PersonChip name={person.name} farbe={person.farbe} size={30} />
           <button

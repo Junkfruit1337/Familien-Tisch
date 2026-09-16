@@ -2,6 +2,23 @@
 
 import { useRef, useState } from "react";
 import { TUTORIAL_KAPITEL } from "@/lib/tutorialInhalte";
+import { BereichIcon } from "@/lib/bereichIcons";
+import { Icon } from "@/lib/uiIcons";
+import type { Bereich } from "@/lib/bereichFarben";
+
+// Fix-Batch 125: dieselben Bereichs-Icons wie Seiten-Header/Navigation (BereichIcon) statt der
+// rohen Emoji-Zeichen aus tutorialInhalte.ts — damit der Icon-Stil-Schalter auch hier greift und
+// z. B. der Doktorhut→Schulranzen-Fix (Fix-Batch 124) automatisch mit übernommen wird.
+const KAPITEL_BEREICH: Partial<Record<string, Bereich>> = {
+  heute: "dashboard",
+  kalender: "kalender",
+  aufgaben: "aufgaben",
+  essen: "essensplan",
+  einkauf: "einkaufsliste",
+  schule: "schule",
+  dienste: "dienstplan",
+  mehr: "einstellungen",
+};
 
 // Fix-Batch 88 (Florians Wunsch): In-App-Einführung, erreichbar über Einstellungen ("📘
 // Einführung"). Bewusst als eigenständiges Overlay mit rein inhaltlichem Content
@@ -86,12 +103,16 @@ export default function TutorialModal({ istEltern, onClose }: { istEltern: boole
                 flexShrink: 0,
               }}
             >
-              {kapitel.icon}
+              {KAPITEL_BEREICH[kapitel.id] ? (
+                <BereichIcon bereich={KAPITEL_BEREICH[kapitel.id]!} size={24} farbe={kapitel.farbe} />
+              ) : (
+                <Icon id="wave" size={24} farbe={kapitel.farbe} />
+              )}
             </span>
             <strong style={{ fontSize: "var(--font-md)", color: kapitel.farbe }}>{kapitel.titel}</strong>
           </div>
           <button className="btn-icon" onClick={onClose} aria-label="Einführung schließen">
-            ✕
+            <Icon id="close" />
           </button>
         </div>
 

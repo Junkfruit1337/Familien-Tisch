@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Icon } from "@/lib/uiIcons";
 
 // Fix-Batch 103 (Florians Bug-Meldung "Fenster braucht mehr Platz, sonst nutzt es keiner"):
 // echtes Vollbild-Overlay statt eines eingeklemmten, abgeschnittenen Fensters.
@@ -36,13 +37,21 @@ export default function ThgVollbild({ compact }: { compact?: boolean }) {
         style={compact ? { fontSize: 13, padding: "8px 12px", flexShrink: 0 } : undefined}
         onClick={() => setOffen(true)}
       >
-        {compact ? "🏫 THG" : "🏫 THG-App öffnen"}
+        {compact ? (
+          <>
+            <Icon id="school" /> THG
+          </>
+        ) : (
+          <>
+            <Icon id="school" /> THG-App öffnen
+          </>
+        )}
       </button>
       {offen && (
         <div style={{ position: "fixed", top: headerHoehe, left: 0, right: 0, bottom: 0, zIndex: 20, background: "#fff", display: "flex", flexDirection: "column" }}>
           <div style={{ display: "flex", justifyContent: "flex-end", padding: 8, background: "#eee", flexShrink: 0 }}>
             <button className="btn-secondary" onClick={() => setOffen(false)}>
-              ✕ Schließen
+              <Icon id="close" /> Schließen
             </button>
           </div>
           <iframe src={THG_URL} title="THG-App" style={{ flex: 1, width: "100%", border: 0 }} />

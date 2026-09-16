@@ -149,7 +149,7 @@ export async function listGeburtstageFuerKalender() {
     for (let jahr = heute.getFullYear() - 1; jahr <= heute.getFullYear() + 5; jahr++) {
       eintraege.push({
         id: `geburtstag-${p.id}-${jahr}`,
-        titel: `🎂 ${p.name} hat Geburtstag`,
+        titel: `${p.name} hat Geburtstag`,
         start: new Date(Date.UTC(jahr, monat, tag)),
         personName: p.name,
         personFarbe: GEBURTSTAG_FARBE,

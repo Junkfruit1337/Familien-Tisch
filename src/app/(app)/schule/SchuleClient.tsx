@@ -21,6 +21,8 @@ import HistorieVerlauf from "@/components/HistorieVerlauf";
 import Spracheingabe from "@/components/Spracheingabe";
 import { erkenneSparzielIcon } from "@/lib/sparzielIcon";
 import SeitenTitel from "@/components/SeitenTitel";
+import { Icon } from "@/lib/uiIcons";
+import { BereichIcon } from "@/lib/bereichIcons";
 import LernHilfe from "@/components/LernHilfe";
 import VerlaufChart from "@/components/VerlaufChart";
 import { BEREICH_FARBEN } from "@/lib/bereichFarben";
@@ -156,11 +158,11 @@ function notenFarbe(schnitt: number | null): string {
   if (schnitt <= 3) return "var(--warning)";
   return "var(--danger)";
 }
-function notenEmoji(schnitt: number): string {
-  if (schnitt <= 1.5) return "🌟";
-  if (schnitt <= 2.5) return "🙂";
-  if (schnitt <= 3.5) return "😐";
-  return "💪";
+function notenIconId(schnitt: number): "moodTop" | "moodGut" | "moodSchlecht" | "strong" {
+  if (schnitt <= 1.5) return "moodTop";
+  if (schnitt <= 2.5) return "moodGut";
+  if (schnitt <= 3.5) return "moodSchlecht";
+  return "strong";
 }
 
 // Fix-Batch 97 (Florians Wunsch): auch Notenfotos moderat komprimieren — Handyfotos sind laut
@@ -195,6 +197,7 @@ function resizeBildAufBase64(file: File): Promise<string> {
 }
 
 function Feier({ onEnde }: { onEnde: () => void }) {
+  const CONFETTI_ICONS = ["party", "sparkle", "star", "celebration"] as const;
   const stuecke = useMemo(
     () =>
       Array.from({ length: 24 }).map((_, i) => ({
@@ -202,7 +205,7 @@ function Feier({ onEnde }: { onEnde: () => void }) {
         left: Math.random() * 100,
         delay: Math.random() * 0.4,
         dauer: 1.8 + Math.random() * 1,
-        emoji: ["🎉", "✨", "⭐", "🎊"][i % 4],
+        icon: CONFETTI_ICONS[i % 4],
       })),
     []
   );
@@ -221,11 +224,13 @@ function Feier({ onEnde }: { onEnde: () => void }) {
             className="confetti-piece"
             style={{ left: `${s.left}%`, animationDelay: `${s.delay}s`, animationDuration: `${s.dauer}s` }}
           >
-            {s.emoji}
+            <Icon id={s.icon} size={22} />
           </span>
         ))}
       </div>
-      <span className="flugzeug-banner">✈️</span>
+      <span className="flugzeug-banner">
+        <Icon id="plane" size={28} />
+      </span>
       <span className="weiter-so-banner">Weiter so!</span>
     </>
   );
@@ -347,7 +352,9 @@ function SchulEintraegeSektion({
           aufrufenden Seite — dadurch entstand ein großer, unmotivierter Leerraum. Jetzt trägt
           dieser Abschnitt seinen Titel selbst, direkt in derselben Zeile wie der Button. */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <strong>🎓 Arbeiten &amp; HÜs</strong>
+        <strong style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <BereichIcon bereich="schule" size={18} /> Arbeiten &amp; HÜs
+      </strong>
         {!istEltern && (
           <button className="btn-secondary" style={{ fontSize: 13 }} onClick={() => setZeigeForm((v) => !v)}>
             {zeigeForm ? "Abbrechen" : "+ Eintrag"}
@@ -402,7 +409,7 @@ function SchulEintraegeSektion({
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {sichtbareEintraege.length === 0 && (
           <div className="empty-state">
-            <span className="empty-state-icon">📚</span>
+            <span className="empty-state-icon"><Icon id="book" size={28} /></span>
             <span>Nichts Anstehendes.</span>
           </div>
         )}
@@ -477,7 +484,7 @@ function SchulEintraegeSektion({
                         setBearbeitenDatum(e.datum.slice(0, 10));
                       }}
                     >
-                      ✎ Bearbeiten
+                      <Icon id="edit" size={12} /> Bearbeiten
                     </button>
                     <button
                       className="btn-secondary"
@@ -486,7 +493,7 @@ function SchulEintraegeSektion({
                         if (confirm(`"${e.titel}" wirklich löschen?`)) startTransition(() => deleteSchulEintrag(e.id));
                       }}
                     >
-                      🗑 Löschen
+                      <Icon id="delete" size={12} /> Löschen
                     </button>
                   </div>
                 ))}
@@ -660,7 +667,9 @@ export default function SchuleClient({
           kompaktere, dichtere Übersicht mit Trendpfeil (mehr fürs schnelle Überwachen als
           fürs Motivieren). Antippen springt zum jeweiligen Fach in der Detailliste unten. */}
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        <strong>📊 Notenübersicht</strong>
+        <strong style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <Icon id="chart" /> Notenübersicht
+        </strong>
         <div style={{ display: "grid", gridTemplateColumns: `repeat(auto-fill, minmax(${istEltern ? 76 : 92}px, 1fr))`, gap: istEltern ? 6 : 10 }}>
           {fachStats.map(({ fach, schnitt, trend }) => (
             <button
@@ -680,7 +689,11 @@ export default function SchuleClient({
             >
               <span style={{ fontSize: istEltern ? 11 : 12, color: "var(--text-muted)", textAlign: "center" }}>{fach.name}</span>
               <strong style={{ fontSize: istEltern ? 18 : 26, color: notenFarbe(schnitt) }}>{schnitt !== null ? schnitt.toFixed(2) : "–"}</strong>
-              {!istEltern && schnitt !== null && <span style={{ fontSize: 16 }}>{notenEmoji(schnitt)}</span>}
+              {!istEltern && schnitt !== null && (
+                <span style={{ fontSize: 16 }}>
+                  <Icon id={notenIconId(schnitt)} size={16} />
+                </span>
+              )}
               {istEltern && trend && (
                 <span
                   style={{
@@ -688,7 +701,13 @@ export default function SchuleClient({
                     color: trend === "besser" ? "var(--success)" : trend === "schlechter" ? "var(--danger)" : "var(--text-muted)",
                   }}
                 >
-                  {trend === "besser" ? "↗" : trend === "schlechter" ? "↘" : "→"}
+                  {trend === "besser" ? (
+                    <Icon id="trendUp" size={11} />
+                  ) : trend === "schlechter" ? (
+                    <Icon id="trendDown" size={11} />
+                  ) : (
+                    <Icon id="trendStable" size={11} />
+                  )}
                 </span>
               )}
             </button>
@@ -711,8 +730,16 @@ export default function SchuleClient({
                     {minusCount > 0 && `· ${minusCount}× −`}
                   </span>
                 )}
-                {trend === "besser" && <span title="Zuletzt verbessert" style={{ color: "var(--success)" }}>↗</span>}
-                {trend === "schlechter" && <span title="Zuletzt verschlechtert" style={{ color: "var(--danger)" }}>↘</span>}
+                {trend === "besser" && (
+                  <span title="Zuletzt verbessert" style={{ color: "var(--success)" }}>
+                    <Icon id="trendUp" size={14} />
+                  </span>
+                )}
+                {trend === "schlechter" && (
+                  <span title="Zuletzt verschlechtert" style={{ color: "var(--danger)" }}>
+                    <Icon id="trendDown" size={14} />
+                  </span>
+                )}
                 {trend === "stabil" && <span title="Zuletzt stabil" style={{ color: "var(--text-muted)" }}>→</span>}
               </span>
             </summary>
@@ -806,7 +833,14 @@ export default function SchuleClient({
                       <span style={{ fontWeight: 700, fontSize: 16 }}>{formatNote(n.note, n.tendenz)}</span>
                       <span style={{ fontSize: 13, color: "var(--text-muted)" }}>
                         {ART_LABEL[n.art]} · {new Date(n.datum).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" })}
-                        {n.fotoBase64 ? " · 📷" : ""}
+                        {n.fotoBase64 ? (
+                          <>
+                            {" · "}
+                            <Icon id="photo" size={12} />
+                          </>
+                        ) : (
+                          ""
+                        )}
                       </span>
                       <span className={`pill pill-${n.status.toLowerCase()}`}>{n.status}</span>
                     </summary>
@@ -852,7 +886,7 @@ export default function SchuleClient({
                                 setKorrekturNotiz(n.notiz ?? "");
                               }}
                             >
-                              ✎ Bearbeiten
+                              <Icon id="edit" size={12} /> Bearbeiten
                             </button>
                             <button
                               className="btn-secondary"
@@ -869,7 +903,7 @@ export default function SchuleClient({
                                 }
                               }}
                             >
-                              🗑 Löschen
+                              <Icon id="delete" size={12} /> Löschen
                             </button>
                           </>
                         )}
@@ -881,7 +915,7 @@ export default function SchuleClient({
                               if (confirm("Diese Note wirklich löschen?")) startTransition(() => loescheNote(n.id));
                             }}
                           >
-                            🗑 Löschen
+                            <Icon id="delete" size={12} /> Löschen
                           </button>
                         )}
                       </div>
@@ -895,7 +929,7 @@ export default function SchuleClient({
       })}
       {kind.noten.length === 0 && (
         <div className="empty-state">
-          <span className="empty-state-icon">📝</span>
+          <span className="empty-state-icon"><Icon id="note" size={28} /></span>
           <span>Noch keine Noten.</span>
         </div>
       )}
@@ -1015,13 +1049,13 @@ export default function SchuleClient({
                           setKorrekturNotiz(n.notiz ?? "");
                         }}
                       >
-                        ✎
+                        <Icon id="edit" size={12} />
                       </button>
                       <button className="btn" style={{ padding: "6px 10px" }} onClick={() => startTransition(() => entscheideNote(n.id, true))}>
                         ✓
                       </button>
                       <button className="btn-danger" style={{ padding: "6px 10px", borderRadius: 10, border: "none" }} onClick={() => startTransition(() => entscheideNote(n.id, false))}>
-                        ✕
+                        <Icon id="close" />
                       </button>
                     </div>
                   </div>
@@ -1278,7 +1312,7 @@ export default function SchuleClient({
               <strong style={{ color: "var(--danger)" }}>Pflicht</strong>
             </span>
             <label className="btn-secondary" style={{ fontSize: 13, padding: "8px 12px", cursor: "pointer", display: "flex", alignItems: "center", gap: 4, alignSelf: "flex-start" }}>
-              📷 Foto aufnehmen
+              <Icon id="photo" /> Foto aufnehmen
               <input
                 type="file"
                 accept="image/*"
@@ -1312,8 +1346,8 @@ export default function SchuleClient({
             </div>
           )}
           {zeigeFotoWarnung && !foto && (
-            <p style={{ margin: 0, fontSize: 13, color: "var(--danger)", fontWeight: 600 }}>
-              ⚠️ Bitte erst ein Foto vom Notenzettel machen. Foto ist verpflichtend.
+            <p style={{ margin: 0, fontSize: 13, color: "var(--danger)", fontWeight: 600, display: "flex", alignItems: "center", gap: 4 }}>
+              <Icon id="warning" size={13} /> Bitte erst ein Foto vom Notenzettel machen. Foto ist verpflichtend.
             </p>
           )}
           <button className="btn" disabled={pending} onClick={() => startTransition(jetztEinreichen)}>
@@ -1363,8 +1397,8 @@ export default function SchuleClient({
 
       {kind.ferien ? (
         <details>
-          <summary style={{ cursor: "pointer", color: "var(--text-muted)" }}>
-            🏖️{" "}
+          <summary style={{ cursor: "pointer", color: "var(--text-muted)", display: "flex", alignItems: "center", gap: 6 }}>
+            <Icon id="vacation" />{" "}
             {kind.ferien.naechste
               ? kind.ferien.naechste.tageBis === 0
                 ? `Heute beginnen die ${FERIEN_LABEL[kind.ferien.naechste.typ] ?? kind.ferien.naechste.typ}!`

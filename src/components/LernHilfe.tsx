@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Icon } from "@/lib/uiIcons";
 import {
   erstelleSpickzettelVorschau,
   erklaereAufgabeVorschau,
@@ -45,7 +46,7 @@ function FotoAuswahl({ disabled, onFoto }: { disabled: boolean; onFoto: (base64:
   return (
     <div style={{ display: "flex", gap: 8 }}>
       <label className="btn-secondary" style={{ fontSize: 13, padding: "8px 12px", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>
-        📷 Foto
+        <Icon id="photo" /> Foto
         <input
           type="file"
           accept="image/*"
@@ -61,7 +62,7 @@ function FotoAuswahl({ disabled, onFoto }: { disabled: boolean; onFoto: (base64:
         />
       </label>
       <label className="btn-secondary" style={{ fontSize: 13, padding: "8px 12px", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>
-        📁 Aus Galerie
+        <Icon id="file" /> Aus Galerie
         <input
           type="file"
           accept="image/*"
@@ -155,9 +156,11 @@ function UebungsUeberlagerung({ aufgaben, onSchliessen }: { aufgaben: Uebungsauf
   return (
     <div style={{ position: "fixed", inset: 0, background: "var(--bg)", zIndex: 1000, display: "flex", flexDirection: "column", padding: 16, overflowY: "auto" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-        <strong>🧩 Übungsmodus</strong>
+        <strong style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <Icon id="puzzle" /> Übungsmodus
+        </strong>
         <button className="btn-icon" title="Beenden" onClick={onSchliessen}>
-          ✕
+          <Icon id="close" />
         </button>
       </div>
       {index < aufgaben.length ? (
@@ -200,7 +203,12 @@ function UebungsUeberlagerung({ aufgaben, onSchliessen }: { aufgaben: Uebungsauf
                   >
                     {option}
                     {verdict && istRichtigeAntwort && " ✓"}
-                    {verdict && istAusgewaehlt && !istRichtigeAntwort && " ✕"}
+                    {verdict && istAusgewaehlt && !istRichtigeAntwort && (
+                      <>
+                        {" "}
+                        <Icon id="close" size={13} />
+                      </>
+                    )}
                   </button>
                 );
               })}
@@ -231,7 +239,17 @@ function UebungsUeberlagerung({ aufgaben, onSchliessen }: { aufgaben: Uebungsauf
                   padding: 10,
                 }}
               >
-                <strong style={{ fontSize: 14 }}>{verdict.korrekt ? "✅ Richtig!" : "❌ Nicht ganz"}</strong>
+                <strong style={{ fontSize: 14, display: "flex", alignItems: "center", gap: 6 }}>
+                  {verdict.korrekt ? (
+                    <>
+                      <Icon id="check" /> Richtig!
+                    </>
+                  ) : (
+                    <>
+                      <Icon id="close" /> Nicht ganz
+                    </>
+                  )}
+                </strong>
                 <p style={{ margin: "4px 0 0", fontSize: 14 }}>{verdict.erklaerung}</p>
                 {!verdict.korrekt && !aktuelle.optionen?.length && (
                   <p style={{ margin: "6px 0 0", fontSize: 13, color: "var(--text-muted)" }}>Lösung: {aktuelle.antwort}</p>
@@ -245,7 +263,9 @@ function UebungsUeberlagerung({ aufgaben, onSchliessen }: { aufgaben: Uebungsauf
         </div>
       ) : (
         <div className="card" style={{ textAlign: "center", maxWidth: 480, margin: "0 auto", width: "100%" }}>
-          <p style={{ fontSize: 18, margin: "0 0 8px" }}>🎉 Geschafft!</p>
+          <p style={{ fontSize: 18, margin: "0 0 8px", display: "flex", alignItems: "center", gap: 6 }}>
+            <Icon id="party" /> Geschafft!
+          </p>
           <p style={{ fontSize: 14, color: "var(--text-muted)", margin: "0 0 16px" }}>
             {richtigGeloest.filter(Boolean).length} von {richtigGeloest.length} auf Anhieb richtig.
           </p>
@@ -321,21 +341,23 @@ export default function LernHilfe() {
 
   return (
     <details>
-      <summary style={{ cursor: "pointer", fontWeight: 600 }}>🧠 Lern-Hilfe</summary>
+      <summary style={{ cursor: "pointer", fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
+        <Icon id="brain" /> Lern-Hilfe
+      </summary>
       <div className="card" style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 8 }}>
         {!modus && (
           <>
             <p style={{ fontSize: 13, color: "var(--text-muted)", margin: 0 }}>
               Wichtig: Die KI löst deine Hausaufgaben nicht für dich — sie erklärt dir nur, wie es geht, oder lässt dich mit anderen Beispielen üben.
             </p>
-            <button className="btn-secondary" onClick={() => setModus("SPICKZETTEL")}>
-              📝 Spickzettel aus meinen Notizen
+            <button className="btn-secondary" onClick={() => setModus("SPICKZETTEL")} style={{ display: "flex", alignItems: "center", gap: 6, justifyContent: "center" }}>
+              <Icon id="note" /> Spickzettel aus meinen Notizen
             </button>
-            <button className="btn-secondary" onClick={() => setModus("ERKLAEREN")}>
-              💡 Erklärmodus (Methode verstehen)
+            <button className="btn-secondary" onClick={() => setModus("ERKLAEREN")} style={{ display: "flex", alignItems: "center", gap: 6, justifyContent: "center" }}>
+              <Icon id="lightbulb" /> Erklärmodus (Methode verstehen)
             </button>
-            <button className="btn-secondary" onClick={() => setModus("UEBEN")}>
-              🧩 Übungsmodus (selbst üben)
+            <button className="btn-secondary" onClick={() => setModus("UEBEN")} style={{ display: "flex", alignItems: "center", gap: 6, justifyContent: "center" }}>
+              <Icon id="puzzle" /> Übungsmodus (selbst üben)
             </button>
           </>
         )}

@@ -39,6 +39,8 @@ import NotengewichtungSektion from "@/components/NotengewichtungSektion";
 import TutorialModal from "@/components/TutorialModal";
 import Spracheingabe from "@/components/Spracheingabe";
 import SeitenTitel from "@/components/SeitenTitel";
+import { Icon } from "@/lib/uiIcons";
+import { BereichIcon } from "@/lib/bereichIcons";
 import { BEREICH_FARBEN } from "@/lib/bereichFarben";
 import { formatiereDatumUhrzeit } from "@/lib/datumFormat";
 
@@ -375,7 +377,7 @@ export default function EinstellungenClient({
                     ✓
                   </button>
                   <button className="btn-secondary" style={{ fontSize: 12, padding: "2px 8px" }} onClick={() => setBearbeiteFachId(null)}>
-                    ✕
+                    <Icon id="close" size={12} />
                   </button>
                 </>
               ) : (
@@ -390,7 +392,7 @@ export default function EinstellungenClient({
                         setBearbeiteFachName(f.name);
                       }}
                     >
-                      ✎
+                      <Icon id="edit" size={12} />
                     </button>
                     {istEltern && (
                       <button
@@ -407,7 +409,7 @@ export default function EinstellungenClient({
                           });
                         }}
                       >
-                        🗑
+                        <Icon id="delete" />
                       </button>
                     )}
                   </div>
@@ -417,7 +419,7 @@ export default function EinstellungenClient({
           ))}
           {k.faecher.length === 0 && (
             <div className="empty-state">
-              <span className="empty-state-icon">🎓</span>
+              <span className="empty-state-icon"><BereichIcon bereich="schule" size={28} /></span>
               <span>Noch keine Fächer.</span>
             </div>
           )}
@@ -434,7 +436,9 @@ export default function EinstellungenClient({
 
   const fehlerMeldenSektion = (
     <details>
-      <summary style={{ cursor: "pointer", fontWeight: 600 }}>🐞 Fehler melden / Verbesserungsvorschlag</summary>
+      <summary style={{ cursor: "pointer", fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
+        <Icon id="bug" /> Fehler melden / Verbesserungsvorschlag
+      </summary>
       <div className="card" style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
         <Spracheingabe onErgebnis={ticketSpracheErkannt} disabled={ticketVerarbeitung} />
         {ticketVerarbeitung && <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>Spracheingabe wird verarbeitet …</p>}
@@ -466,13 +470,13 @@ export default function EinstellungenClient({
             })
           }
         >
-          ✨ Text verbessern
+          <Icon id="sparkle" /> Text verbessern
         </button>
         <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
           <span style={{ fontSize: 13, color: "var(--text-muted)" }}>Bilder dazufügen (optional, z. B. mehrere Screenshots)</span>
           <div style={{ display: "flex", gap: 8 }}>
             <label className="btn-secondary" style={{ fontSize: 13, padding: "8px 12px", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>
-              📷 Foto
+              <Icon id="photo" /> Foto
               <input
                 type="file"
                 accept="image/*"
@@ -488,7 +492,7 @@ export default function EinstellungenClient({
               />
             </label>
             <label className="btn-secondary" style={{ fontSize: 13, padding: "8px 12px", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>
-              📁 Aus Galerie
+              <Icon id="file" /> Aus Galerie
               <input
                 type="file"
                 accept="image/*"
@@ -531,7 +535,7 @@ export default function EinstellungenClient({
                   }}
                   onClick={() => setTicketFotos((prev) => prev.filter((_, idx) => idx !== i))}
                 >
-                  ✕
+                  <Icon id="close" size={11} />
                 </button>
               </div>
             ))}
@@ -582,8 +586,8 @@ export default function EinstellungenClient({
                     ))}
                   </div>
                 )}
-                <span style={{ color: "var(--text-muted)", fontSize: 12 }}>
-                  🕐 Eingereicht: {formatiereDatumUhrzeit(t.createdAt)}
+                <span style={{ color: "var(--text-muted)", fontSize: 12, display: "flex", alignItems: "center", gap: 4 }}>
+                  <Icon id="clock" size={12} /> Eingereicht: {formatiereDatumUhrzeit(t.createdAt)}
                 </span>
                 {t.begruendung && <span style={{ color: "var(--text-muted)", fontSize: 12 }}>Begründung: „{t.begruendung}"</span>}
               </div>
@@ -639,7 +643,9 @@ export default function EinstellungenClient({
   // Familie, ohne einer einzelnen Person zugeordnet zu sein.
   const geburtstagSektion = istEltern && (
     <details>
-      <summary style={{ cursor: "pointer", fontWeight: 600 }}>🎂 Geburtstage verwalten</summary>
+      <summary style={{ cursor: "pointer", fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
+        <Icon id="cake" /> Geburtstage verwalten
+      </summary>
       <div className="card" style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
         {personen.map((p) => (
           <label key={p.id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -665,7 +671,9 @@ export default function EinstellungenClient({
   // und mitlesen, Status/Notizen/Umwandlung in eine Aufgabe bleibt Eltern vorbehalten.
   const hausreparaturenSektion = (
     <details>
-      <summary style={{ cursor: "pointer", fontWeight: 600 }}>🏠 Hausreparaturen ({hausprobleme.filter((h) => h.status !== "ERLEDIGT").length} offen)</summary>
+      <summary style={{ cursor: "pointer", fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
+        <Icon id="home" /> Hausreparaturen ({hausprobleme.filter((h) => h.status !== "ERLEDIGT").length} offen)
+      </summary>
       <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
         <div className="card" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           <strong style={{ fontSize: 13 }}>Neues Problem melden</strong>
@@ -715,14 +723,14 @@ export default function EinstellungenClient({
               })
             }
           >
-            ✨ Text verbessern
+            <Icon id="sparkle" /> Text verbessern
           </button>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <label
               className="btn-secondary"
               style={{ fontSize: 13, padding: "8px 12px", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}
             >
-              📷 Foto
+              <Icon id="photo" /> Foto
               <input
                 type="file"
                 accept="image/*"
@@ -741,7 +749,7 @@ export default function EinstellungenClient({
               className="btn-secondary"
               style={{ fontSize: 13, padding: "8px 12px", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}
             >
-              📁 Aus Galerie
+              <Icon id="file" /> Aus Galerie
               <input
                 type="file"
                 accept="image/*"
@@ -773,7 +781,7 @@ export default function EinstellungenClient({
                     style={{ position: "absolute", top: -6, right: -6, width: 20, height: 20, padding: 0, fontSize: 11, borderRadius: 999, lineHeight: 1 }}
                     onClick={() => setNeuesHausproblemFotos((prev) => prev.filter((_, idx) => idx !== i))}
                   >
-                    ✕
+                    <Icon id="close" size={11} />
                   </button>
                 </div>
               ))}
@@ -854,9 +862,23 @@ export default function EinstellungenClient({
               </div>
             )}
             <div style={{ display: "flex", flexDirection: "column", gap: 2, fontSize: 12, color: "var(--text-muted)" }}>
-              <span>{h.zustaendigkeit === "VERMIETER" ? "🏢 Vermieter zuständig" : "🔧 Familie erledigt selbst"}</span>
-              <span>👤 Gemeldet von {h.erstellerName}</span>
-              <span>🕐 {formatiereDatumUhrzeit(h.createdAt)}</span>
+              <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                {h.zustaendigkeit === "VERMIETER" ? (
+                  <>
+                    <Icon id="building" size={12} /> Vermieter zuständig
+                  </>
+                ) : (
+                  <>
+                    <Icon id="wrench" size={12} /> Familie erledigt selbst
+                  </>
+                )}
+              </span>
+              <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                <Icon id="user" size={12} /> Gemeldet von {h.erstellerName}
+              </span>
+              <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                <Icon id="clock" size={12} /> {formatiereDatumUhrzeit(h.createdAt)}
+              </span>
             </div>
             {istEltern ? (
               <>
@@ -935,7 +957,7 @@ export default function EinstellungenClient({
                     if (confirm(`"${h.titel}" wirklich löschen?`)) startTransition(() => loescheHausproblem(h.id));
                   }}
                 >
-                  🗑 Löschen
+                  <Icon id="delete" /> Löschen
                 </button>
               </>
             ) : (
@@ -966,14 +988,16 @@ export default function EinstellungenClient({
         {grossesTicketBildModal}
         {tutorialOffen && <TutorialModal istEltern={istEltern} onClose={() => setTutorialOffen(false)} />}
         <SeitenTitel bereich="einstellungen">Einstellungen</SeitenTitel>
-        <button className="btn-secondary" style={{ alignSelf: "flex-start" }} onClick={() => setTutorialOffen(true)}>
-          📘 Einführung
+        <button className="btn-secondary" style={{ alignSelf: "flex-start", display: "flex", alignItems: "center", gap: 6 }} onClick={() => setTutorialOffen(true)}>
+          <Icon id="tutorial" /> Einführung
         </button>
         {fehlerMeldenSektion}
         {geburtstagSektion}
         {kinder.length > 0 && (
           <details>
-            <summary style={{ cursor: "pointer", fontWeight: 600 }}>🎓 Meine Schule</summary>
+            <summary style={{ cursor: "pointer", fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
+              <BereichIcon bereich="schule" size={18} /> Meine Schule
+            </summary>
             <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 8 }}>
               {schulprofilUndFaecherKarten(kind)}
             </div>
@@ -992,13 +1016,13 @@ export default function EinstellungenClient({
       {grossesTicketBildModal}
       {tutorialOffen && <TutorialModal istEltern={istEltern} onClose={() => setTutorialOffen(false)} />}
       <SeitenTitel bereich="einstellungen">Einstellungen</SeitenTitel>
-      <button className="btn-secondary" style={{ alignSelf: "flex-start" }} onClick={() => setTutorialOffen(true)}>
-        📘 Einführung
+      <button className="btn-secondary" style={{ alignSelf: "flex-start", display: "flex", alignItems: "center", gap: 6 }} onClick={() => setTutorialOffen(true)}>
+        <Icon id="tutorial" /> Einführung
       </button>
 
       <details>
-        <summary style={{ cursor: "pointer", fontWeight: 600 }}>
-          📋 Feedback &amp; Meldungen
+        <summary style={{ cursor: "pointer", fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
+          <Icon id="list" /> Feedback &amp; Meldungen
           {alleTickets.filter((t) => t.status === "EINGEREICHT").length + hausprobleme.filter((h) => h.status !== "ERLEDIGT").length > 0 && (
             <span className="pill pill-offen" style={{ marginLeft: 8 }}>
               {alleTickets.filter((t) => t.status === "EINGEREICHT").length + hausprobleme.filter((h) => h.status !== "ERLEDIGT").length} offen
@@ -1038,9 +1062,17 @@ export default function EinstellungenClient({
                 Uhrzeit — jede Angabe in einer eigenen Zeile statt einer langen, dicht
                 zusammengeschriebenen Zeile. */}
             <div style={{ display: "flex", flexDirection: "column", gap: 2, fontSize: 12, color: "var(--text-muted)" }}>
-              <span>👤 Von {t.erstellerName}</span>
-              <span>🕐 Eingereicht: {formatiereDatumUhrzeit(t.createdAt)}</span>
-              {t.status !== "EINGEREICHT" && <span>✅ Entschieden: {formatiereDatumUhrzeit(t.updatedAt)}</span>}
+              <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                <Icon id="user" size={12} /> Von {t.erstellerName}
+              </span>
+              <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                <Icon id="clock" size={12} /> Eingereicht: {formatiereDatumUhrzeit(t.createdAt)}
+              </span>
+              {t.status !== "EINGEREICHT" && (
+                <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                  <Icon id="check" size={12} /> Entschieden: {formatiereDatumUhrzeit(t.updatedAt)}
+                </span>
+              )}
             </div>
             {t.begruendung && <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>Begründung: „{t.begruendung}"</p>}
             <input
@@ -1078,7 +1110,9 @@ export default function EinstellungenClient({
         ];
         return (
           <details>
-            <summary style={{ cursor: "pointer", fontWeight: 600 }}>🎫 Tickets verwalten ({alleTickets.filter((t) => t.status === "EINGEREICHT").length} neu)</summary>
+            <summary style={{ cursor: "pointer", fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
+              <Icon id="ticket" /> Tickets verwalten ({alleTickets.filter((t) => t.status === "EINGEREICHT").length} neu)
+            </summary>
             <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
               {alleTickets.filter((t) => t.status === "EINGEREICHT").map(alleTicketEintrag)}
               {gruppen.map(
@@ -1102,7 +1136,9 @@ export default function EinstellungenClient({
       </details>
 
       <details>
-        <summary style={{ cursor: "pointer", fontWeight: 600 }}>👪 Familie &amp; Zugänge</summary>
+        <summary style={{ cursor: "pointer", fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
+          <Icon id="family" /> Familie &amp; Zugänge
+        </summary>
         <div style={{ display: "flex", flexDirection: "column", gap: 16, marginTop: 10 }}>
       {geburtstagSektion}
 
@@ -1195,11 +1231,15 @@ export default function EinstellungenClient({
       </details>
 
       <details>
-        <summary style={{ cursor: "pointer", fontWeight: 600 }}>🏠 Verwaltung</summary>
+        <summary style={{ cursor: "pointer", fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
+          <Icon id="home" /> Verwaltung
+        </summary>
         <div style={{ display: "flex", flexDirection: "column", gap: 16, marginTop: 10 }}>
 
       <details>
-        <summary style={{ cursor: "pointer", fontWeight: 600 }}>🛒 Einkaufsliste: Kategorien</summary>
+        <summary style={{ cursor: "pointer", fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
+          <BereichIcon bereich="einkaufsliste" size={18} /> Einkaufsliste: Kategorien
+        </summary>
         <div className="card" style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
           {kategorien.map((k, i) => (
             <div key={k.id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -1245,7 +1285,9 @@ export default function EinstellungenClient({
 
       {kinder.length > 0 && (
         <details>
-          <summary style={{ cursor: "pointer", fontWeight: 600 }}>🎓 Schule: Fächer verwalten</summary>
+          <summary style={{ cursor: "pointer", fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
+            <BereichIcon bereich="schule" size={18} /> Schule: Fächer verwalten
+          </summary>
           <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 8 }}>
             {kinder.length > 1 && (
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -1289,7 +1331,9 @@ export default function EinstellungenClient({
       )}
 
       <details>
-        <summary style={{ cursor: "pointer", fontWeight: 600 }}>🧹 Dienstplan: Dienstkatalog</summary>
+        <summary style={{ cursor: "pointer", fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
+          <BereichIcon bereich="dienstplan" size={18} /> Dienstplan: Dienstkatalog
+        </summary>
         <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 8 }}>
           <p style={{ fontSize: 12, color: "var(--text-muted)", margin: 0 }}>
             Änderungen hier wirken dauerhaft ab sofort — auch rückwirkend für die aktuelle Woche, nicht nur für zukünftige.
@@ -1365,7 +1409,7 @@ export default function EinstellungenClient({
                               setDienstBeschreibung(d.beschreibung ?? "");
                             }}
                           >
-                            ✎
+                            <Icon id="edit" size={13} />
                           </button>
                           <button
                             className="btn-secondary"
@@ -1378,7 +1422,7 @@ export default function EinstellungenClient({
                               startTransition(() => deleteDienst(d.id));
                             }}
                           >
-                            🗑
+                            <Icon id="delete" size={13} />
                           </button>
                         </div>
                         {d.beschreibung && <p style={{ fontSize: 12, color: "var(--text-muted)", margin: 0, whiteSpace: "pre-wrap" }}>{d.beschreibung}</p>}
@@ -1413,7 +1457,9 @@ export default function EinstellungenClient({
       </details>
 
       <details className="card">
-        <summary style={{ cursor: "pointer", fontWeight: 600 }}>🧴 Tagesroutinen &amp; Körperpflege-Plan bearbeiten</summary>
+        <summary style={{ cursor: "pointer", fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
+          <Icon id="routine" /> Tagesroutinen &amp; Körperpflege-Plan bearbeiten
+        </summary>
         <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 10 }}>
           <p style={{ fontSize: 12, color: "var(--text-muted)", margin: 0 }}>
             Diese Texte werden im Dienstplan nur noch angezeigt — bearbeitet werden sie ab jetzt hier.
@@ -1444,7 +1490,7 @@ export default function EinstellungenClient({
                         ✓
                       </button>
                       <button className="btn-secondary" style={{ fontSize: 12, padding: "2px 8px" }} onClick={() => setBearbeiteRoutineId(null)}>
-                        ✕
+                        <Icon id="close" size={12} />
                       </button>
                     </>
                   ) : (
@@ -1458,7 +1504,7 @@ export default function EinstellungenClient({
                           setRoutineText(r.text);
                         }}
                       >
-                        ✎
+                        <Icon id="edit" size={12} />
                       </button>
                       <button
                         className="btn-secondary"
@@ -1467,7 +1513,7 @@ export default function EinstellungenClient({
                           if (confirm(`Eintrag „${r.text}" wirklich löschen?`)) startTransition(() => deleteTagesroutine(r.id));
                         }}
                       >
-                        🗑
+                        <Icon id="delete" size={12} />
                       </button>
                     </>
                   )}
@@ -1537,7 +1583,7 @@ export default function EinstellungenClient({
                         ✓
                       </button>
                       <button className="btn-secondary" style={{ fontSize: 12, padding: "2px 8px" }} onClick={() => setBearbeiteWochentag(null)}>
-                        ✕
+                        <Icon id="close" size={12} />
                       </button>
                     </>
                   ) : (
@@ -1551,7 +1597,7 @@ export default function EinstellungenClient({
                           setWochentagText(eintrag?.text ?? "");
                         }}
                       >
-                        ✎
+                        <Icon id="edit" size={12} />
                       </button>
                     </>
                   )}
@@ -1575,7 +1621,9 @@ export default function EinstellungenClient({
       {istEltern && <IcsImportSektion personen={personen.map((p) => ({ id: p.id, name: p.name }))} />}
 
       <details>
-        <summary style={{ cursor: "pointer", fontWeight: 600 }}>🔔 Benachrichtigungen &amp; Verlauf</summary>
+        <summary style={{ cursor: "pointer", fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
+          <Icon id="notifications" /> Benachrichtigungen &amp; Verlauf
+        </summary>
         <div style={{ display: "flex", flexDirection: "column", gap: 16, marginTop: 10 }}>
       <PushBenachrichtigungen />
 
@@ -1584,7 +1632,7 @@ export default function EinstellungenClient({
         <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 10 }}>
           {historie.length === 0 && (
             <div className="empty-state">
-              <span className="empty-state-icon">🕘</span>
+              <span className="empty-state-icon"><Icon id="history" size={28} /></span>
               <span>Noch keine Änderungen erfasst.</span>
             </div>
           )}

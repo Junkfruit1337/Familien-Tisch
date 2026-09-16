@@ -2,6 +2,8 @@
 
 import { useState, useTransition } from "react";
 import { setNotenGewichtung } from "@/app/(app)/schule/actions";
+import { Icon } from "@/lib/uiIcons";
+import { BereichIcon } from "@/lib/bereichIcons";
 
 const ART_LABEL: Record<string, string> = {
   KLASSENARBEIT: "Arbeit",
@@ -31,7 +33,9 @@ export default function NotengewichtungSektion({
 
   return (
     <details className="card">
-      <summary style={{ cursor: "pointer", fontWeight: 600 }}>⚖️ Notengewichtung ({kindName})</summary>
+      <summary style={{ cursor: "pointer", fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
+        <Icon id="weight" /> Notengewichtung ({kindName})
+      </summary>
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         <p style={{ fontSize: 13, color: "var(--text-muted)", margin: 0 }}>
           Legt fest, wie stark eine Note dieser Art in den Fach-Durchschnitt einfließt (z. B. Arbeit = 2, HÜ = 1).
@@ -63,7 +67,7 @@ export default function NotengewichtungSektion({
         ))}
         {gewichtung.length === 0 && (
           <div className="empty-state">
-            <span className="empty-state-icon">🎓</span>
+            <span className="empty-state-icon"><BereichIcon bereich="schule" size={28} /></span>
             <span>Noch keine Fächer angelegt.</span>
           </div>
         )}

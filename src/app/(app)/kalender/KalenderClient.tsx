@@ -15,6 +15,8 @@ import Spracheingabe from "@/components/Spracheingabe";
 import SeitenTitel from "@/components/SeitenTitel";
 import PersonChip from "@/components/PersonChip";
 import { BEREICH_FARBEN } from "@/lib/bereichFarben";
+import { Icon } from "@/lib/uiIcons";
+import { BereichIcon } from "@/lib/bereichIcons";
 
 type PersonKurz = { id: string; name: string; farbe: string };
 type Termin = {
@@ -386,13 +388,20 @@ export default function KalenderClient({
     const istEigenerTermin = t.personen.some((p) => p.id === eigeneId);
     const bearbeitbar = t.typ === "termin" && (istEltern || istEigenerTermin);
     const loeschbar = t.typ === "termin" && (istEltern || t.erstelltVonId === eigeneId);
-    const icon = t.typ === "aufgabe" ? "📌 " : t.typ === "schule" ? "🎓 " : t.typ === "geburtstag" ? "" : "";
+    const icon =
+      t.typ === "aufgabe" ? (
+        <Icon id="pin" size={14} />
+      ) : t.typ === "schule" ? (
+        <BereichIcon bereich="schule" size={14} />
+      ) : t.typ === "geburtstag" ? (
+        <Icon id="cake" size={14} />
+      ) : null;
     const zusammenfassung = (
       <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-        <div style={{ fontWeight: 600, textDecoration: t.typ === "aufgabe" && t.erledigt ? "line-through" : undefined }}>
+        <div style={{ fontWeight: 600, textDecoration: t.typ === "aufgabe" && t.erledigt ? "line-through" : undefined, display: "flex", alignItems: "center", gap: 4 }}>
           {icon}
           {t.titel}
-          {t.seriesId ? " 🔁" : ""}
+          {t.seriesId && <Icon id="repeat" size={14} />}
         </div>
         <div style={{ fontSize: 13, color: "var(--text-muted)" }}>
           {/* Fix-Batch 89 (Florians Wunsch): mehrtägige Termine zeigen den ganzen Zeitraum
@@ -447,9 +456,9 @@ export default function KalenderClient({
                     target="_blank"
                     rel="noopener noreferrer"
                     className="btn-secondary"
-                    style={{ fontSize: 12, padding: "4px 8px", textDecoration: "none" }}
+                    style={{ fontSize: 12, padding: "4px 8px", textDecoration: "none", display: "flex", alignItems: "center", gap: 4 }}
                   >
-                    📄 PDF öffnen
+                    <Icon id="pdf" size={12} /> PDF öffnen
                   </a>
                 ) : (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -465,7 +474,9 @@ export default function KalenderClient({
             </div>
           )}
           {t.notiz && (
-            <div style={{ fontSize: 13, whiteSpace: "pre-wrap", color: "var(--text-muted)" }}>📝 {t.notiz}</div>
+            <div style={{ fontSize: 13, whiteSpace: "pre-wrap", color: "var(--text-muted)", display: "flex", gap: 4 }}>
+              <Icon id="note" size={13} /> {t.notiz}
+            </div>
           )}
           {loeschAuswahl?.id === t.id && (
             <div style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 12, flexWrap: "wrap" }}>
@@ -503,13 +514,13 @@ export default function KalenderClient({
           {!loeschAuswahl && (bearbeitbar || loeschbar) && (
             <div style={{ display: "flex", gap: 8 }}>
               {bearbeitbar && (
-                <button className="btn-secondary" style={{ fontSize: 12, padding: "4px 8px" }} onClick={() => bearbeitenStarten(t)}>
-                  ✎ Bearbeiten
+                <button className="btn-secondary" style={{ fontSize: 12, padding: "4px 8px", display: "flex", alignItems: "center", gap: 4 }} onClick={() => bearbeitenStarten(t)}>
+                  <Icon id="edit" size={12} /> Bearbeiten
                 </button>
               )}
               {loeschbar && (
-                <button className="btn-secondary" style={{ fontSize: 12, padding: "4px 8px" }} onClick={() => loeschKlick(t)}>
-                  🗑 Löschen
+                <button className="btn-secondary" style={{ fontSize: 12, padding: "4px 8px", display: "flex", alignItems: "center", gap: 4 }} onClick={() => loeschKlick(t)}>
+                  <Icon id="delete" size={12} /> Löschen
                 </button>
               )}
             </div>
@@ -648,7 +659,7 @@ export default function KalenderClient({
             <span style={{ fontSize: 12, color: "var(--text-muted)" }}>Anhang (optional — Bild oder PDF)</span>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
               <label className="btn-secondary" style={{ fontSize: 13, padding: "8px 12px", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>
-                📷 Foto
+                <Icon id="photo" /> Foto
                 <input
                   type="file"
                   accept="image/*"
@@ -664,7 +675,7 @@ export default function KalenderClient({
                 />
               </label>
               <label className="btn-secondary" style={{ fontSize: 13, padding: "8px 12px", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>
-                📁 Datei (Bild oder PDF)
+                <Icon id="file" /> Datei (Bild oder PDF)
                 <input
                   type="file"
                   accept="image/*,application/pdf"
@@ -688,7 +699,7 @@ export default function KalenderClient({
                       <div
                         style={{ width: 60, height: 60, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, background: "var(--surface-soft, var(--border))", borderRadius: 8 }}
                       >
-                        📄
+                        <Icon id="pdf" size={22} />
                       </div>
                     ) : (
                       // eslint-disable-next-line @next/next/no-img-element
@@ -704,7 +715,7 @@ export default function KalenderClient({
                       style={{ position: "absolute", top: -6, right: -6, width: 20, height: 20, padding: 0, fontSize: 11, borderRadius: 999, lineHeight: 1 }}
                       onClick={() => setAnhaengeEntwurf((prev) => prev.filter((_, idx) => idx !== i))}
                     >
-                      ✕
+                      <Icon id="close" size={11} />
                     </button>
                   </div>
                 ))}
@@ -888,7 +899,7 @@ export default function KalenderClient({
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {tagesEintraege.length === 0 && (
               <div className="empty-state">
-                <span className="empty-state-icon">📭</span>
+                <span className="empty-state-icon"><Icon id="inbox" size={28} /></span>
                 <span>Keine Einträge.</span>
               </div>
             )}
@@ -917,7 +928,7 @@ export default function KalenderClient({
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {gefiltert.length === 0 && (
             <div className="empty-state">
-              <span className="empty-state-icon">📭</span>
+              <span className="empty-state-icon"><Icon id="inbox" size={28} /></span>
               <span>Keine Termine.</span>
             </div>
           )}

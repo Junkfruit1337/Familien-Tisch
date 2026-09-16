@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { getVapidPublicKey, istPushAktiv, registrierePushSubscription, entfernePushSubscription } from "@/app/(app)/push/actions";
+import { Icon } from "@/lib/uiIcons";
 
 function base64ZuUint8Array(base64: string): Uint8Array {
   const padding = "=".repeat((4 - (base64.length % 4)) % 4);
@@ -84,7 +85,9 @@ export default function PushBenachrichtigungen() {
 
   return (
     <div className="card" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-      <strong>🔔 Benachrichtigungen (dieses Gerät)</strong>
+      <strong style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <Icon id="notifications" /> Benachrichtigungen (dieses Gerät)
+      </strong>
       {status === "nicht_eingerichtet" ? (
         <p style={{ fontSize: 13, color: "var(--text-muted)", margin: 0 }}>
           Push-Benachrichtigungen sind serverseitig noch nicht eingerichtet.

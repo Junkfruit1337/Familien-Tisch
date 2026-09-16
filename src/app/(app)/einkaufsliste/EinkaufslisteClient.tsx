@@ -28,6 +28,8 @@ import HistorieVerlauf from "@/components/HistorieVerlauf";
 import RezeptSucheFeld from "@/components/RezeptSucheFeld";
 import Spracheingabe from "@/components/Spracheingabe";
 import SeitenTitel from "@/components/SeitenTitel";
+import { Icon } from "@/lib/uiIcons";
+import { BereichIcon } from "@/lib/bereichIcons";
 import { BEREICH_FARBEN } from "@/lib/bereichFarben";
 import { formatiereDatumUhrzeit } from "@/lib/datumFormat";
 
@@ -437,7 +439,15 @@ export default function EinkaufslisteClient({
               })
             }
           >
-            {einkaufsmodus ? "✕ Fertig" : "🛍️ Einkaufsmodus"}
+            {einkaufsmodus ? (
+              <>
+                <Icon id="close" /> Fertig
+              </>
+            ) : (
+              <>
+                <Icon id="bag" /> Einkaufsmodus
+              </>
+            )}
           </button>
         )}
       </div>
@@ -565,7 +575,7 @@ export default function EinkaufslisteClient({
                           setWunschBearbeitenNotiz(w.notiz ?? "");
                         }}
                       >
-                        ✎
+                        <Icon id="edit" size={13} />
                       </button>
                       <button
                         className="btn-secondary"
@@ -574,7 +584,7 @@ export default function EinkaufslisteClient({
                           if (confirm(`Wunsch „${w.artikelName}" wirklich zurückziehen?`)) startTransition(() => deleteWunsch(w.id));
                         }}
                       >
-                        🗑
+                        <Icon id="delete" size={13} />
                       </button>
                     </div>
                   </div>
@@ -642,7 +652,7 @@ export default function EinkaufslisteClient({
                       })
                     }
                   >
-                    ✕ Brauchen wir nicht
+                    <Icon id="close" /> Brauchen wir nicht
                   </button>
                 </div>
               </div>
@@ -653,7 +663,9 @@ export default function EinkaufslisteClient({
 
       {!einkaufsmodus && istEltern && rezepte.length > 0 && (
         <details>
-          <summary style={{ cursor: "pointer", color: "var(--text-muted)" }}>➕ Extra-Gericht zur Einkaufsliste hinzufügen</summary>
+          <summary style={{ cursor: "pointer", color: "var(--text-muted)", display: "flex", alignItems: "center", gap: 6 }}>
+            <Icon id="add" size={14} /> Extra-Gericht zur Einkaufsliste hinzufügen
+          </summary>
           <div className="card" style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
             <p style={{ fontSize: 12, color: "var(--text-muted)", margin: 0 }}>
               Für Anlässe außerhalb des Essensplans — z. B. ein Dip fürs Grillen zusätzlich einkaufen.
@@ -774,7 +786,7 @@ export default function EinkaufslisteClient({
                       onClick={() => startTransition(() => verwirfVorschlag(v.name))}
                       style={KACHEL_ECKE_BUTTON_STYLE}
                     >
-                      ✕
+                      <Icon id="close" size={12} />
                     </button>
                   }
                 />
@@ -835,7 +847,7 @@ export default function EinkaufslisteClient({
                       ✓
                     </button>
                     <button className="btn-danger" style={{ padding: "6px 10px", borderRadius: 10, border: "none" }} onClick={() => startTransition(() => entscheideWunsch(w.id, false))}>
-                      ✕
+                      <Icon id="close" />
                     </button>
                   </div>
                 </div>
@@ -881,8 +893,8 @@ export default function EinkaufslisteClient({
           anderen selten gebrauchten Dingen, direkt vor der eigentlichen Liste. */}
       {!einkaufsmodus && istEltern && (
         <div className="card" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          <button className="btn-secondary" onClick={() => setZeigeListenImport((v) => !v)}>
-            📷 Liste aus Foto/Screenshot importieren
+          <button className="btn-secondary" onClick={() => setZeigeListenImport((v) => !v)} style={{ display: "flex", alignItems: "center", gap: 6, justifyContent: "center" }}>
+            <Icon id="photo" /> Liste aus Foto/Screenshot importieren
           </button>
           {zeigeListenImport && (
             <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 4 }}>
@@ -891,7 +903,7 @@ export default function EinkaufslisteClient({
               </p>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 <label className="btn-secondary" style={{ fontSize: 13, padding: "8px 12px", cursor: listenImportLaeuft ? "default" : "pointer", display: "flex", alignItems: "center", gap: 4, opacity: listenImportLaeuft ? 0.5 : 1 }}>
-                  📷 Foto
+                  <Icon id="photo" /> Foto
                   <input
                     type="file"
                     accept="image/*"
@@ -925,7 +937,7 @@ export default function EinkaufslisteClient({
                   />
                 </label>
                 <label className="btn-secondary" style={{ fontSize: 13, padding: "8px 12px", cursor: listenImportLaeuft ? "default" : "pointer", display: "flex", alignItems: "center", gap: 4, opacity: listenImportLaeuft ? 0.5 : 1 }}>
-                  📁 Aus Galerie
+                  <Icon id="file" /> Aus Galerie
                   <input
                     type="file"
                     accept="image/*"
@@ -1014,7 +1026,7 @@ export default function EinkaufslisteClient({
 
       {Object.keys(nachKategorie).length === 0 && (
         <div className="empty-state">
-          <span className="empty-state-icon">🛒</span>
+          <span className="empty-state-icon"><BereichIcon bereich="einkaufsliste" size={28} /></span>
           <span>Die Einkaufsliste ist leer.</span>
         </div>
       )}
@@ -1161,7 +1173,7 @@ export default function EinkaufslisteClient({
                       });
                     }}
                   >
-                    🗑
+                    <Icon id="delete" />
                   </button>
                 </div>
               </div>
@@ -1179,7 +1191,9 @@ export default function EinkaufslisteClient({
           Aufklappen, für Fälle wie "jemand ohne die App geht einkaufen". */}
       {!einkaufsmodus && artikel.length > 0 && (
         <details>
-          <summary style={{ cursor: "pointer", color: "var(--text-muted)" }}>📋 Liste als Text exportieren</summary>
+          <summary style={{ cursor: "pointer", color: "var(--text-muted)", display: "flex", alignItems: "center", gap: 6 }}>
+            <Icon id="list" /> Liste als Text exportieren
+          </summary>
           <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
             <textarea
               readOnly
@@ -1200,14 +1214,15 @@ export default function EinkaufslisteClient({
                   }
                 }}
               >
-                📋 Kopieren
+                <Icon id="list" /> Kopieren
               </button>
               {typeof navigator !== "undefined" && !!navigator.share && (
                 <button
                   className="btn-secondary"
                   onClick={() => navigator.share({ title: "Einkaufsliste", text: exportText }).catch(() => {})}
+                  style={{ display: "flex", alignItems: "center", gap: 6 }}
                 >
-                  📤 Teilen
+                  <Icon id="export" /> Teilen
                 </button>
               )}
             </div>

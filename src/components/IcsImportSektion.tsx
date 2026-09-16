@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { parseIcsVorschau, importiereIcsTermine } from "@/app/(app)/kalender/actions";
+import { Icon } from "@/lib/uiIcons";
 
 // Fix-Batch 96 (Florians Wunsch): Termine per ICS-Datei importieren (Umzug von Faminice).
 // Fix-Batch 101 (Florians Feedback): dieser Import passiert höchstens ein paar Mal beim
@@ -56,7 +57,9 @@ export default function IcsImportSektion({ personen }: { personen: { id: string;
 
   return (
     <details className="card">
-      <summary style={{ cursor: "pointer", fontWeight: 600 }}>📥 Termine aus einer Kalender-Datei importieren (ICS)</summary>
+      <summary style={{ cursor: "pointer", fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
+        <Icon id="import" /> Termine aus einer Kalender-Datei importieren (ICS)
+      </summary>
       <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 8 }}>
         <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>
           Für einen Umzug aus einer anderen Kalender-App: dort als ICS-Datei exportieren (meist pro Person eine eigene
@@ -73,8 +76,8 @@ export default function IcsImportSektion({ personen }: { personen: { id: string;
             ))}
           </select>
         </div>
-        <label className="btn-secondary" style={{ fontSize: 13, padding: "8px 12px", cursor: "pointer", alignSelf: "flex-start" }}>
-          📁 ICS-Datei auswählen
+        <label className="btn-secondary" style={{ fontSize: 13, padding: "8px 12px", cursor: "pointer", alignSelf: "flex-start", display: "flex", alignItems: "center", gap: 4 }}>
+          <Icon id="file" /> ICS-Datei auswählen
           <input
             type="file"
             accept=".ics,text/calendar"
@@ -94,8 +97,8 @@ export default function IcsImportSektion({ personen }: { personen: { id: string;
         {icsErgebnis && (
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {icsErgebnis.quelle === "ki" && (
-              <p style={{ margin: 0, fontSize: 12, color: "var(--warning)" }}>
-                ⚠️ Diese Datei war nicht im Standard-Kalenderformat — die Termine wurden per KI ausgelesen. Bitte besonders
+              <p style={{ margin: 0, fontSize: 12, color: "var(--warning)", display: "flex", alignItems: "center", gap: 4 }}>
+                <Icon id="warning" size={12} /> Diese Datei war nicht im Standard-Kalenderformat — die Termine wurden per KI ausgelesen. Bitte besonders
                 sorgfältig prüfen, bevor du übernimmst.
               </p>
             )}

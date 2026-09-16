@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { ICON_STIL_KEY, anwendenIconStil, type IconStil } from "@/lib/iconStil";
 import { BEREICH_ICONS_BUNT, BEREICH_ICONS_MINIMAL } from "@/lib/bereichIcons";
+import { Icon } from "@/lib/uiIcons";
 
 // Fix-Batch 124 (Florians Wunsch): "man könnte doch sowas in den Designvorlagen ändern... dass
 // sich das durch die ganze App zieht" — Icon-Stil (bunte Emoji vs. schlichte Symbole) als
@@ -32,10 +33,12 @@ export default function IconStilAuswahl() {
 
   return (
     <details>
-      <summary style={{ cursor: "pointer", fontWeight: 600 }}>🖼️ Icon-Stil</summary>
+      <summary style={{ cursor: "pointer", fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
+        <Icon id="iconStil" /> Icon-Stil
+      </summary>
       <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
         <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 4px" }}>
-          Nur für dieses Gerät — gilt für die Symbole oben auf jeder Seite und in der Navigationsleiste unten.
+          Nur für dieses Gerät — gilt für alle Bedien- und Navigations-Symbole in der ganzen App (Lebensmittel-, Sparziel- und Design-Vorlagen-Symbole bleiben immer bunt, da sie konkrete Dinge zeigen statt nur zu dekorieren).
         </p>
         <div style={{ display: "flex", gap: 8 }}>
           {OPTIONEN.map((o) => {

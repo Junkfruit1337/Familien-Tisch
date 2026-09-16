@@ -37,6 +37,8 @@ import {
   entsperreExtraMahlzeit,
 } from "./actions";
 import SeitenTitel from "@/components/SeitenTitel";
+import { Icon } from "@/lib/uiIcons";
+import { BereichIcon } from "@/lib/bereichIcons";
 import Spracheingabe from "@/components/Spracheingabe";
 import { pruefeZutatenVollstaendig } from "@/lib/rezeptValidierung";
 import { REZEPT_KATEGORIEN } from "@/lib/rezeptKategorien";
@@ -430,8 +432,8 @@ export default function EssensplanClient({
       </div>
 
       {istEltern && ausgewogenheit?.hinweis && (
-        <div className="card" style={{ background: "var(--info-soft)", fontSize: 13 }}>
-          ⚖️ {ausgewogenheit.hinweis}
+        <div className="card" style={{ background: "var(--info-soft)", fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}>
+          <Icon id="weight" size={14} /> {ausgewogenheit.hinweis}
         </div>
       )}
 
@@ -447,7 +449,9 @@ export default function EssensplanClient({
                 "gelockt" geprüft, da ein Tag auch ohne Zutaten-Übernahme manuell gesperrt sein
                 kann; nur ein tatsächlicher Herkunfts-Eintrag zählt als "schon eingekauft". */}
             {t.eintrag && !t.eintrag.zutatenUebernommen && (
-              <span className="pill pill-offen" style={{ alignSelf: "flex-start" }}>⚠️ Zutaten noch nicht eingekauft</span>
+              <span className="pill pill-offen" style={{ alignSelf: "flex-start", display: "flex", alignItems: "center", gap: 4 }}>
+                <Icon id="warning" size={12} /> Zutaten noch nicht eingekauft
+              </span>
             )}
             {/* Fix-Batch 82 (Florians Wunsch): ein bereits vergangener Tag darf nicht mehr
                 bearbeitet werden — dieselbe schreibgeschützte Ansicht wie für Kinder. */}
@@ -462,8 +466,8 @@ export default function EssensplanClient({
                   onEntfernen={() => tagEntfernen(t)}
                 />
                 {t.eintrag?.gelockt && (
-                  <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>
-                    🔒 Erst entsperren, um das Gericht zu ändern.
+                  <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)", display: "flex", alignItems: "center", gap: 4 }}>
+                    <Icon id="lock" size={12} /> Erst entsperren, um das Gericht zu ändern.
                   </p>
                 )}
               </>
@@ -472,13 +476,21 @@ export default function EssensplanClient({
             )}
             {istEltern && t.eintrag && !t.vergangen && (
               <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", borderTop: "1px solid var(--border)", paddingTop: 8 }}>
-                <button className="btn-secondary" style={{ fontSize: "var(--font-xs)" }} onClick={() => klickSchloss(t)}>
-                  {t.eintrag.gelockt ? "🔓 Entsperren" : "🔒 Sperren"}
+                <button className="btn-secondary" style={{ fontSize: "var(--font-xs)", display: "flex", alignItems: "center", gap: 4 }} onClick={() => klickSchloss(t)}>
+                  {t.eintrag.gelockt ? (
+                    <>
+                      <Icon id="unlock" size={12} /> Entsperren
+                    </>
+                  ) : (
+                    <>
+                      <Icon id="lock" size={12} /> Sperren
+                    </>
+                  )}
                 </button>
                 {t.eintrag.gelockt && <span className="pill pill-neutral">Gesperrt</span>}
                 {!t.eintrag.gelockt && (
-                  <button className="btn-secondary" style={{ fontSize: "var(--font-xs)" }} onClick={() => zutatenHinzufuegen(t.eintrag!.id)} disabled={pending}>
-                    🛒 Zutaten zur Einkaufsliste hinzufügen
+                  <button className="btn-secondary" style={{ fontSize: "var(--font-xs)", display: "flex", alignItems: "center", gap: 4 }} onClick={() => zutatenHinzufuegen(t.eintrag!.id)} disabled={pending}>
+                    <BereichIcon bereich="einkaufsliste" size={13} /> Zutaten zur Einkaufsliste hinzufügen
                   </button>
                 )}
               </div>
@@ -499,8 +511,8 @@ export default function EssensplanClient({
                       ? `+${diffProzent}% mehr Zutaten als im Rezept`
                       : `${diffProzent}% weniger Zutaten als im Rezept`;
                   return (
-                    <div style={{ fontSize: "var(--font-xs)", color: "var(--text-muted)", marginBottom: 4 }}>
-                      👪 Wer isst mit? ({gesamtPortionen.toFixed(1)} von {portionenBasis} Portionen · {mengenHinweis})
+                    <div style={{ fontSize: "var(--font-xs)", color: "var(--text-muted)", marginBottom: 4, display: "flex", alignItems: "center", gap: 4 }}>
+                      <Icon id="family" size={12} /> Wer isst mit? ({gesamtPortionen.toFixed(1)} von {portionenBasis} Portionen · {mengenHinweis})
                     </div>
                   );
                 })()}
@@ -570,7 +582,11 @@ export default function EssensplanClient({
                       </span>
                       {/* Fix-Batch 87 (Florians Wunsch): siehe Kommentar beim Hauptgericht weiter
                           oben — derselbe verlässliche Herkunfts-Check statt "gelockt". */}
-                      {!e.zutatenUebernommen && <span className="pill pill-offen">⚠️ Noch nicht eingekauft</span>}
+                      {!e.zutatenUebernommen && (
+                        <span className="pill pill-offen" style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                          <Icon id="warning" size={11} /> Noch nicht eingekauft
+                        </span>
+                      )}
                       {/* Fix-Batch 84 (Florians Bug-Meldung): dieselbe Sperren-Logik wie beim
                           Hauptgericht — nach Übernahme gesperrt, Löschen erst nach Entsperren. */}
                       {e.gelockt ? (
@@ -578,22 +594,22 @@ export default function EssensplanClient({
                           <span className="pill pill-neutral">Gesperrt</span>
                           <button
                             className="btn-secondary"
-                            style={{ fontSize: 11, padding: "2px 8px" }}
+                            style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, padding: "2px 8px" }}
                             disabled={pending}
                             onClick={() => klickSchlossExtra(e)}
                           >
-                            🔓 Entsperren
+                            <Icon id="unlock" size={11} /> Entsperren
                           </button>
                         </>
                       ) : (
                         <>
                           <button
                             className="btn-secondary"
-                            style={{ fontSize: 11, padding: "2px 8px" }}
+                            style={{ fontSize: 11, padding: "2px 8px", display: "flex", alignItems: "center", gap: 4 }}
                             disabled={pending}
                             onClick={() => startTransition(() => fuegeZutatenFuerExtraMahlzeitHinzu(e.id).then(() => ladeWoche(offset)))}
                           >
-                            🛒 Zutaten
+                            <BereichIcon bereich="einkaufsliste" size={11} /> Zutaten
                           </button>
                           <button
                             className="btn-icon btn-icon-danger"
@@ -604,7 +620,7 @@ export default function EssensplanClient({
                               startTransition(() => entferneExtraMahlzeit(e.id).then(() => ladeWoche(offset)));
                             }}
                           >
-                            🗑
+                            <Icon id="delete" size={12} />
                           </button>
                         </>
                       )}
@@ -777,7 +793,7 @@ export default function EssensplanClient({
                     {h.menge ? `${h.menge} ` : ""}
                     {h.artikelName}
                   </span>
-                  <span style={{ fontSize: 16 }}>{behalten ? "✅" : "❌"}</span>
+                  <span style={{ fontSize: 16 }}>{behalten ? <Icon id="check" size={16} /> : <Icon id="close" size={16} />}</span>
                 </button>
               );
             })}
@@ -888,8 +904,8 @@ export default function EssensplanClient({
                         nicht sauber rechnen. Egal woher die Zeilen kommen (hier: manuell
                         editiert, oder per Umschreiben/Verdichten vorbefüllt). */}
                     {zeigeZutatenWarnungEdit && rezeptZutatenEntwurfPruefung.some((z) => !z.vollstaendig) && (
-                      <p style={{ margin: 0, fontSize: 13, color: "var(--danger)" }}>
-                        ⚠️ Bitte bei diesen Zutaten eine Menge angeben (außer bei „Prise"):{" "}
+                      <p style={{ margin: 0, fontSize: 13, color: "var(--danger)", display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}>
+                        <Icon id="warning" size={13} /> Bitte bei diesen Zutaten eine Menge angeben (außer bei „Prise"):{" "}
                         <strong>
                           {rezeptZutatenEntwurfPruefung
                             .filter((z) => !z.vollstaendig)
@@ -922,7 +938,13 @@ export default function EssensplanClient({
                         })
                       }
                     >
-                      {verdichtenLaeuft ? "Wird verdichtet …" : "🪄 Anleitung kürzer fassen"}
+                      {verdichtenLaeuft ? (
+                        "Wird verdichtet …"
+                      ) : (
+                        <>
+                          <Icon id="magic" size={13} /> Anleitung kürzer fassen
+                        </>
+                      )}
                     </button>
                     <button
                       className="btn-secondary"
@@ -948,7 +970,13 @@ export default function EssensplanClient({
                         })
                       }
                     >
-                      {abgleichLaeuft ? "Wird abgeglichen …" : "🔍 Mengen mit Zutaten abgleichen"}
+                      {abgleichLaeuft ? (
+                        "Wird abgeglichen …"
+                      ) : (
+                        <>
+                          <Icon id="search" size={13} /> Mengen mit Zutaten abgleichen
+                        </>
+                      )}
                     </button>
                     {abgleichHinweis && (
                       <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>{abgleichHinweis}</p>
@@ -1009,7 +1037,7 @@ export default function EssensplanClient({
                           setAbgleichHinweis(null);
                         }}
                       >
-                        ✎ Zutaten/Zubereitung bearbeiten
+                        <Icon id="edit" size={13} /> Zutaten/Zubereitung bearbeiten
                       </button>
                     )}
                   </>
@@ -1057,7 +1085,7 @@ export default function EssensplanClient({
                           setUmschreibeVorschau(null);
                         }}
                       >
-                        🔄 Rezept umschreiben lassen (z. B. „vegetarisch")
+                        <Icon id="refresh" size={13} /> Rezept umschreiben lassen (z. B. „vegetarisch")
                       </button>
                     ) : !umschreibeVorschau ? (
                       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -1170,7 +1198,7 @@ export default function EssensplanClient({
                       });
                     }}
                   >
-                    🗑
+                    <Icon id="delete" />
                   </button>
                 )}
               </div>
@@ -1181,19 +1209,23 @@ export default function EssensplanClient({
 
       {istEltern && (
         <details>
-          <summary style={{ cursor: "pointer", color: "var(--text-muted)" }}>➕ Neues Rezept hinzufügen (Elternbereich)</summary>
+          <summary style={{ cursor: "pointer", color: "var(--text-muted)", display: "flex", alignItems: "center", gap: 6 }}>
+            <Icon id="add" size={14} /> Neues Rezept hinzufügen (Elternbereich)
+          </summary>
           <div className="card" style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
             {/* Fix-Batch 76 (Florians Korrektur an Fix-Batch 75): "Vorhandenes Rezept
                 hinzufügen" (Foto/Datei/Diktieren — der Normalfall für bewährte Rezepte) und
                 "KI erstellt ein Rezept" (kostet Geld, seltener) müssen zwei klar getrennte,
                 unterschiedlich gewichtete Bereiche sein, nicht ein gemeinsames Feld. */}
-            <strong style={{ fontSize: 14 }}>📖 Vorhandenes Rezept hinzufügen</strong>
+            <strong style={{ fontSize: 14, display: "flex", alignItems: "center", gap: 6 }}>
+              <Icon id="book" /> Vorhandenes Rezept hinzufügen
+            </strong>
             <p style={{ fontSize: 12, color: "var(--text-muted)", margin: 0 }}>
               Für Rezepte, die ihr schon habt — abfotografieren, als Datei hochladen oder einsprechen.
             </p>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
               <label className="btn-secondary" style={{ fontSize: 13, padding: "8px 12px", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>
-                📷 Foto
+                <Icon id="photo" /> Foto
                 <input
                   type="file"
                   accept="image/*"
@@ -1227,7 +1259,7 @@ export default function EssensplanClient({
                 />
               </label>
               <label className="btn-secondary" style={{ fontSize: 13, padding: "8px 12px", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>
-                📁 Datei (Bild oder PDF)
+                <Icon id="file" /> Datei (Bild oder PDF)
                 <input
                   type="file"
                   accept="image/*,application/pdf"
@@ -1316,8 +1348,8 @@ export default function EssensplanClient({
                   "Prise") — egal ob manuell getippt, per Sprache/Foto/Datei erkannt oder von
                   der KI vorgeschlagen. */}
               {zeigeZutatenWarnungNeu && neuZutatenPruefung.some((z) => !z.vollstaendig) && (
-                <p style={{ margin: 0, fontSize: 13, color: "var(--danger)" }}>
-                  ⚠️ Bitte bei diesen Zutaten eine Menge angeben (außer bei „Prise"):{" "}
+                <p style={{ margin: 0, fontSize: 13, color: "var(--danger)", display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}>
+                  <Icon id="warning" size={13} /> Bitte bei diesen Zutaten eine Menge angeben (außer bei „Prise"):{" "}
                   <strong>{neuZutatenPruefung.filter((z) => !z.vollstaendig).map((z) => z.zeile).join(" · ")}</strong>
                 </p>
               )}
@@ -1343,7 +1375,9 @@ export default function EssensplanClient({
               )}
               {neuAbgleichWarnung && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 6, background: "var(--warning-soft)", borderRadius: "var(--radius)", padding: 10 }}>
-                  <p style={{ margin: 0, fontSize: 13 }}>⚠️ {neuAbgleichWarnung.hinweis}</p>
+                  <p style={{ margin: 0, fontSize: 13, display: "flex", alignItems: "center", gap: 4 }}>
+                    <Icon id="warning" size={13} /> {neuAbgleichWarnung.hinweis}
+                  </p>
                   {neuAbgleichWarnung.korrigierteZubereitung && (
                     <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>
                       Vorschlag zur Korrektur wurde bereits ins Zubereitungsfeld oben eingetragen — bitte prüfen.
@@ -1429,8 +1463,8 @@ export default function EssensplanClient({
                 und dass es Geld kostet (Florian: "man soll sehen, dass es zwei
                 unterschiedliche Bereiche sind: das Hochladen und das Erfinden"). */}
             <details style={{ marginTop: 4 }}>
-              <summary style={{ cursor: "pointer", color: "var(--text-muted)", fontSize: 13 }}>
-                ✨ Stattdessen ein Rezept von der KI erstellen lassen
+              <summary style={{ cursor: "pointer", color: "var(--text-muted)", fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}>
+                <Icon id="sparkle" size={13} /> Stattdessen ein Rezept von der KI erstellen lassen
               </summary>
               <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
                 <p style={{ fontSize: 12, color: "var(--text-muted)", margin: 0 }}>
@@ -1468,7 +1502,13 @@ export default function EssensplanClient({
                     })
                   }
                 >
-                  {neuLaeuft ? "Wird erstellt …" : "✨ Rezept vorschlagen (günstig)"}
+                  {neuLaeuft ? (
+                    "Wird erstellt …"
+                  ) : (
+                    <>
+                      <Icon id="sparkle" size={13} /> Rezept vorschlagen (günstig)
+                    </>
+                  )}
                 </button>
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                   <button
@@ -1496,7 +1536,7 @@ export default function EssensplanClient({
                       })
                     }
                   >
-                    🍂 Saisonale Idee
+                    <Icon id="seasonal" size={13} /> Saisonale Idee
                   </button>
                   <button
                     className="btn-secondary"
@@ -1525,7 +1565,7 @@ export default function EssensplanClient({
                       })
                     }
                   >
-                    🌐 Aus dem Internet (ca. 2–5 Cent)
+                    <Icon id="globe" size={13} /> Aus dem Internet (ca. 2–5 Cent)
                   </button>
                 </div>
                 <p style={{ fontSize: 11, color: "var(--text-muted)", margin: 0 }}>
