@@ -126,6 +126,14 @@ function ArtikelKachel({
   // Fix-Batch 35 Nachtrag (Ticket "Icon-Größe..."): Kacheln bewusst kompakt gehalten (auch im
   // Einkaufsmodus NICHT vergrößert, im Gegenteil das war vorher der Fehler) — Florian will beim
   // Einkaufen möglichst viele Artikel auf einen Blick sehen, nicht wenige große.
+  // Fix-Batch 126 (Florians Bug-Meldung, mit Screenshot): lange Artikelnamen (typischerweise aus
+  // Rezept-Zutatenzeilen wie "Hähnchengewürz (Paprikapulver, Chili, Rosmarin)") liefen bei fester
+  // Schriftgröße über die feste Kachelgröße (aspectRatio 1) hinaus in die Seite hinein. Statt die
+  // Eingabe zu begrenzen (Zutat-Namen kommen oft direkt aus KI-erkannten Rezepten, nicht immer
+  // frei getippt) skaliert die Schrift jetzt mit der Textlänge automatisch etwas kleiner, UND die
+  // Kachel schneidet überschüssigen Text zusätzlich sauber ab (max. 3 Zeilen, „…“) statt über den
+  // Rand hinauszulaufen — so bleibt auch ein extrem langer Name innerhalb der Kachel lesbar.
+  const nameSchriftgroesse = name.length > 20 ? 7 : name.length > 14 ? 8 : name.length > 8 ? 9 : 10;
   return (
     <div
       onClick={deaktiviert ? undefined : onTap}
@@ -142,6 +150,7 @@ function ArtikelKachel({
         gap: 1,
         textAlign: "center",
         aspectRatio: "1",
+        overflow: "hidden",
         cursor: deaktiviert || !onTap ? "default" : "pointer",
       }}
     >
@@ -150,10 +159,25 @@ function ArtikelKachel({
           {eckeAktion}
         </div>
       )}
-      <span style={{ fontSize: 17, lineHeight: 1 }}>{icon}</span>
-      <span style={{ fontWeight: 600, fontSize: 10, textDecoration: durchgestrichen ? "line-through" : "none", lineHeight: 1.15 }}>{name}</span>
-      {menge && <span style={{ fontSize: 9, opacity: 0.85 }}>{menge}</span>}
-      {notiz && <span style={{ fontSize: 9, opacity: 0.75, fontStyle: "italic" }}>{notiz}</span>}
+      <span style={{ fontSize: 17, lineHeight: 1, flexShrink: 0 }}>{icon}</span>
+      <span
+        style={{
+          fontWeight: 600,
+          fontSize: nameSchriftgroesse,
+          textDecoration: durchgestrichen ? "line-through" : "none",
+          lineHeight: 1.15,
+          display: "-webkit-box",
+          WebkitLineClamp: 3,
+          WebkitBoxOrient: "vertical",
+          overflow: "hidden",
+          overflowWrap: "break-word",
+          wordBreak: "break-word",
+        }}
+      >
+        {name}
+      </span>
+      {menge && <span style={{ fontSize: 9, opacity: 0.85, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "100%" }}>{menge}</span>}
+      {notiz && <span style={{ fontSize: 9, opacity: 0.75, fontStyle: "italic", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "100%" }}>{notiz}</span>}
     </div>
   );
 }
