@@ -316,6 +316,19 @@ export default function EinkaufslisteClient({
     };
   }, [einkaufsmodus]);
 
+  // Fix-Batch 129 (Florians Wunsch, mit Screenshot): im Einkaufsmodus soll wirklich NUR die
+  // Liste zu sehen sein — kein Kopfbereich, keine untere Reiterleiste, kein versehentliches
+  // Wegtippen mehr, solange man tatsächlich im Laden einkauft. Rein über ein Attribut auf
+  // <html> gelöst (dieselbe Technik wie Hell/Dunkel, Design-Vorlage, Icon-Stil) — AppShell.tsx
+  // selbst weiß nichts von "Einkaufsmodus", globals.css blendet Kopf/Reiterleiste nur anhand
+  // dieses Attributs aus. Aufräumen beim Verlassen UND beim Verlassen der Seite (Cleanup),
+  // damit die App niemals dauerhaft ohne Navigation "steckenbleiben" kann.
+  useEffect(() => {
+    if (einkaufsmodus) document.documentElement.setAttribute("data-einkaufsmodus", "1");
+    else document.documentElement.removeAttribute("data-einkaufsmodus");
+    return () => document.documentElement.removeAttribute("data-einkaufsmodus");
+  }, [einkaufsmodus]);
+
   async function spracheErkannt(text: string) {
     setSpracheVerarbeitung(true);
     try {

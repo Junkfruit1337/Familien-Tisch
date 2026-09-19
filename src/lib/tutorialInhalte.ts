@@ -82,7 +82,7 @@ export const TUTORIAL_KAPITEL: TutorialKapitel[] = [
     punkte: [
       "Artikel per Text, Sprache oder Foto hinzufügen",
       "Kategorien werden automatisch erkannt und merken sich Korrekturen",
-      "Einkaufsmodus hält den Bildschirm wach, während du abhakst",
+      "Einkaufsmodus hält den Bildschirm wach und blendet Kopfbereich/Navigation aus, während du abhakst",
       "Liste als Text exportieren oder teilen",
     ],
     punkteKind: ["Wünsche einreichen, die die Eltern genehmigen oder ablehnen"],

@@ -109,7 +109,10 @@ export default function AppShell({ person, children }: { person: Person; childre
   const navRef = useRef<HTMLElement>(null);
 
   function onTouchStart(e: React.TouchEvent) {
-    if (navRef.current?.contains(e.target as Node)) {
+    // Fix-Batch 129: im Einkaufsmodus darf auch die Wisch-Geste nicht mehr aus der Liste
+    // heraus navigieren — sonst wäre das Ausblenden von Kopf/Reiterleiste sinnlos, wenn man
+    // versehentlich beim Einkaufen quer wischt und trotzdem den Tab wechselt.
+    if (document.documentElement.hasAttribute("data-einkaufsmodus") || navRef.current?.contains(e.target as Node)) {
       wischStartRef.current = null;
       return;
     }
@@ -141,6 +144,7 @@ export default function AppShell({ person, children }: { person: Person; childre
       onTouchEnd={onTouchEnd}
     >
       <header
+        className="app-header"
         style={{
           display: "flex",
           alignItems: "center",
@@ -180,7 +184,7 @@ export default function AppShell({ person, children }: { person: Person; childre
         </div>
       </header>
 
-      <main style={{ flex: 1, padding: 16, paddingBottom: "calc(96px + env(safe-area-inset-bottom))", maxWidth: 720, margin: "0 auto", width: "100%" }}>
+      <main className="app-main" style={{ flex: 1, padding: 16, paddingBottom: "calc(96px + env(safe-area-inset-bottom))", maxWidth: 720, margin: "0 auto", width: "100%" }}>
         {children}
       </main>
 
@@ -191,6 +195,7 @@ export default function AppShell({ person, children }: { person: Person; childre
           passen; kein overflowX mehr nötig. */}
       <nav
         ref={navRef}
+        className="app-nav"
         style={{
           position: "fixed",
           bottom: 0,

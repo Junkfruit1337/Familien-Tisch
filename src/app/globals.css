@@ -129,6 +129,19 @@
   display: inline-flex;
 }
 
+/* Fix-Batch 129 (Florians Wunsch, mit Screenshot): im Einkaufsmodus soll NUR die Liste zu
+   sehen sein — kein Kopfbereich, keine untere Reiterleiste, keine Möglichkeit, versehentlich
+   herauszunavigieren. Das Attribut wird von EinkaufslisteClient.tsx gesetzt/entfernt, AppShell
+   selbst kennt "Einkaufsmodus" nicht — dieselbe entkoppelte Technik wie beim Hell/Dunkel- und
+   Design-Vorlagen-Umschalter. */
+:root[data-einkaufsmodus="1"] .app-header,
+:root[data-einkaufsmodus="1"] .app-nav {
+  display: none !important;
+}
+:root[data-einkaufsmodus="1"] .app-main {
+  padding-bottom: 16px !important;
+}
+
 * {
   box-sizing: border-box;
 }
