@@ -273,13 +273,34 @@ export async function schreibeRezeptUmVorschau(
   }
 }
 
+// Ticket "Rezepte löschen" (Florians Meldung, 19.09.2026): Löschen schlug bisher für JEDES
+// Rezept fehl, das JEMALS (auch vor Monaten) im Essensplan stand — EssensplanEintrag/
+// ExtraMahlzeit verweisen ohne Kaskade auf Rezept, die Datenbank blockierte die Löschung also
+// dauerhaft, nicht nur bei einer wirklich noch aktuellen Planung. Das machte Löschen für jedes
+// tatsächlich genutzte Rezept faktisch unmöglich. Jetzt blockiert nur noch eine ECHTE aktuelle
+// oder zukünftige Planung (mit klarer Fehlermeldung, welcher Tag betroffen ist) — vergangene
+// Verwendungen werden beim Löschen automatisch mitentfernt (ihre Einkaufslisten-Herkunfts-
+// Verknüpfung kaskadiert ohnehin schon, siehe EssensplanHerkunft/ExtraMahlzeitHerkunft).
 export async function deleteRezept(id: string) {
   await requireParent();
-  try {
-    await prisma.rezept.delete({ where: { id } });
-  } catch {
-    throw new Error("Rezept kann nicht gelöscht werden, solange es noch im Essensplan eingeplant ist.");
+  const heute = new Date(new Date().toDateString());
+  const [naechsterEintrag, naechsteExtra] = await Promise.all([
+    prisma.essensplanEintrag.findFirst({ where: { rezeptId: id, tag: { gte: heute } }, orderBy: { tag: "asc" } }),
+    prisma.extraMahlzeit.findFirst({ where: { rezeptId: id, tag: { gte: heute } }, orderBy: { tag: "asc" } }),
+  ]);
+  const naechsterTag = [naechsterEintrag?.tag, naechsteExtra?.tag]
+    .filter((t): t is Date => !!t)
+    .sort((a, b) => a.getTime() - b.getTime())[0];
+  if (naechsterTag) {
+    throw new Error(
+      `Dieses Rezept ist noch für den ${naechsterTag.toLocaleDateString("de-DE", { weekday: "long", day: "2-digit", month: "2-digit" })} (oder später) im Essensplan eingeplant — bitte dort zuerst ändern, dann erneut löschen.`
+    );
   }
+  await prisma.$transaction([
+    prisma.essensplanEintrag.deleteMany({ where: { rezeptId: id } }),
+    prisma.extraMahlzeit.deleteMany({ where: { rezeptId: id } }),
+    prisma.rezept.delete({ where: { id } }),
+  ]);
   revalidatePath("/essensplan");
 }
 
