@@ -58,24 +58,43 @@ export async function autoKategorieId(name: string): Promise<string | null> {
   return kategorie?.id ?? null;
 }
 
-// Findet einen bereits offenen (nicht erledigten), BESTÄTIGTEN Artikel mit gleichem Namen,
-// damit gleiche Artikel nicht als doppelte Zeilen auf der Liste landen. Bewusst nur unter
-// bereits bestätigten Artikeln gesucht (Fix-Batch 24) — ein manuell hinzugefügter Artikel
-// darf nicht versehentlich in einen noch unbestätigten Essensplan-Posten hineingemischt
-// werden und dadurch selbst als "noch nicht zugesagt" erscheinen.
-export async function findeOffenenArtikel(name: string) {
-  return prisma.einkaufsArtikel.findFirst({
+// Fix (Ticket "Unterschiedliche Milchsorten werden zusammengezählt", Florians Klarstellung:
+// "ich hatte bei beiden Sachen Milch geschrieben, aber bei der laktosefreien in die Notizen
+// dazu (Laktosefrei)... ist ja ein anderes Produkt... genauso bei Paprika (rot)/(grün)"):
+// die Notiz ist der einzige Ort, an dem zwei gleichnamige, aber tatsächlich verschiedene
+// Produkte unterschieden werden (siehe Kommentar am Modell EinkaufsArtikel.notiz, "Körnerbrot"
+// bei "Brot" — genau dieses Muster). Der Namensabgleich allein reichte deshalb nicht: "Milch"
+// ohne Notiz und "Milch" mit Notiz "Laktosefrei" müssen als GETRENNTE Artikel behandelt werden,
+// nicht als derselbe mit zusammengezählter Menge. Notiz wird dafür wie der Name normalisiert
+// (getrimmt, klein geschrieben) verglichen — kein Eintrag und ein leerer String gelten als
+// gleich, aber jede tatsächlich unterschiedliche Notiz schließt ein Zusammenführen aus.
+function normalisiereNotiz(notiz: string | null | undefined): string {
+  return (notiz ?? "").trim().toLowerCase();
+}
+
+// Findet einen bereits offenen (nicht erledigten), BESTÄTIGTEN Artikel mit gleichem Namen UND
+// gleicher (oder ebenfalls leerer) Notiz, damit gleiche Artikel nicht als doppelte Zeilen auf
+// der Liste landen — aber unterschiedlich benotierte Varianten (z. B. "Milch"/"Milch,
+// Laktosefrei" oder "Paprika"/"Paprika, rot") getrennt bleiben. Bewusst nur unter bereits
+// bestätigten Artikeln gesucht (Fix-Batch 24) — ein manuell hinzugefügter Artikel darf nicht
+// versehentlich in einen noch unbestätigten Essensplan-Posten hineingemischt werden und
+// dadurch selbst als "noch nicht zugesagt" erscheinen.
+export async function findeOffenenArtikel(name: string, notiz?: string | null) {
+  const kandidaten = await prisma.einkaufsArtikel.findMany({
     where: { erledigt: false, bestaetigt: true, name: { equals: name.trim(), mode: "insensitive" } },
   });
+  return kandidaten.find((a) => normalisiereNotiz(a.notiz) === normalisiereNotiz(notiz)) ?? null;
 }
 
 // Gegenstück für den "noch nicht zugesagt"-Pool aus dem Essensplan (Fix-Batch 24) — mehrere
 // Tage, die dieselbe Zutat brauchen, sollen sich in EINEM unbestätigten Posten summieren,
-// statt für jeden Tag eine eigene Zeile zu erzeugen.
-export async function findeOffenenUnbestaetigtenArtikel(name: string) {
-  return prisma.einkaufsArtikel.findFirst({
+// statt für jeden Tag eine eigene Zeile zu erzeugen (aber ebenfalls nur bei gleicher Notiz,
+// siehe findeOffenenArtikel oben).
+export async function findeOffenenUnbestaetigtenArtikel(name: string, notiz?: string | null) {
+  const kandidaten = await prisma.einkaufsArtikel.findMany({
     where: { erledigt: false, bestaetigt: false, name: { equals: name.trim(), mode: "insensitive" } },
   });
+  return kandidaten.find((a) => normalisiereNotiz(a.notiz) === normalisiereNotiz(notiz)) ?? null;
 }
 
 // Echte Einheiten-Umrechnung für Gewicht (g/kg) und Volumen (ml/l) — Entscheidung
@@ -256,7 +275,7 @@ export async function bestaetigeArtikel(id: string, data?: { menge?: string; nam
   if (!artikel) return;
   const menge = data?.menge !== undefined ? data.menge || null : artikel.menge;
   const name = data?.name?.trim() ? data.name.trim() : artikel.name;
-  const bestehender = await findeOffenenArtikel(name);
+  const bestehender = await findeOffenenArtikel(name, artikel.notiz);
   if (bestehender) {
     await prisma.einkaufsArtikel.update({
       where: { id: bestehender.id },
@@ -301,7 +320,7 @@ export async function listKategorien() {
 export async function addArtikel(data: { name: string; menge?: string; notiz?: string; kategorieId?: string }) {
   await requireParent();
 
-  const bestehender = await findeOffenenArtikel(data.name);
+  const bestehender = await findeOffenenArtikel(data.name, data.notiz);
   let artikelId: string;
   let artikel;
   if (bestehender) {
@@ -444,7 +463,7 @@ export async function entscheideWunsch(id: string, genehmigt: boolean, kategorie
     include: { kind: true },
   });
   if (genehmigt) {
-    const bestehender = await findeOffenenArtikel(wunsch.artikelName);
+    const bestehender = await findeOffenenArtikel(wunsch.artikelName, wunsch.notiz);
     let artikelId: string;
     if (bestehender) {
       await prisma.einkaufsArtikel.update({
