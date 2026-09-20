@@ -114,7 +114,11 @@ export const TUTORIAL_KAPITEL: TutorialKapitel[] = [
     titel: "Mehr",
     farbe: BEREICH_FARBEN.einstellungen,
     nutzen: "Alles rund um die App selbst — Aussehen, Benachrichtigungen und Feedback.",
-    punkte: ["Design-Vorlage, Icon-Stil (bunt/minimalistisch) und Hell/Dunkel-Modus wählen", "Fehler melden oder Verbesserungen vorschlagen"],
+    punkte: [
+      "Design-Vorlage, Icon-Stil (bunt/minimalistisch) und Hell/Dunkel-Modus wählen",
+      "Fehler melden oder Verbesserungen vorschlagen",
+      "Eigene PIN jederzeit selbst ändern",
+    ],
     punkteEltern: [
       "Familienmitglieder, Kategorien, Dienste und Notengewichtung verwalten",
       "Termine aus einem anderen Kalender (z. B. Faminice) als ICS-Datei importieren",

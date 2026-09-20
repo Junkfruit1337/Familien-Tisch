@@ -43,6 +43,18 @@ async function main() {
     });
   }
 
+  // Fix-Batch 131 (Florians Wunsch, nach dem Account-Vorfall): erzwingt eine PIN-Änderung für
+  // jede Person, deren aktuelle PIN noch die Standard-PIN "0000" ist — läuft bei jedem Deploy
+  // erneut, damit auch bereits existierende Personen erfasst werden, nicht nur neu angelegte.
+  const personenMitPin = await prisma.person.findMany({ where: { pinHash: { not: null } } });
+  for (const p of personenMitPin) {
+    if (p.pinAendernErforderlich) continue;
+    const istStandardPin = await bcrypt.compare("0000", p.pinHash!);
+    if (istStandardPin) {
+      await prisma.person.update({ where: { id: p.id }, data: { pinAendernErforderlich: true } });
+    }
+  }
+
   for (const d of DIENSTE_VORLAGE) {
     const existing = await prisma.dienstDefinition.findFirst({ where: { schichtNummer: d.schichtNummer, reihenfolge: d.reihenfolge } });
     if (existing) {

@@ -24,6 +24,15 @@ model Person {
   rolle                    Rolle
   farbe                    String    @default("#8a7a63")
   pinHash                  String? // nur gesetzt, wenn rolle Login erlaubt
+  // Fix-Batch 131 (Florians Wunsch, nach dem Account-Vorfall): Brute-Force-Schutz für die
+  // 4-stellige PIN (nur 10.000 Kombinationen) — nach ein paar Fehlversuchen kurze Sperre statt
+  // beliebig oft raten zu dürfen. Bei jedem erfolgreichen Login zurückgesetzt.
+  pinFehlversuche          Int       @default(0)
+  pinGesperrtBis           DateTime?
+  // Fix-Batch 131: erzwingt eine PIN-Änderung, solange noch die Standard-PIN "0000" aus dem
+  // Seed-Skript aktiv ist — verhindert, dass eine leicht erratbare Standard-PIN unbemerkt
+  // dauerhaft aktiv bleibt. Wird beim Ändern der eigenen PIN automatisch wieder gelöscht.
+  pinAendernErforderlich   Boolean   @default(false)
   aktiv                    Boolean   @default(true)
   reihenfolge              Int       @default(0)
   // Portionsgröße für den Essensplan-Skalierungsrechner (Fix-Batch 23) — vorher fest im

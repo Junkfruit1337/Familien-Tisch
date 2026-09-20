@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState, useTransition } from "react";
 import {
   createPerson,
@@ -991,6 +992,9 @@ export default function EinstellungenClient({
         <button className="btn-secondary" style={{ alignSelf: "flex-start", display: "flex", alignItems: "center", gap: 6 }} onClick={() => setTutorialOffen(true)}>
           <Icon id="tutorial" /> Einführung
         </button>
+        <Link href="/pin-aendern" className="btn-secondary" style={{ alignSelf: "flex-start", display: "flex", alignItems: "center", gap: 6, textDecoration: "none" }}>
+          <Icon id="lock" /> Meine PIN ändern
+        </Link>
         {fehlerMeldenSektion}
         {geburtstagSektion}
         {kinder.length > 0 && (
@@ -1019,6 +1023,9 @@ export default function EinstellungenClient({
       <button className="btn-secondary" style={{ alignSelf: "flex-start", display: "flex", alignItems: "center", gap: 6 }} onClick={() => setTutorialOffen(true)}>
         <Icon id="tutorial" /> Einführung
       </button>
+      <Link href="/pin-aendern" className="btn-secondary" style={{ alignSelf: "flex-start", display: "flex", alignItems: "center", gap: 6, textDecoration: "none" }}>
+        <Icon id="lock" /> Meine PIN ändern
+      </Link>
 
       <details>
         <summary style={{ cursor: "pointer", fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
