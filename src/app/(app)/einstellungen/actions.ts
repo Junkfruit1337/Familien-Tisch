@@ -6,15 +6,16 @@ import { revalidatePath } from "next/cache";
 import { erkenneTicketAusSprache, verbessereFormulierung, type ErkanntesTicket } from "@/lib/spracheErkennung";
 
 export async function listPersonen() {
-  await requirePerson();
-  return prisma.person.findMany({ orderBy: { reihenfolge: "asc" } });
+  const person = await requirePerson();
+  return prisma.person.findMany({ where: { familieId: person.familieId }, orderBy: { reihenfolge: "asc" } });
 }
 
 export async function createPerson(data: { name: string; rolle: string; pin?: string; farbe: string }) {
-  await requireParent();
-  const anzahl = await prisma.person.count();
+  const person = await requireParent();
+  const anzahl = await prisma.person.count({ where: { familieId: person.familieId } });
   await prisma.person.create({
     data: {
+      familieId: person.familieId,
       name: data.name,
       rolle: data.rolle as any,
       farbe: data.farbe,
@@ -25,20 +26,32 @@ export async function createPerson(data: { name: string; rolle: string; pin?: st
   revalidatePath("/einstellungen");
 }
 
+// Jede der folgenden Personen-Änderungen prüft zuerst, dass die Ziel-Person überhaupt zur
+// eigenen Familie gehört — sonst könnte eine Familie über eine erratene/erspähte Personen-ID
+// die PIN, Farbe o.ä. einer Person einer ANDEREN Familie verändern.
+async function ladeEigenePerson(personId: string, eigeneFamilieId: string | null) {
+  const ziel = await prisma.person.findUnique({ where: { id: personId } });
+  if (!ziel || ziel.familieId !== eigeneFamilieId) throw new Error("Person nicht gefunden.");
+  return ziel;
+}
+
 export async function setPin(personId: string, pin: string) {
-  await requireParent();
+  const person = await requireParent();
+  await ladeEigenePerson(personId, person.familieId);
   await prisma.person.update({ where: { id: personId }, data: { pinHash: await hashPin(pin) } });
   revalidatePath("/einstellungen");
 }
 
 export async function setFarbe(personId: string, farbe: string) {
-  await requireParent();
+  const person = await requireParent();
+  await ladeEigenePerson(personId, person.familieId);
   await prisma.person.update({ where: { id: personId }, data: { farbe } });
   revalidatePath("/einstellungen");
 }
 
 export async function setAktiv(personId: string, aktiv: boolean) {
-  await requireParent();
+  const person = await requireParent();
+  await ladeEigenePerson(personId, person.familieId);
   await prisma.person.update({ where: { id: personId }, data: { aktiv } });
   revalidatePath("/einstellungen");
 }
@@ -46,8 +59,9 @@ export async function setAktiv(personId: string, aktiv: boolean) {
 // Portionsgröße für den Essensplan-Skalierungsrechner (Fix-Batch 23) — vorher fest im Code
 // (Flo 1.5, Ayla 0.5, Rest 1), jetzt von den Eltern hier pro Person editierbar.
 export async function setPortionsGewicht(personId: string, portionsGewicht: number) {
-  await requireParent();
+  const person = await requireParent();
   if (!(portionsGewicht > 0)) return;
+  await ladeEigenePerson(personId, person.familieId);
   await prisma.person.update({ where: { id: personId }, data: { portionsGewicht } });
   revalidatePath("/einstellungen");
   revalidatePath("/essensplan");
@@ -59,7 +73,8 @@ export async function setPortionsGewicht(personId: string, portionsGewicht: numb
 // selbst durch die Person einstellbar — nur noch Eltern, und für jede Person (nicht nur sich
 // selbst). Grund: Geburtstage sollen zentral von den Erwachsenen gepflegt werden.
 export async function setGeburtsdatum(personId: string, datum: string) {
-  await requireParent();
+  const person = await requireParent();
+  await ladeEigenePerson(personId, person.familieId);
   await prisma.person.update({ where: { id: personId }, data: { geburtsdatum: new Date(datum) } });
   revalidatePath("/einstellungen");
   revalidatePath("/kalender");
@@ -105,7 +120,7 @@ export async function erstelleTicket(titel: string, beschreibung: string, fotos?
   const person = await requirePerson();
   if (!titel.trim() || !beschreibung.trim()) throw new Error("Titel und Beschreibung dürfen nicht leer sein.");
   await prisma.ticket.create({
-    data: { titel: titel.trim(), beschreibung: beschreibung.trim(), fotos: fotos ?? [], erstelltVonId: person.id },
+    data: { familieId: person.familieId, titel: titel.trim(), beschreibung: beschreibung.trim(), fotos: fotos ?? [], erstelltVonId: person.id },
   });
   revalidatePath("/einstellungen");
 }
@@ -114,18 +129,20 @@ export async function erstelleTicket(titel: string, beschreibung: string, fotos?
 // Anforderung: "Ticketersteller kann immer den Status seines Tickets anschauen").
 export async function listMeineTickets() {
   const person = await requirePerson();
-  return prisma.ticket.findMany({ where: { erstelltVonId: person.id }, orderBy: { createdAt: "desc" } });
+  return prisma.ticket.findMany({ where: { erstelltVonId: person.id, familieId: person.familieId }, orderBy: { createdAt: "desc" } });
 }
 
 // Eltern sehen und bearbeiten alle Tickets — die App kennt keine Sonderrechte zwischen
 // einzelnen Elternteilen (Fragenkatalog), daher hier bewusst nicht auf Florian beschränkt.
 export async function listAlleTickets() {
-  await requireParent();
-  return prisma.ticket.findMany({ include: { erstelltVon: true }, orderBy: { createdAt: "desc" } });
+  const person = await requireParent();
+  return prisma.ticket.findMany({ where: { familieId: person.familieId }, include: { erstelltVon: true }, orderBy: { createdAt: "desc" } });
 }
 
 export async function setzeTicketStatus(id: string, status: string, begruendung?: string) {
-  await requireParent();
+  const person = await requireParent();
+  const ticket = await prisma.ticket.findUnique({ where: { id } });
+  if (!ticket || ticket.familieId !== person.familieId) return;
   await prisma.ticket.update({ where: { id }, data: { status: status as any, begruendung: begruendung || undefined } });
   revalidatePath("/einstellungen");
 }
@@ -135,8 +152,8 @@ export async function setzeTicketStatus(id: string, status: string, begruendung?
 // vorschläge zur App melden (Tickets), nicht Hausmängel/Vermieterkommunikation.
 
 export async function listHausprobleme() {
-  await requireParent();
-  return prisma.hausproblem.findMany({ include: { erstelltVon: true }, orderBy: { createdAt: "desc" } });
+  const person = await requireParent();
+  return prisma.hausproblem.findMany({ where: { familieId: person.familieId }, include: { erstelltVon: true }, orderBy: { createdAt: "desc" } });
 }
 
 export async function erstelleHausproblem(data: {
@@ -149,6 +166,7 @@ export async function erstelleHausproblem(data: {
   if (!data.titel.trim() || !data.beschreibung.trim()) throw new Error("Titel und Beschreibung dürfen nicht leer sein.");
   await prisma.hausproblem.create({
     data: {
+      familieId: person.familieId,
       titel: data.titel.trim(),
       beschreibung: data.beschreibung.trim(),
       zustaendigkeit: data.zustaendigkeit,
@@ -177,7 +195,9 @@ export async function updateHausproblem(
   id: string,
   data: { status?: "GEMELDET" | "IN_BEARBEITUNG" | "ERLEDIGT"; zustaendigkeit?: "VERMIETER" | "FAMILIE"; notizen?: string }
 ) {
-  await requireParent();
+  const person = await requireParent();
+  const problem = await prisma.hausproblem.findUnique({ where: { id } });
+  if (!problem || problem.familieId !== person.familieId) return;
   await prisma.hausproblem.update({
     where: { id },
     data: {
@@ -190,7 +210,9 @@ export async function updateHausproblem(
 }
 
 export async function loescheHausproblem(id: string) {
-  await requireParent();
+  const person = await requireParent();
+  const problem = await prisma.hausproblem.findUnique({ where: { id } });
+  if (!problem || problem.familieId !== person.familieId) return;
   await prisma.hausproblem.delete({ where: { id } });
   revalidatePath("/einstellungen");
 }
@@ -201,9 +223,9 @@ export async function loescheHausproblem(id: string) {
 export async function wandleHausproblemInAufgabeUm(id: string, personId: string) {
   const person = await requireParent();
   const problem = await prisma.hausproblem.findUnique({ where: { id } });
-  if (!problem) throw new Error("Hausproblem nicht gefunden.");
+  if (!problem || problem.familieId !== person.familieId) throw new Error("Hausproblem nicht gefunden.");
   const aufgabe = await prisma.aufgabe.create({
-    data: { titel: problem.titel, personId, erstelltVonId: person.id },
+    data: { familieId: person.familieId, titel: problem.titel, personId, erstelltVonId: person.id },
   });
   await prisma.hausproblem.update({ where: { id }, data: { aufgabeId: aufgabe.id } });
   revalidatePath("/einstellungen");

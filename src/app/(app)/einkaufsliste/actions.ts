@@ -439,7 +439,7 @@ export async function submitWunsch(data: { artikelName: string; menge?: string; 
     title: "Neuer Einkaufswunsch",
     body: `${person.name} wünscht sich: ${wunsch.artikelName}${wunsch.menge ? ` (${wunsch.menge})` : ""}`,
     url: "/einkaufsliste",
-  });
+  }, person.familieId);
   revalidatePath("/einkaufsliste");
 }
 

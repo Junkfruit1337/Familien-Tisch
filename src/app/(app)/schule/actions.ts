@@ -261,7 +261,7 @@ export async function einreichenNote(data: {
       title: "Neue Note wartet auf Freigabe",
       body: `${kind?.name ?? "Ein Kind"} — ${fach.name}: Note ${note.note}`,
       url: "/schule",
-    });
+    }, person.familieId);
   }
 
   revalidatePath("/schule");

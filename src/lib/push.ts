@@ -31,16 +31,20 @@ export async function sendePushAnPerson(personId: string, payload: PushPayload) 
   await Promise.all(subs.map((sub) => sendeAnSubscription(sub, payload)));
 }
 
-export async function sendePushAnEltern(payload: PushPayload) {
+// familieId ist Pflicht (nicht optional) — ohne diesen Filter würden bei mehreren Familien
+// alle Eltern ALLER Familien benachrichtigt, inklusive des Inhalts privater Ereignisse einer
+// fremden Familie (Multi-Tenant-Datenleck).
+export async function sendePushAnEltern(payload: PushPayload, familieId: string | null) {
   if (!istKonfiguriert()) return;
-  const eltern = await prisma.person.findMany({ where: { rolle: "ELTERN", aktiv: true } });
+  const eltern = await prisma.person.findMany({ where: { rolle: "ELTERN", aktiv: true, familieId } });
   await Promise.all(eltern.map((p) => sendePushAnPerson(p.id, payload)));
 }
 
-export async function sendePushAnAlle(payload: PushPayload) {
+// familieId ist Pflicht — siehe Kommentar bei sendePushAnEltern.
+export async function sendePushAnAlle(payload: PushPayload, familieId: string | null) {
   if (!istKonfiguriert()) return;
   stelleVapidSicher();
-  const subs = await prisma.pushSubscription.findMany();
+  const subs = await prisma.pushSubscription.findMany({ where: { person: { familieId } } });
   await Promise.all(subs.map((sub) => sendeAnSubscription(sub, payload)));
 }
 

@@ -32,7 +32,7 @@ async function pruefeFaelligeTermine() {
       if (termin.personId) {
         await sendePushAnPerson(termin.personId, payload);
       } else {
-        await sendePushAnAlle(payload);
+        await sendePushAnAlle(payload, termin.familieId);
       }
       await prisma.termin.update({ where: { id: termin.id }, data: { erinnerungGesendet: true } });
     }

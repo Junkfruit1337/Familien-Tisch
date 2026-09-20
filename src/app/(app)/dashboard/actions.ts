@@ -20,7 +20,7 @@ function lerntipp(tageBis: number): string {
 // Markierungen (geburtstagErinnerungJahr/lerntippGesendet) passiert das trotzdem nur einmal.
 // Reicht in der Praxis, da die Startseite ohnehin mehrmals täglich von irgendjemandem
 // geöffnet wird.
-async function pruefeUndSendeErinnerungen() {
+async function pruefeUndSendeErinnerungen(familieId: string | null) {
   const heute = new Date();
   heute.setHours(0, 0, 0, 0);
 
@@ -29,7 +29,7 @@ async function pruefeUndSendeErinnerungen() {
   const in7Tagen = new Date(heute);
   in7Tagen.setDate(in7Tagen.getDate() + 7);
   const zielJahr = in7Tagen.getFullYear();
-  const personenMitGeburtstag = await prisma.person.findMany({ where: { aktiv: true, geburtsdatum: { not: null } } });
+  const personenMitGeburtstag = await prisma.person.findMany({ where: { aktiv: true, geburtsdatum: { not: null }, familieId } });
   for (const p of personenMitGeburtstag) {
     if (!p.geburtsdatum) continue;
     const passt = p.geburtsdatum.getMonth() === in7Tagen.getMonth() && p.geburtsdatum.getDate() === in7Tagen.getDate();
@@ -38,7 +38,7 @@ async function pruefeUndSendeErinnerungen() {
         title: "Geburtstag in einer Woche 🎂",
         body: `${p.name} hat in 7 Tagen Geburtstag — noch Zeit, ein Geschenk zu besorgen.`,
         url: "/kalender",
-      });
+      }, familieId);
       await prisma.person.update({ where: { id: p.id }, data: { geburtstagErinnerungJahr: zielJahr } });
     }
   }
@@ -49,7 +49,7 @@ async function pruefeUndSendeErinnerungen() {
   const in3Tagen = new Date(heute);
   in3Tagen.setDate(in3Tagen.getDate() + 3);
   const baldigeEintraege = await prisma.schulEintrag.findMany({
-    where: { datum: { gte: heute, lt: in3Tagen }, lerntippGesendet: false },
+    where: { datum: { gte: heute, lt: in3Tagen }, lerntippGesendet: false, familieId },
   });
   for (const s of baldigeEintraege) {
     const tageBis = Math.ceil((s.datum.getTime() - heute.getTime()) / (24 * 60 * 60 * 1000));
@@ -71,7 +71,7 @@ async function pruefeUndSendeErinnerungen() {
   uebermorgen.setDate(uebermorgen.getDate() + 1);
 
   const morgigerEintrag = await prisma.essensplanEintrag.findFirst({
-    where: { tag: { gte: morgen, lt: uebermorgen }, einkaufErinnerungGesendet: false },
+    where: { tag: { gte: morgen, lt: uebermorgen }, einkaufErinnerungGesendet: false, familieId },
     include: { rezept: true, _count: { select: { herkuenfte: true } } },
   });
   if (morgigerEintrag) {
@@ -80,13 +80,13 @@ async function pruefeUndSendeErinnerungen() {
         title: "Einkaufs-Erinnerung 🛒",
         body: `Für morgen ist "${morgigerEintrag.rezept.name}" geplant, aber die Zutaten sind noch nicht auf der Einkaufsliste.`,
         url: "/essensplan",
-      });
+      }, familieId);
     }
     await prisma.essensplanEintrag.update({ where: { id: morgigerEintrag.id }, data: { einkaufErinnerungGesendet: true } });
   }
 
   const morgigeExtras = await prisma.extraMahlzeit.findMany({
-    where: { tag: { gte: morgen, lt: uebermorgen }, einkaufErinnerungGesendet: false },
+    where: { tag: { gte: morgen, lt: uebermorgen }, einkaufErinnerungGesendet: false, familieId },
     include: { rezept: true, _count: { select: { herkuenfte: true } } },
   });
   for (const extra of morgigeExtras) {
@@ -95,7 +95,7 @@ async function pruefeUndSendeErinnerungen() {
         title: "Einkaufs-Erinnerung 🛒",
         body: `Für morgen ist "${extra.bezeichnung}: ${extra.rezept.name}" geplant, aber die Zutaten sind noch nicht auf der Einkaufsliste.`,
         url: "/essensplan",
-      });
+      }, familieId);
     }
     await prisma.extraMahlzeit.update({ where: { id: extra.id }, data: { einkaufErinnerungGesendet: true } });
   }
@@ -113,17 +113,24 @@ async function pruefeUndSendeErinnerungen() {
   };
   const in8Tagen = new Date(in7Tagen);
   in8Tagen.setDate(in8Tagen.getDate() + 1);
+  // Schulferien sind bewusst öffentliche, familienübergreifend geteilte Referenzdaten (siehe
+  // Schema-Kommentar) — "erinnerungGesendet" liegt deshalb ebenfalls global auf dieser Zeile,
+  // nicht pro Familie. Bei mehreren Familien im selben Bundesland bekäme dadurch nur die
+  // Familie, deren Dashboard zuerst geladen wird, die Push-Erinnerung; für alle anderen ist sie
+  // danach schon als "gesendet" markiert. Bewusst als bekannte, geringe Einschränkung in Kauf
+  // genommen (betrifft nur diesen einen Push, der Ferien-Countdown selbst bleibt für jede
+  // Familie normal sichtbar) statt jetzt extra eine pro-Familie-Sendeverfolgung einzuführen.
   const baldigeFerien = await prisma.schulferien.findMany({
     where: { start: { gte: in7Tagen, lt: in8Tagen }, erinnerungGesendet: false },
   });
   for (const ferien of baldigeFerien) {
-    const betroffeneKinder = await prisma.person.findMany({ where: { aktiv: true, bundesland: ferien.bundesland } });
+    const betroffeneKinder = await prisma.person.findMany({ where: { aktiv: true, bundesland: ferien.bundesland, familieId } });
     if (betroffeneKinder.length > 0) {
       await sendePushAnEltern({
         title: "Ferien in einer Woche 🏖️",
         body: `${FERIEN_LABEL[ferien.typ] ?? ferien.typ} beginnen in 7 Tagen (${betroffeneKinder.map((k) => k.name).join(", ")}).`,
         url: "/schule",
-      });
+      }, familieId);
     }
     await prisma.schulferien.update({ where: { id: ferien.id }, data: { erinnerungGesendet: true } });
   }
@@ -136,7 +143,7 @@ export async function getDashboardDaten() {
   const morgenFrueh = new Date(heute);
   morgenFrueh.setDate(morgenFrueh.getDate() + 1);
 
-  await pruefeUndSendeErinnerungen();
+  await pruefeUndSendeErinnerungen(person.familieId);
 
   const plan = await getWochenplan(0);
   const heutigesEssen = plan.tage.find((t) => new Date(t.tag).toDateString() === heute.toDateString());
@@ -173,7 +180,7 @@ export async function getDashboardDaten() {
   }
 
   const extraHeute = await prisma.extraMahlzeit.findMany({
-    where: { wocheStart: new Date(plan.wocheStart) },
+    where: { wocheStart: new Date(plan.wocheStart), familieId: person.familieId },
     include: { rezept: true, _count: { select: { herkuenfte: true } } },
     orderBy: { createdAt: "asc" },
   });
@@ -198,29 +205,31 @@ export async function getDashboardDaten() {
 
   const terminWhere =
     person.rolle === "ELTERN"
-      ? { start: { gte: heute, lt: morgenFrueh } }
-      : { start: { gte: heute, lt: morgenFrueh }, OR: [{ personId: person.id }, { personId: null }] };
+      ? { familieId: person.familieId, start: { gte: heute, lt: morgenFrueh } }
+      : { familieId: person.familieId, start: { gte: heute, lt: morgenFrueh }, OR: [{ personId: person.id }, { personId: null }] };
   const termineHeute = await prisma.termin.findMany({ where: terminWhere as any, include: { person: true }, orderBy: { start: "asc" } });
 
   const aufgabenWhere =
-    person.rolle === "ELTERN" ? { erledigt: false } : { erledigt: false, OR: [{ personId: person.id }, { personId: null }] };
+    person.rolle === "ELTERN"
+      ? { familieId: person.familieId, erledigt: false }
+      : { familieId: person.familieId, erledigt: false, OR: [{ personId: person.id }, { personId: null }] };
   const offeneAufgaben = await prisma.aufgabe.count({ where: aufgabenWhere as any });
 
   // Fix-Batch 30: Eltern sehen auf dem Dashboard alle offenen Kinder-Anfragen gesammelt
   // (Noten-Einreichungen + Einkaufs-Wünsche), um direkt von dort zu genehmigen/ablehnen.
   const offeneNoten =
     person.rolle === "ELTERN"
-      ? await prisma.note.findMany({ where: { status: "OFFEN" }, include: { fach: true, kind: true }, orderBy: { datum: "desc" } })
+      ? await prisma.note.findMany({ where: { status: "OFFEN", familieId: person.familieId }, include: { fach: true, kind: true }, orderBy: { datum: "desc" } })
       : [];
   const offeneWuensche =
     person.rolle === "ELTERN"
-      ? await prisma.einkaufsWunsch.findMany({ where: { status: "OFFEN" }, include: { kind: true }, orderBy: { createdAt: "desc" } })
+      ? await prisma.einkaufsWunsch.findMany({ where: { status: "OFFEN", familieId: person.familieId }, include: { kind: true }, orderBy: { createdAt: "desc" } })
       : [];
 
   // Fix-Batch 49: eigene noch nicht abgeschlossene Tickets auf dem Dashboard anzeigen
   // (für alle, nicht nur Eltern) — Klick führt zum Ticket-Bereich in den Einstellungen.
   const meineOffenenTickets = await prisma.ticket.findMany({
-    where: { erstelltVonId: person.id, status: { in: ["EINGEREICHT", "GENEHMIGT", "IN_UMSETZUNG"] } },
+    where: { erstelltVonId: person.id, familieId: person.familieId, status: { in: ["EINGEREICHT", "GENEHMIGT", "IN_UMSETZUNG"] } },
     orderBy: { createdAt: "desc" },
   });
 
@@ -279,6 +288,7 @@ export async function getAenderungshistorie(limit = 25) {
   const person = await requirePerson();
   if (person.rolle !== "ELTERN") return [];
   const eintraege = await prisma.aenderungsLog.findMany({
+    where: { geaendertVon: { familieId: person.familieId } },
     orderBy: { zeitpunkt: "desc" },
     take: limit,
     include: { geaendertVon: true },
