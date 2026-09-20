@@ -23,7 +23,6 @@ import { erkenneSparzielIcon } from "@/lib/sparzielIcon";
 import SeitenTitel from "@/components/SeitenTitel";
 import { Icon } from "@/lib/uiIcons";
 import { BereichIcon } from "@/lib/bereichIcons";
-import LernHilfe from "@/components/LernHilfe";
 import VerlaufChart from "@/components/VerlaufChart";
 import { BEREICH_FARBEN } from "@/lib/bereichFarben";
 import ThgVollbild from "@/components/ThgVollbild";
@@ -1357,11 +1356,6 @@ export default function SchuleClient({
         </details>
       )}
 
-
-      {/* Fix-Batch 86 (Florians Wunsch): zurück in die Einstellungen verschoben — wird nur
-          selten (i.d.R. einmal pro Schuljahr) geändert und ist damit keine tägliche
-          Information, die auf der Schule-Seite Platz beanspruchen sollte. */}
-      {!istEltern && kind.id === eigeneId && <LernHilfe />}
 
       <details>
         <summary style={{ cursor: "pointer", color: "var(--text-muted)" }}>Verlauf Taschengeld</summary>

@@ -6,15 +6,6 @@ import { logAenderung } from "@/lib/history";
 import { revalidatePath } from "next/cache";
 import { sendePushAnEltern, sendePushAnPerson } from "@/lib/push";
 import { erkenneNoteAusSprache, type ErkannteNote, erkenneSchulEintragAusSprache, type ErkannterSchulEintrag, pruefeFachDuplikatKI } from "@/lib/spracheErkennung";
-import {
-  erstelleSpickzettel,
-  erklaereAufgabe,
-  erklaereThema,
-  generiereUebungsaufgaben,
-  generiereUebungsaufgabenZuThema,
-  pruefeUebungsantwort,
-  type Uebungsaufgabe,
-} from "@/lib/lernhilfe";
 
 function betragFuerNote(note: number): number {
   if (note === 1) return 10;
@@ -586,103 +577,4 @@ export async function deleteSchulEintrag(id: string) {
   await prisma.schulEintrag.delete({ where: { id } });
   revalidatePath("/schule");
   revalidatePath("/dashboard");
-}
-
-// ---------- KI-Lernhilfe (Fix-Batch 64, Florians Sicherheitsauflage: "nicht einfach mit der
-// KI die Hausaufgaben gemacht werden können") — drei getrennte Vorschau-Funktionen, nichts
-// wird hier gespeichert. Jede Person darf sie für sich selbst nutzen (requirePerson genügt,
-// die eigentliche Sicherheitsgrenze liegt in den Prompts in src/lib/lernhilfe.ts).
-
-export async function erstelleSpickzettelVorschau(
-  fotoDataUrl: string,
-  thema?: string
-): Promise<{ ok: true; text: string } | { ok: false; fehler: string }> {
-  await requirePerson();
-  try {
-    const text = await erstelleSpickzettel(fotoDataUrl, thema);
-    return { ok: true, text };
-  } catch (err) {
-    console.error("Spickzettel-Erstellung fehlgeschlagen:", err);
-    const fehler = err instanceof Error ? err.message : "Unbekannter Fehler bei der Spickzettel-Erstellung.";
-    return { ok: false, fehler };
-  }
-}
-
-export async function erklaereAufgabeVorschau(
-  fotoDataUrl: string
-): Promise<{ ok: true; text: string } | { ok: false; fehler: string }> {
-  await requirePerson();
-  try {
-    const text = await erklaereAufgabe(fotoDataUrl);
-    return { ok: true, text };
-  } catch (err) {
-    console.error("Erklärmodus fehlgeschlagen:", err);
-    const fehler = err instanceof Error ? err.message : "Unbekannter Fehler beim Erklären.";
-    return { ok: false, fehler };
-  }
-}
-
-// Fix-Batch 110 (Florians Bug-Meldung: Aufgaben "nicht abgestimmt auf das Kind"): die
-// Klassenstufe der eingeloggten Person (steht bereits im Personen-Datensatz) fließt jetzt in
-// den Prompt ein, damit die KI Thema/Zahlen wirklich passend zum Kenntnisstand wählt.
-export async function generiereUebungsaufgabenVorschau(
-  fotoDataUrl: string
-): Promise<{ ok: true; aufgaben: Uebungsaufgabe[] } | { ok: false; fehler: string }> {
-  const person = await requirePerson();
-  try {
-    const aufgaben = await generiereUebungsaufgaben(fotoDataUrl, person.klassenstufe);
-    return { ok: true, aufgaben };
-  } catch (err) {
-    console.error("Übungsaufgaben-Erstellung fehlgeschlagen:", err);
-    const fehler = err instanceof Error ? err.message : "Unbekannter Fehler bei der Übungsaufgaben-Erstellung.";
-    return { ok: false, fehler };
-  }
-}
-
-// Fix-Batch 110 (Florians Bug-Meldung: "richtig oder falsch, das sieht man nicht so genau"):
-// echte automatische Prüfung der Freitext-Antwort statt reinem Selbst-Einschätzen.
-export async function pruefeUebungsantwortVorschau(
-  frage: string,
-  richtigeAntwort: string,
-  nutzerAntwort: string
-): Promise<{ ok: true; korrekt: boolean; erklaerung: string } | { ok: false; fehler: string }> {
-  await requirePerson();
-  try {
-    const ergebnis = await pruefeUebungsantwort(frage, richtigeAntwort, nutzerAntwort);
-    return { ok: true, ...ergebnis };
-  } catch (err) {
-    console.error("Antwort-Prüfung fehlgeschlagen:", err);
-    const fehler = err instanceof Error ? err.message : "Unbekannter Fehler bei der Antwort-Prüfung.";
-    return { ok: false, fehler };
-  }
-}
-
-// Fix-Batch 65 (Florians Wunsch): Erklär-/Übungsmodus auch per Sprache/Text nutzbar, indem
-// man ein ganzes Thema beschreibt, statt zwingend ein Foto zu machen.
-export async function erklaereThemaVorschau(
-  thema: string
-): Promise<{ ok: true; text: string } | { ok: false; fehler: string }> {
-  await requirePerson();
-  try {
-    const text = await erklaereThema(thema);
-    return { ok: true, text };
-  } catch (err) {
-    console.error("Erklärmodus (Thema) fehlgeschlagen:", err);
-    const fehler = err instanceof Error ? err.message : "Unbekannter Fehler beim Erklären.";
-    return { ok: false, fehler };
-  }
-}
-
-export async function generiereUebungsaufgabenZuThemaVorschau(
-  thema: string
-): Promise<{ ok: true; aufgaben: Uebungsaufgabe[] } | { ok: false; fehler: string }> {
-  const person = await requirePerson();
-  try {
-    const aufgaben = await generiereUebungsaufgabenZuThema(thema, person.klassenstufe);
-    return { ok: true, aufgaben };
-  } catch (err) {
-    console.error("Übungsaufgaben-Erstellung (Thema) fehlgeschlagen:", err);
-    const fehler = err instanceof Error ? err.message : "Unbekannter Fehler bei der Übungsaufgaben-Erstellung.";
-    return { ok: false, fehler };
-  }
 }

@@ -100,7 +100,6 @@ export const TUTORIAL_KAPITEL: TutorialKapitel[] = [
       "Anstehende Arbeiten/HÜ-Kontrollen mit Lerntipps",
       "THG-App (Stundenplan/Vertretungsplan) per Knopf oben öffnen",
     ],
-    punkteKind: ["KI-Lernhilfe: ein Foto der Aufgabe erklären lassen oder ähnliche Übungsaufgaben zum Trainieren erzeugen"],
     punkteEltern: ["Übersicht „Für alle Kinder“ ganz oben: was über alle Kinder hinweg ansteht"],
   },
   {

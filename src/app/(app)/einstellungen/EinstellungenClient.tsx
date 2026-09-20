@@ -49,7 +49,7 @@ import { formatiereDatumUhrzeit } from "@/lib/datumFormat";
 // "generell alle Fotos... es reicht, wenn man ungefähr erkennt was darauf ist"): stärker
 // komprimiert als vorher, um die Datenbank (alles liegt als Base64 in Postgres) nicht unnötig
 // wachsen zu lassen — bewusst NICHT beim Notenfoto (muss lesbar bleiben) oder bei Fotos, die
-// eine KI danach ausliest (Lernhilfe, Einkaufslisten-Import, Rezept-Import — dort würde
+// eine KI danach ausliest (Einkaufslisten-Import, Rezept-Import — dort würde
 // stärkeres Komprimieren die Erkennung verschlechtern).
 function ticketFotoAufBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
