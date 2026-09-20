@@ -142,6 +142,14 @@
   padding-bottom: 16px !important;
 }
 
+/* Fix-Batch 141 (Florians Wunsch, Vorschlag 8 vom 20.09.2026): Kiosk-Modus für ein dauerhaft
+   angezeigtes Tablet — "Abmelden" ausgeblendet, damit niemand aus Versehen den geteilten Zugang
+   abmeldet. Das Attribut wird von KioskModusAuswahl.tsx (Einstellungen) sowie einmalig beim
+   Mount von AppShell.tsx gesetzt — dieselbe entkoppelte Technik wie beim Einkaufsmodus. */
+:root[data-kiosk-modus="1"] .app-logout {
+  display: none !important;
+}
+
 * {
   box-sizing: border-box;
 }

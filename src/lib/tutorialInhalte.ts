@@ -124,6 +124,9 @@ export const TUTORIAL_KAPITEL: TutorialKapitel[] = [
       // Einstellungen sind jetzt nur noch für den Admin sichtbar/nutzbar.
       "Familienmitglieder, Kategorien, Dienste und Notengewichtung verwalten (nur Admin)",
       "Termine aus einem anderen Kalender (z. B. Faminice) als ICS-Datei importieren",
+      // Fix-Batch 141: bewusst kurz gehalten, das Feature selbst soll in den Einstellungen
+      // unauffällig bleiben.
+      "Kiosk-Modus für ein dauerhaft angezeigtes Tablet (z. B. in der Küche)",
     ],
   },
 ];

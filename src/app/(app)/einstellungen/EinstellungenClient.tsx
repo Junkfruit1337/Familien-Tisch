@@ -35,6 +35,7 @@ import {
 import PushBenachrichtigungen from "@/components/PushBenachrichtigungen";
 import DesignAuswahl from "@/components/DesignAuswahl";
 import IconStilAuswahl from "@/components/IconStilAuswahl";
+import KioskModusAuswahl from "@/components/KioskModusAuswahl";
 import IcsImportSektion from "@/components/IcsImportSektion";
 import NotengewichtungSektion from "@/components/NotengewichtungSektion";
 import TutorialModal from "@/components/TutorialModal";
@@ -1013,6 +1014,7 @@ export default function EinstellungenClient({
         <DesignAuswahl />
         <IconStilAuswahl />
         <PushBenachrichtigungen />
+        <KioskModusAuswahl />
       </div>
     );
   }
@@ -1659,6 +1661,7 @@ export default function EinstellungenClient({
         </summary>
         <div style={{ display: "flex", flexDirection: "column", gap: 16, marginTop: 10 }}>
       <PushBenachrichtigungen />
+      <KioskModusAuswahl />
 
       <details className="card">
         <summary style={{ cursor: "pointer", fontWeight: 600 }}>Änderungshistorie ({historie.length})</summary>

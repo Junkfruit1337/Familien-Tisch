@@ -10,6 +10,7 @@ import { Icon } from "@/lib/uiIcons";
 import PersonChip from "@/components/PersonChip";
 import { DESIGN_KEY } from "@/lib/designThemes";
 import { ICON_STIL_KEY, anwendenIconStil, type IconStil } from "@/lib/iconStil";
+import { KIOSK_MODUS_KEY, anwendenKioskModus } from "@/lib/kioskModus";
 
 type Person = { id: string; name: string; farbe: string; rolle: string };
 type Theme = "hell" | "dunkel";
@@ -63,6 +64,10 @@ export default function AppShell({ person, children }: { person: Person; childre
   // Erst nach dem Mount gesetzt (wie beim Theme) statt direkt beim Rendern berechnet, damit
   // Server- und Client-Render nicht auseinanderlaufen können (Hydration).
   const [heute, setHeute] = useState<string | null>(null);
+  // Fix-Batch 141 (Kiosk-Modus): einmalig beim Mount aus localStorage gelesen — ein Umschalten
+  // in den Einstellungen wirkt (bewusst, siehe Kommentar dort) erst nach einem Neuladen der
+  // Seite vollständig, da AppShell als Layout über Client-Navigationen hinweg nicht neu mountet.
+  const [kioskAktiv, setKioskAktiv] = useState(false);
 
   useEffect(() => {
     setHeute(new Date().toLocaleDateString("de-DE", { weekday: "long", day: "2-digit", month: "2-digit", year: "numeric" }));
@@ -86,7 +91,60 @@ export default function AppShell({ person, children }: { person: Person; childre
       const iconStil = localStorage.getItem(ICON_STIL_KEY) as IconStil | null;
       if (iconStil) anwendenIconStil(iconStil);
     } catch {}
+
+    try {
+      const kiosk = localStorage.getItem(KIOSK_MODUS_KEY) === "1";
+      setKioskAktiv(kiosk);
+      anwendenKioskModus(kiosk);
+    } catch {}
   }, []);
+
+  // Fix-Batch 141: Bildschirm bleibt im Kiosk-Modus dauerhaft wach — dieselbe Wake-Lock-Technik
+  // wie im Einkaufsmodus (Fix-Batch ~87), hier nur nicht an einen Reiter, sondern an das
+  // geräteweite Kiosk-Modus-Flag gekoppelt.
+  useEffect(() => {
+    if (!kioskAktiv || !("wakeLock" in navigator)) return;
+    let sentinel: any = null;
+    let abgebrochen = false;
+    async function anfordern() {
+      try {
+        sentinel = await (navigator as any).wakeLock.request("screen");
+      } catch {}
+    }
+    anfordern();
+    function beiSichtbarkeitswechsel() {
+      if (document.visibilityState === "visible" && !abgebrochen) anfordern();
+    }
+    document.addEventListener("visibilitychange", beiSichtbarkeitswechsel);
+    return () => {
+      abgebrochen = true;
+      document.removeEventListener("visibilitychange", beiSichtbarkeitswechsel);
+      sentinel?.release?.().catch(() => {});
+    };
+  }, [kioskAktiv]);
+
+  // Fix-Batch 141: kehrt nach ein paar Minuten Untätigkeit automatisch zur Startseite zurück
+  // (falls jemand mittendrin stehen bleibt) — nur im Kiosk-Modus, sonst wäre das für den
+  // normalen Alltagsgebrauch nur störend.
+  const UNTAETIGKEIT_MS = 3 * 60 * 1000;
+  useEffect(() => {
+    if (!kioskAktiv) return;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    function zuruecksetzen() {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        if (!pathname?.startsWith("/dashboard")) router.push("/dashboard");
+      }, UNTAETIGKEIT_MS);
+    }
+    zuruecksetzen();
+    window.addEventListener("pointerdown", zuruecksetzen);
+    window.addEventListener("keydown", zuruecksetzen);
+    return () => {
+      if (timer) clearTimeout(timer);
+      window.removeEventListener("pointerdown", zuruecksetzen);
+      window.removeEventListener("keydown", zuruecksetzen);
+    };
+  }, [kioskAktiv, pathname, router]);
 
   function themeUmschalten() {
     const neu: Theme = theme === "dunkel" ? "hell" : "dunkel";
@@ -172,7 +230,7 @@ export default function AppShell({ person, children }: { person: Person; childre
           </button>
           <PersonChip name={person.name} farbe={person.farbe} size={30} />
           <button
-            className="btn-secondary"
+            className="btn-secondary app-logout"
             style={{ padding: "8px 12px", fontSize: "var(--font-sm)" }}
             onClick={async () => {
               await logout();
