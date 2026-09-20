@@ -9,9 +9,13 @@ import EinstellungenClient from "./EinstellungenClient";
 export default async function EinstellungenPage() {
   const person = await getCurrentPerson();
   const istEltern = person?.rolle === "ELTERN";
+  // Fix-Batch 140 (Florians Wunsch): Admin (Florian) vs. normale Eltern ("Erwachsene", Tugce) —
+  // strukturelle Einstellungen (Personen anlegen/PIN anderer setzen, Kategorien, Dienstkatalog,
+  // Notengewichtung, Tickets entscheiden) sind ab jetzt nur noch für den Admin zugänglich.
+  const istAdmin = !!person?.istAdmin && istEltern;
   const personen = await listPersonen();
   const meineTickets = await listMeineTickets();
-  const alleTickets = istEltern ? await listAlleTickets() : [];
+  const alleTickets = istAdmin ? await listAlleTickets() : [];
   const hausprobleme = istEltern ? await listHausprobleme() : [];
 
   const kategorien = istEltern ? await listKategorien() : [];
@@ -42,6 +46,7 @@ export default async function EinstellungenPage() {
   return (
     <EinstellungenClient
       istEltern={!!istEltern}
+      istAdmin={istAdmin}
       eigeneId={person!.id}
       personen={personen.map((p) => ({
         id: p.id,

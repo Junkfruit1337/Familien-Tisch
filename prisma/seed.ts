@@ -43,6 +43,10 @@ async function main() {
     });
   }
 
+  // Fix-Batch 140 (Florians Wunsch: "Ich bin Admin"): Flo ist der einzige Admin — läuft bei
+  // jedem Deploy erneut, idempotent, betrifft nur diese eine Person.
+  await prisma.person.update({ where: { id: "seed-flo" }, data: { istAdmin: true } });
+
   // Fix-Batch 131 (Florians Wunsch, nach dem Account-Vorfall): erzwingt eine PIN-Änderung für
   // jede Person, deren aktuelle PIN noch die Standard-PIN "0000" ist — läuft bei jedem Deploy
   // erneut, damit auch bereits existierende Personen erfasst werden, nicht nur neu angelegte.

@@ -33,6 +33,13 @@ model Person {
   // Seed-Skript aktiv ist — verhindert, dass eine leicht erratbare Standard-PIN unbemerkt
   // dauerhaft aktiv bleibt. Wird beim Ändern der eigenen PIN automatisch wieder gelöscht.
   pinAendernErforderlich   Boolean   @default(false)
+  // Fix-Batch 140 (Florians Wunsch): Unterscheidung zwischen normalen Eltern ("Erwachsene",
+  // z.B. Tugce) und dem Admin (Florian) — nur der Admin darf strukturelle Einstellungen ändern
+  // (Familienmitglieder anlegen/PIN anderer zurücksetzen, Kategorien/Dienstkatalog/Noten-
+  // gewichtung verwalten, Tickets entscheiden). Alltägliche Eltern-Aufgaben (Noten/Wünsche
+  // genehmigen, Taschengeld, Dienst-Tausch, Einkaufsliste, Rezepte) bleiben für jede Person mit
+  // rolle=ELTERN gleich zugänglich — nur bei rolle=ELTERN überhaupt relevant.
+  istAdmin                 Boolean   @default(false)
   aktiv                    Boolean   @default(true)
   reihenfolge              Int       @default(0)
   // Portionsgröße für den Essensplan-Skalierungsrechner (Fix-Batch 23) — vorher fest im
@@ -335,11 +342,11 @@ model NotenGewichtung {
 }
 
 model Note {
-  id               String     @id @default(cuid())
+  id               String        @id @default(cuid())
   kindId           String
-  kind             Person     @relation(fields: [kindId], references: [id])
+  kind             Person        @relation(fields: [kindId], references: [id])
   fachId           String
-  fach             Fach       @relation(fields: [fachId], references: [id])
+  fach             Fach          @relation(fields: [fachId], references: [id])
   art              NoteArt
   note             Int
   // Fix-Batch 120 (Florians Wunsch): manche Noten stehen "zwischen" zwei ganzen Noten
@@ -350,12 +357,12 @@ model Note {
   tendenz          NotenTendenz?
   datum            DateTime
   notiz            String?
-  gewichtung       Float      @default(1)
-  fotoBase64       String?    @db.Text
-  status           NoteStatus @default(OFFEN)
+  gewichtung       Float         @default(1)
+  fotoBase64       String?       @db.Text
+  status           NoteStatus    @default(OFFEN)
   eingetragenVonId String // Kind selbst oder Elternteil
-  createdAt        DateTime   @default(now())
-  updatedAt        DateTime   @updatedAt
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
 
   taschengeld TaschengeldTransaktion[]
 }

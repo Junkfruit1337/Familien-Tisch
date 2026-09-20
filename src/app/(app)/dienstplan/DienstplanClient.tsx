@@ -42,6 +42,7 @@ type HistorieEintrag = { id: string; zeitpunkt: string; personName: string; akti
 
 export default function DienstplanClient({
   istEltern,
+  istAdmin,
   wocheStart: initialWocheStart,
   woche: initialWoche,
   tausche: initialTausche,
@@ -52,6 +53,7 @@ export default function DienstplanClient({
   historie,
 }: {
   istEltern: boolean;
+  istAdmin: boolean;
   wocheStart: string;
   woche: Schicht[];
   tausche: Tausch[];
@@ -233,7 +235,8 @@ export default function DienstplanClient({
                     <summary style={{ fontSize: "var(--font-base)", fontWeight: 500 }}>{d.bezeichnung}</summary>
                     <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                       {d.beschreibung && <p style={{ margin: 0, fontSize: "var(--font-sm)", color: "var(--text-muted)" }}>{d.beschreibung}</p>}
-                      {istEltern && (
+                      {/* Fix-Batch 140 (Florians Wunsch): Dienst-Regeltexte bearbeiten ist Admin-Sache. */}
+                      {istAdmin && (
                         <button
                           className="btn-secondary"
                           style={{ fontSize: "var(--font-xs)", padding: "3px 8px", alignSelf: "flex-start" }}

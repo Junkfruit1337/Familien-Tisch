@@ -1,7 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { requirePerson, requireParent } from "@/lib/auth";
+import { requirePerson, requireParent, requireAdmin } from "@/lib/auth";
 import { logAenderung } from "@/lib/history";
 import { revalidatePath } from "next/cache";
 import { sendePushAnEltern, sendePushAnPerson } from "@/lib/push";
@@ -463,7 +463,7 @@ async function wendeGewichtungRueckwirkendAn(kindId: string, fachId: string, art
 }
 
 export async function setNotenGewichtung(kindId: string, fachId: string, art: string, gewichtung: number) {
-  await requireParent();
+  await requireAdmin();
   await prisma.notenGewichtung.upsert({
     where: { kindId_fachId_art: { kindId, fachId, art: art as any } },
     update: { gewichtung },

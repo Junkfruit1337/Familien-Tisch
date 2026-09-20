@@ -159,6 +159,7 @@ const TICKET_STATUS_LABEL: Record<string, string> = {
 
 export default function EinstellungenClient({
   istEltern,
+  istAdmin,
   eigeneId,
   personen,
   kategorien,
@@ -172,6 +173,7 @@ export default function EinstellungenClient({
   hausprobleme,
 }: {
   istEltern: boolean;
+  istAdmin: boolean;
   eigeneId: string;
   personen: Person[];
   kategorien: Kategorie[];
@@ -1163,7 +1165,7 @@ export default function EinstellungenClient({
                   kann jede Person ihre eigene PIN dort selbst ändern) — für die eigene Zeile
                   bleibt deshalb nur noch der Hinweis, für alle anderen Personen (z. B. ein Kind,
                   das seine PIN vergessen hat) bleibt das Eltern-Reset hier unverändert nötig. */}
-              {p.rolle !== "KIND_OHNE_ZUGANG" && p.id !== eigeneId && (
+              {p.rolle !== "KIND_OHNE_ZUGANG" && p.id !== eigeneId && istAdmin && (
                 <>
                   <input
                     placeholder="Neuer PIN"
@@ -1187,6 +1189,10 @@ export default function EinstellungenClient({
               {p.rolle !== "KIND_OHNE_ZUGANG" && p.id === eigeneId && (
                 <span style={{ fontSize: 12, color: "var(--text-muted)" }}>PIN oben über „Meine PIN ändern" änderbar</span>
               )}
+              {/* Fix-Batch 140 (Florians Wunsch): PIN-Reset für andere Personen ist Admin-Sache. */}
+              {p.rolle !== "KIND_OHNE_ZUGANG" && p.id !== eigeneId && !istAdmin && (
+                <span style={{ fontSize: 12, color: "var(--text-muted)" }}>PIN-Reset nur durch den Admin</span>
+              )}
               <label style={{ fontSize: 12, display: "flex", alignItems: "center", gap: 4 }}>
                 Portionsgröße
                 <input
@@ -1202,44 +1208,49 @@ export default function EinstellungenClient({
                   }}
                 />
               </label>
-              <label style={{ fontSize: 12, marginLeft: "auto" }}>
-                <input type="checkbox" checked={p.aktiv} onChange={(e) => startTransition(() => setAktiv(p.id, e.target.checked))} style={{ width: "auto" }} /> aktiv
-              </label>
+              {istAdmin && (
+                <label style={{ fontSize: 12, marginLeft: "auto" }}>
+                  <input type="checkbox" checked={p.aktiv} onChange={(e) => startTransition(() => setAktiv(p.id, e.target.checked))} style={{ width: "auto" }} /> aktiv
+                </label>
+              )}
             </div>
           ))}
           <p style={{ fontSize: 12, color: "var(--text-muted)", margin: 0 }}>
             Portionsgröße steuert die Mengen-Skalierung beim Essensplan: 1 = normale Portion, 0,5 = halbe, 1,5 = anderthalbfache usw.
           </p>
 
-          <details>
-            <summary style={{ cursor: "pointer", color: "var(--text-muted)" }}>Neue Person anlegen</summary>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
-              <input placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} />
-              <select value={rolle} onChange={(e) => setRolle(e.target.value)}>
-                {ROLLEN.map((r) => (
-                  <option key={r.value} value={r.value}>
-                    {r.label}
-                  </option>
-                ))}
-              </select>
-              {rolle !== "KIND_OHNE_ZUGANG" && <input placeholder="4-stelliger PIN" maxLength={4} value={pin} onChange={(e) => setPinInput(e.target.value)} />}
-              <input type="color" value={farbe} onChange={(e) => setFarbeInput(e.target.value)} />
-              <button
-                className="btn"
-                disabled={pending}
-                onClick={() =>
-                  startTransition(async () => {
-                    if (!name) return;
-                    await createPerson({ name, rolle, pin: pin || undefined, farbe });
-                    setName("");
-                    setPinInput("");
-                  })
-                }
-              >
-                Anlegen
-              </button>
-            </div>
-          </details>
+          {/* Fix-Batch 140 (Florians Wunsch): Familienmitglieder anlegen ist Admin-Sache. */}
+          {istAdmin && (
+            <details>
+              <summary style={{ cursor: "pointer", color: "var(--text-muted)" }}>Neue Person anlegen</summary>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
+                <input placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} />
+                <select value={rolle} onChange={(e) => setRolle(e.target.value)}>
+                  {ROLLEN.map((r) => (
+                    <option key={r.value} value={r.value}>
+                      {r.label}
+                    </option>
+                  ))}
+                </select>
+                {rolle !== "KIND_OHNE_ZUGANG" && <input placeholder="4-stelliger PIN" maxLength={4} value={pin} onChange={(e) => setPinInput(e.target.value)} />}
+                <input type="color" value={farbe} onChange={(e) => setFarbeInput(e.target.value)} />
+                <button
+                  className="btn"
+                  disabled={pending}
+                  onClick={() =>
+                    startTransition(async () => {
+                      if (!name) return;
+                      await createPerson({ name, rolle, pin: pin || undefined, farbe });
+                      setName("");
+                      setPinInput("");
+                    })
+                  }
+                >
+                  Anlegen
+                </button>
+              </div>
+            </details>
+          )}
         </div>
       </details>
         </div>
@@ -1251,6 +1262,8 @@ export default function EinstellungenClient({
         </summary>
         <div style={{ display: "flex", flexDirection: "column", gap: 16, marginTop: 10 }}>
 
+      {/* Fix-Batch 140 (Florians Wunsch): Kategorien verwalten ist Admin-Sache. */}
+      {istAdmin && (
       <details>
         <summary style={{ cursor: "pointer", fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
           <BereichIcon bereich="einkaufsliste" size={18} /> Einkaufsliste: Kategorien
@@ -1297,6 +1310,7 @@ export default function EinstellungenClient({
           </div>
         </div>
       </details>
+      )}
 
       {kinder.length > 0 && (
         <details>
@@ -1340,11 +1354,14 @@ export default function EinstellungenClient({
             {/* Fix-Batch 86 (Florians Wunsch): zurück in die Einstellungen — wird i.d.R. nur
                 einmal (ggf. einmal pro Schuljahr) angepasst, gehört daher nicht auf die
                 Schule-Seite, die den täglichen Überblick zeigen soll. */}
-            {kind && <NotengewichtungSektion kindId={kind.id} kindName={kind.name} gewichtung={kind.gewichtung} />}
+            {/* Fix-Batch 140 (Florians Wunsch): Notengewichtung verwalten ist Admin-Sache. */}
+            {kind && istAdmin && <NotengewichtungSektion kindId={kind.id} kindName={kind.name} gewichtung={kind.gewichtung} />}
           </div>
         </details>
       )}
 
+      {/* Fix-Batch 140 (Florians Wunsch): Dienstkatalog verwalten ist Admin-Sache. */}
+      {istAdmin && (
       <details>
         <summary style={{ cursor: "pointer", fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
           <BereichIcon bereich="dienstplan" size={18} /> Dienstplan: Dienstkatalog
@@ -1470,6 +1487,7 @@ export default function EinstellungenClient({
           })}
         </div>
       </details>
+      )}
 
       <details className="card">
         <summary style={{ cursor: "pointer", fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>

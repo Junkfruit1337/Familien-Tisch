@@ -62,3 +62,16 @@ export async function requirePerson(): Promise<Person> {
   if (!person) throw new Error("Nicht eingeloggt.");
   return person;
 }
+
+// Fix-Batch 140 (Florians Wunsch): eine engere Rolle als "Eltern" — nur der Admin (Florian)
+// darf strukturelle Einstellungen ändern (Familienmitglieder verwalten, PIN anderer
+// zurücksetzen, Kategorien/Dienstkatalog/Notengewichtung, Tickets entscheiden). Alle
+// alltäglichen Eltern-Aufgaben bleiben unverändert über requireParent() für JEDEN Eltern-Teil
+// zugänglich — istAdmin engt das nur für die explizit dafür umgestellten Aktionen weiter ein.
+export async function requireAdmin(): Promise<Person> {
+  const person = await getCurrentPerson();
+  if (!person || person.rolle !== "ELTERN" || !person.istAdmin) {
+    throw new Error("Nur der Admin darf das.");
+  }
+  return person;
+}

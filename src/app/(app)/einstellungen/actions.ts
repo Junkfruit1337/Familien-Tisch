@@ -1,7 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { requireParent, requirePerson, hashPin } from "@/lib/auth";
+import { requireParent, requirePerson, requireAdmin, hashPin } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import { erkenneTicketAusSprache, verbessereFormulierung, type ErkanntesTicket } from "@/lib/spracheErkennung";
 
@@ -11,7 +11,7 @@ export async function listPersonen() {
 }
 
 export async function createPerson(data: { name: string; rolle: string; pin?: string; farbe: string }) {
-  await requireParent();
+  await requireAdmin();
   const anzahl = await prisma.person.count();
   await prisma.person.create({
     data: {
@@ -26,7 +26,7 @@ export async function createPerson(data: { name: string; rolle: string; pin?: st
 }
 
 export async function setPin(personId: string, pin: string) {
-  await requireParent();
+  await requireAdmin();
   await prisma.person.update({ where: { id: personId }, data: { pinHash: await hashPin(pin) } });
   revalidatePath("/einstellungen");
 }
@@ -38,7 +38,7 @@ export async function setFarbe(personId: string, farbe: string) {
 }
 
 export async function setAktiv(personId: string, aktiv: boolean) {
-  await requireParent();
+  await requireAdmin();
   await prisma.person.update({ where: { id: personId }, data: { aktiv } });
   revalidatePath("/einstellungen");
 }
@@ -117,15 +117,16 @@ export async function listMeineTickets() {
   return prisma.ticket.findMany({ where: { erstelltVonId: person.id }, orderBy: { createdAt: "desc" } });
 }
 
-// Eltern sehen und bearbeiten alle Tickets — die App kennt keine Sonderrechte zwischen
-// einzelnen Elternteilen (Fragenkatalog), daher hier bewusst nicht auf Florian beschränkt.
+// Fix-Batch 140 (Florians Wunsch): Tickets triagieren/entscheiden ist jetzt Admin-Sache
+// (vorher bewusst nicht auf Florian beschränkt, siehe alter Kommentar — das hat sich mit der
+// neuen Admin/Erwachsene-Unterscheidung geändert).
 export async function listAlleTickets() {
-  await requireParent();
+  await requireAdmin();
   return prisma.ticket.findMany({ include: { erstelltVon: true }, orderBy: { createdAt: "desc" } });
 }
 
 export async function setzeTicketStatus(id: string, status: string, begruendung?: string) {
-  await requireParent();
+  await requireAdmin();
   await prisma.ticket.update({ where: { id }, data: { status: status as any, begruendung: begruendung || undefined } });
   revalidatePath("/einstellungen");
 }

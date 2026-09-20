@@ -18,6 +18,7 @@ export default async function DienstplanPage() {
   return (
     <DienstplanClient
       istEltern={person?.rolle === "ELTERN"}
+      istAdmin={!!person?.istAdmin && person?.rolle === "ELTERN"}
       wocheStart={wocheStart}
       woche={woche.map((w) => ({
         schichtNummer: w.schichtNummer,

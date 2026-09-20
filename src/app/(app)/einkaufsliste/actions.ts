@@ -1,7 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { requirePerson, requireParent } from "@/lib/auth";
+import { requirePerson, requireParent, requireAdmin } from "@/lib/auth";
 import { logAenderung } from "@/lib/history";
 import { erkenneKategorie } from "@/lib/kategorisierung";
 import { erkenneArtikelAusSprache, type ErkannterArtikel } from "@/lib/spracheErkennung";
@@ -587,7 +587,7 @@ export async function setzeVorschlaegeZurueck() {
 }
 
 export async function addKategorie(name: string) {
-  await requireParent();
+  await requireAdmin();
   const anzahl = await prisma.einkaufsKategorie.count();
   await prisma.einkaufsKategorie.create({ data: { name, reihenfolge: anzahl } });
   revalidatePath("/einkaufsliste");
@@ -601,7 +601,7 @@ export async function addKategorie(name: string) {
 // erwartet. Jetzt direkt die gewünschte 1-basierte Position übergeben — das berechnet die
 // GESAMTE Reihenfolge neu und ist dadurch unabhängig davon, wie oft/schnell geklickt wurde.
 export async function setzeKategorieReihenfolge(id: string, neuePosition1Basiert: number) {
-  await requireParent();
+  await requireAdmin();
   const kategorien = await prisma.einkaufsKategorie.findMany({ orderBy: { reihenfolge: "asc" } });
   const ohneZiel = kategorien.filter((k) => k.id !== id);
   const ziel = kategorien.find((k) => k.id === id);

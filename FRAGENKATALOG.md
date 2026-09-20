@@ -133,6 +133,7 @@ Florian bat um eine komplette Durchsicht von Fahrplan, Fragenkatalog und App-Que
     **Antwort:** Einfacher PIN (4 Stellen) pro Person reicht, wie beim Handy-Entsperren — kein volles Passwort nötig (aktuell erstmal nur zum Testen innerhalb der Familie gedacht).
 37. **Rollen-Feinheit:** Reicht die Unterscheidung „Eltern" vs. „Kind", oder gibt es Fälle, in denen Flo und Tugce unterschiedliche Rechte brauchen sollen (z. B. nur einer verwaltet Server-Einstellungen/Kosten)?
     **Antwort:** Ja, die zwei Rollen Eltern/Kind reichen aus — Flo und Tugce brauchen keine unterschiedlichen Rechte.
+    **Revidiert (20.09.2026, Fix-Batch 140):** Doch — Florian ist jetzt Admin (`Person.istAdmin`), Tugce bleibt "Erwachsene" ohne Admin-Rechte. Details siehe FAHRPLAN.md, Anforderungs-Log 20.09.2026.
 38. **Ayla:** Braucht sie einen eigenen Zugang/Login (z. B. falls sie später mal ein Familien-Tablet nutzt), oder bleibt sie technisch rein eine „Person" im System ohne eigenen Account (wie aktuell im Prototyp)?
     **Antwort:** Kein eigener Zugang. Sie muss aber weiterhin als Person im System angelegt und von den Eltern verwaltet werden können — im Rollenmodell praktisch eine dritte Kategorie „Kind ohne eigenen Zugang" (Kleinkind), ohne eigenes Login/PIN.
 39. **Passwort/PIN vergessen:** Reicht „Eltern setzen es im Adminbereich zurück", oder braucht es einen E-Mail-Reset-Mechanismus?

@@ -1,7 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { requirePerson, requireParent } from "@/lib/auth";
+import { requirePerson, requireParent, requireAdmin } from "@/lib/auth";
 import { logAenderung, getHistorieFuerTyp } from "@/lib/history";
 import { getWeekStart, getEffectiveWeek, getBadReihenfolge } from "@/lib/dienstplan";
 import { DIENSTE_VORLAGE, TAGESROUTINEN_VORLAGE, KOERPERPFLEGE_VORLAGE } from "@/lib/schichtsystemVorlage";
@@ -209,7 +209,7 @@ export async function hebeTauschAuf(id: string) {
 // ---------- Dienstkatalog: Regeltexte bearbeiten (Fahrplan §3, Batch 4) ----------
 
 export async function updateDienstBeschreibung(id: string, beschreibung: string) {
-  await requireParent();
+  await requireAdmin();
   await prisma.dienstDefinition.update({ where: { id }, data: { beschreibung } });
   revalidatePath("/dienstplan");
 }
@@ -270,7 +270,7 @@ export async function listDienstkatalog() {
 }
 
 export async function addDienst(schichtNummer: number, bezeichnung: string, beschreibung?: string) {
-  await requireParent();
+  await requireAdmin();
   const anzahl = await prisma.dienstDefinition.count({ where: { schichtNummer } });
   await prisma.dienstDefinition.create({ data: { schichtNummer, reihenfolge: anzahl + 1, bezeichnung, beschreibung } });
   revalidatePath("/dienstplan");
@@ -278,7 +278,7 @@ export async function addDienst(schichtNummer: number, bezeichnung: string, besc
 }
 
 export async function updateDienst(id: string, data: { bezeichnung?: string; beschreibung?: string }) {
-  await requireParent();
+  await requireAdmin();
   await prisma.dienstDefinition.update({ where: { id }, data });
   revalidatePath("/dienstplan");
   revalidatePath("/einstellungen");
@@ -286,7 +286,7 @@ export async function updateDienst(id: string, data: { bezeichnung?: string; bes
 
 // Verschiebt einen Dienst dauerhaft in eine andere Schicht (ans Ende der Ziel-Schicht).
 export async function verschiebeDienstSchicht(id: string, neueSchichtNummer: number) {
-  await requireParent();
+  await requireAdmin();
   const anzahl = await prisma.dienstDefinition.count({ where: { schichtNummer: neueSchichtNummer } });
   await prisma.dienstDefinition.update({ where: { id }, data: { schichtNummer: neueSchichtNummer, reihenfolge: anzahl + 1 } });
   revalidatePath("/dienstplan");
@@ -294,7 +294,7 @@ export async function verschiebeDienstSchicht(id: string, neueSchichtNummer: num
 }
 
 export async function verschiebeDienstReihenfolge(id: string, richtung: "hoch" | "runter") {
-  await requireParent();
+  await requireAdmin();
   const dienst = await prisma.dienstDefinition.findUnique({ where: { id } });
   if (!dienst) return;
   const geschwister = await prisma.dienstDefinition.findMany({
@@ -315,7 +315,7 @@ export async function verschiebeDienstReihenfolge(id: string, richtung: "hoch" |
 }
 
 export async function deleteDienst(id: string) {
-  await requireParent();
+  await requireAdmin();
   await prisma.dienstDefinition.delete({ where: { id } });
   revalidatePath("/dienstplan");
   revalidatePath("/einstellungen");
@@ -326,7 +326,7 @@ export async function deleteDienst(id: string) {
 // mehrfach ausgeführt werden (Dienste/Körperpflegeplan werden überschrieben, nicht verdoppelt;
 // Tagesroutinen werden komplett ersetzt, damit keine doppelten Einträge entstehen).
 export async function installiereSchichtsystemVorlage() {
-  await requireParent();
+  await requireAdmin();
 
   for (const d of DIENSTE_VORLAGE) {
     const existing = await prisma.dienstDefinition.findFirst({ where: { schichtNummer: d.schichtNummer, reihenfolge: d.reihenfolge } });

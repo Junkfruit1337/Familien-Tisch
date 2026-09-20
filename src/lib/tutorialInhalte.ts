@@ -120,7 +120,9 @@ export const TUTORIAL_KAPITEL: TutorialKapitel[] = [
       "Eigene PIN jederzeit selbst ändern",
     ],
     punkteEltern: [
-      "Familienmitglieder, Kategorien, Dienste und Notengewichtung verwalten",
+      // Fix-Batch 140 (Florians Wunsch: Admin- vs. Erwachsene-Rolle): diese strukturellen
+      // Einstellungen sind jetzt nur noch für den Admin sichtbar/nutzbar.
+      "Familienmitglieder, Kategorien, Dienste und Notengewichtung verwalten (nur Admin)",
       "Termine aus einem anderen Kalender (z. B. Faminice) als ICS-Datei importieren",
     ],
   },
