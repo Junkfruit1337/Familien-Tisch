@@ -1,7 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { requirePerson, requireParent, kiErlaubt, KI_DEAKTIVIERT_FEHLER } from "@/lib/auth";
+import { requirePerson, requireParent } from "@/lib/auth";
 import { logAenderung } from "@/lib/history";
 import { erkenneKategorie } from "@/lib/kategorisierung";
 import { erkenneArtikelAusSprache, type ErkannterArtikel } from "@/lib/spracheErkennung";
@@ -12,8 +12,7 @@ import { revalidatePath } from "next/cache";
 // Spracheingabe fürs Artikel-/Wunsch-Formular (Fix-Batch 30) — für Eltern (Artikel direkt
 // hinzufügen) und Kinder (Wunsch einreichen) gleichermaßen nutzbar.
 export async function erkenneArtikelAusText(text: string): Promise<{ ok: true; artikel: ErkannterArtikel } | { ok: false; fehler: string }> {
-  const person = await requirePerson();
-  if (!kiErlaubt(person)) return { ok: false, fehler: KI_DEAKTIVIERT_FEHLER };
+  await requirePerson();
   try {
     const artikel = await erkenneArtikelAusSprache(text);
     return { ok: true, artikel };
@@ -29,8 +28,7 @@ export async function erkenneArtikelAusText(text: string): Promise<{ ok: true; a
 export async function erkenneEinkaufslisteAusFoto(
   fotoDataUrl: string
 ): Promise<{ ok: true; artikel: ErkannterListenArtikel[] } | { ok: false; fehler: string }> {
-  const person = await requireParent();
-  if (!kiErlaubt(person)) return { ok: false, fehler: KI_DEAKTIVIERT_FEHLER };
+  await requireParent();
   try {
     const artikel = await erkenneEinkaufslisteAusBild(fotoDataUrl);
     return { ok: true, artikel };
@@ -81,9 +79,9 @@ function normalisiereNotiz(notiz: string | null | undefined): string {
 // bestätigten Artikeln gesucht (Fix-Batch 24) — ein manuell hinzugefügter Artikel darf nicht
 // versehentlich in einen noch unbestätigten Essensplan-Posten hineingemischt werden und
 // dadurch selbst als "noch nicht zugesagt" erscheinen.
-export async function findeOffenenArtikel(name: string, notiz?: string | null, familieId?: string | null) {
+export async function findeOffenenArtikel(name: string, notiz?: string | null) {
   const kandidaten = await prisma.einkaufsArtikel.findMany({
-    where: { familieId, erledigt: false, bestaetigt: true, name: { equals: name.trim(), mode: "insensitive" } },
+    where: { erledigt: false, bestaetigt: true, name: { equals: name.trim(), mode: "insensitive" } },
   });
   return kandidaten.find((a) => normalisiereNotiz(a.notiz) === normalisiereNotiz(notiz)) ?? null;
 }
@@ -92,9 +90,9 @@ export async function findeOffenenArtikel(name: string, notiz?: string | null, f
 // Tage, die dieselbe Zutat brauchen, sollen sich in EINEM unbestätigten Posten summieren,
 // statt für jeden Tag eine eigene Zeile zu erzeugen (aber ebenfalls nur bei gleicher Notiz,
 // siehe findeOffenenArtikel oben).
-export async function findeOffenenUnbestaetigtenArtikel(name: string, notiz?: string | null, familieId?: string | null) {
+export async function findeOffenenUnbestaetigtenArtikel(name: string, notiz?: string | null) {
   const kandidaten = await prisma.einkaufsArtikel.findMany({
-    where: { familieId, erledigt: false, bestaetigt: false, name: { equals: name.trim(), mode: "insensitive" } },
+    where: { erledigt: false, bestaetigt: false, name: { equals: name.trim(), mode: "insensitive" } },
   });
   return kandidaten.find((a) => normalisiereNotiz(a.notiz) === normalisiereNotiz(notiz)) ?? null;
 }
@@ -199,9 +197,8 @@ export async function mergeMenge(bestehend: string | null, neu?: string | null):
 // Einkaufsmodus-Antippen nur noch ab, statt zu löschen) beliebig groß werden und wird
 // deshalb separat, gedeckelt und mit "mehr anzeigen" nachgeladen (siehe listErledigteArtikel).
 export async function listArtikel() {
-  const person = await requirePerson();
   return prisma.einkaufsArtikel.findMany({
-    where: { familieId: person.familieId, bestaetigt: true, erledigt: false },
+    where: { bestaetigt: true, erledigt: false },
     include: { kategorie: true },
     orderBy: [{ kategorie: { reihenfolge: "asc" } }, { createdAt: "asc" }],
   });
@@ -212,15 +209,14 @@ export async function listArtikel() {
 // gelöscht (siehe Fix-Batch 67), die komplette Historie bleibt für spätere Statistiken
 // vollständig in der Datenbank erhalten, es wird nur nicht mehr alles auf einmal geladen.
 export async function listErledigteArtikel(limit = 50) {
-  const person = await requirePerson();
   const [rohArtikel, gesamtAnzahl] = await Promise.all([
     prisma.einkaufsArtikel.findMany({
-      where: { familieId: person.familieId, bestaetigt: true, erledigt: true },
+      where: { bestaetigt: true, erledigt: true },
       include: { kategorie: true },
       orderBy: { updatedAt: "desc" },
       take: limit,
     }),
-    prisma.einkaufsArtikel.count({ where: { familieId: person.familieId, bestaetigt: true, erledigt: true } }),
+    prisma.einkaufsArtikel.count({ where: { bestaetigt: true, erledigt: true } }),
   ]);
   // Bereits hier auf die vom Client erwartete flache Form gebracht (kategorieName statt
   // verschachteltem kategorie-Objekt), damit sowohl page.tsx als auch der client-seitige
@@ -244,9 +240,9 @@ export async function listErledigteArtikel(limit = 50) {
 // gleichermaßen — Tagesgericht, Zusatzmahlzeit und Ad-hoc-Extra-Rezept —, nicht mehr nur
 // fürs Tagesgericht. Zeigt zur Einordnung, aus welchem(n) Gericht(en) die Menge stammt.
 export async function listUnbestaetigteArtikel() {
-  const person = await requireParent();
+  await requireParent();
   const artikel = await prisma.einkaufsArtikel.findMany({
-    where: { familieId: person.familieId, bestaetigt: false, erledigt: false },
+    where: { bestaetigt: false, erledigt: false },
     include: {
       essensplanHerkuenfte: { include: { eintrag: { include: { rezept: true } } } },
       extraMahlzeitHerkuenfte: { include: { extraMahlzeit: { include: { rezept: true } } } },
@@ -274,12 +270,12 @@ export async function listUnbestaetigteArtikel() {
 // korrigieren (Fix-Batch 34, Florians Wunsch) — der Merge-Check auf einen schon offenen
 // gleichnamigen Artikel läuft dann gegen den ggf. korrigierten Namen.
 export async function bestaetigeArtikel(id: string, data?: { menge?: string; name?: string }) {
-  const person = await requireParent();
+  await requireParent();
   const artikel = await prisma.einkaufsArtikel.findUnique({ where: { id } });
-  if (!artikel || artikel.familieId !== person.familieId) return;
+  if (!artikel) return;
   const menge = data?.menge !== undefined ? data.menge || null : artikel.menge;
   const name = data?.name?.trim() ? data.name.trim() : artikel.name;
-  const bestehender = await findeOffenenArtikel(name, artikel.notiz, person.familieId);
+  const bestehender = await findeOffenenArtikel(name, artikel.notiz);
   if (bestehender) {
     await prisma.einkaufsArtikel.update({
       where: { id: bestehender.id },
@@ -302,9 +298,7 @@ export async function bestaetigeArtikel(id: string, data?: { menge?: string; nam
 // Lehnt einen "noch nicht zugesagten" Artikel ab (z. B. schon zu Hause vorrätig) — löscht
 // ihn samt Essensplan-Herkunfts-Verknüpfung (Cascade) wieder.
 export async function lehneArtikelAb(id: string) {
-  const person = await requireParent();
-  const artikel = await prisma.einkaufsArtikel.findUnique({ where: { id } });
-  if (!artikel || artikel.familieId !== person.familieId) return;
+  await requireParent();
   await prisma.einkaufsArtikel.delete({ where: { id } }).catch(() => {});
   revalidatePath("/einkaufsliste");
 }
@@ -314,8 +308,7 @@ export async function lehneArtikelAb(id: string) {
 // Datensatz (Namen, Artikel, Status aller Kinder) im Server-Payload erhält.
 export async function listWuensche() {
   const person = await requirePerson();
-  const where =
-    person.rolle === "ELTERN" ? { familieId: person.familieId } : { familieId: person.familieId, kindId: person.id };
+  const where = person.rolle === "ELTERN" ? {} : { kindId: person.id };
   return prisma.einkaufsWunsch.findMany({ where, include: { kind: true }, orderBy: { createdAt: "desc" } });
 }
 
@@ -325,9 +318,9 @@ export async function listKategorien() {
 
 // Eltern: Artikel direkt hinzufügen
 export async function addArtikel(data: { name: string; menge?: string; notiz?: string; kategorieId?: string }) {
-  const person = await requireParent();
+  await requireParent();
 
-  const bestehender = await findeOffenenArtikel(data.name, data.notiz, person.familieId);
+  const bestehender = await findeOffenenArtikel(data.name, data.notiz);
   let artikelId: string;
   let artikel;
   if (bestehender) {
@@ -339,7 +332,7 @@ export async function addArtikel(data: { name: string; menge?: string; notiz?: s
   } else {
     const kategorieId = data.kategorieId || (await autoKategorieId(data.name));
     artikel = await prisma.einkaufsArtikel.create({
-      data: { familieId: person.familieId, name: data.name, menge: data.menge, notiz: data.notiz || null, kategorieId: kategorieId || null },
+      data: { name: data.name, menge: data.menge, notiz: data.notiz || null, kategorieId: kategorieId || null },
     });
     artikelId = artikel.id;
   }
@@ -352,9 +345,7 @@ export async function addArtikel(data: { name: string; menge?: string; notiz?: s
 // iconOverride: manuell gewähltes Icon statt der Automatik (Fix-Batch 35 Nachtrag, Ticket
 // "Icon-Größe und Regeneration") — leerer String setzt zurück auf automatische Erkennung.
 export async function updateArtikel(id: string, data: { name?: string; menge?: string; notiz?: string; iconOverride?: string }) {
-  const person = await requireParent();
-  const bestehend = await prisma.einkaufsArtikel.findUnique({ where: { id } });
-  if (!bestehend || bestehend.familieId !== person.familieId) return;
+  await requireParent();
   const artikel = await prisma.einkaufsArtikel.update({
     where: { id },
     data: {
@@ -391,9 +382,7 @@ export async function listGelernteIcons(): Promise<Record<string, string>> {
 // Artikelnamen gemerkt (siehe autoKategorieId oben), damit sie künftigen Eingaben desselben
 // Artikels zugutekommt, egal aus welcher Quelle sie kommen.
 export async function verschiebeArtikelKategorie(id: string, kategorieId: string) {
-  const person = await requireParent();
-  const bestehend = await prisma.einkaufsArtikel.findUnique({ where: { id } });
-  if (!bestehend || bestehend.familieId !== person.familieId) return;
+  await requireParent();
   const artikel = await prisma.einkaufsArtikel.update({
     where: { id },
     data: { kategorieId: kategorieId || null },
@@ -412,17 +401,15 @@ export async function verschiebeArtikelKategorie(id: string, kategorieId: string
 }
 
 export async function toggleArtikel(id: string) {
-  const person = await requireParent();
+  await requireParent();
   const a = await prisma.einkaufsArtikel.findUnique({ where: { id } });
-  if (!a || a.familieId !== person.familieId) return;
+  if (!a) return;
   await prisma.einkaufsArtikel.update({ where: { id }, data: { erledigt: !a.erledigt } });
   revalidatePath("/einkaufsliste");
 }
 
 export async function deleteArtikel(id: string) {
-  const person = await requireParent();
-  const a = await prisma.einkaufsArtikel.findUnique({ where: { id } });
-  if (!a || a.familieId !== person.familieId) return;
+  await requireParent();
   await prisma.einkaufsArtikel.delete({ where: { id } });
   revalidatePath("/einkaufsliste");
 }
@@ -434,14 +421,14 @@ export async function deleteArtikel(id: string) {
 export async function submitWunsch(data: { artikelName: string; menge?: string; notiz?: string }) {
   const person = await requirePerson();
   const wunsch = await prisma.einkaufsWunsch.create({
-    data: { familieId: person.familieId, artikelName: data.artikelName, menge: data.menge, notiz: data.notiz || null, kindId: person.id },
+    data: { artikelName: data.artikelName, menge: data.menge, notiz: data.notiz || null, kindId: person.id },
   });
   await logAenderung({ entityTyp: "EINKAUFS_WUNSCH", entityId: wunsch.id, aktion: "eingereicht", neuerWert: wunsch.artikelName, geaendertVonId: person.id });
   await sendePushAnEltern({
     title: "Neuer Einkaufswunsch",
     body: `${person.name} wünscht sich: ${wunsch.artikelName}${wunsch.menge ? ` (${wunsch.menge})` : ""}`,
     url: "/einkaufsliste",
-  }, person.familieId);
+  });
   revalidatePath("/einkaufsliste");
 }
 
@@ -451,7 +438,7 @@ export async function submitWunsch(data: { artikelName: string; menge?: string; 
 export async function updateWunsch(id: string, data: { artikelName?: string; menge?: string; notiz?: string }) {
   const person = await requirePerson();
   const bestehend = await prisma.einkaufsWunsch.findUnique({ where: { id } });
-  if (!bestehend || bestehend.familieId !== person.familieId) throw new Error("Wunsch nicht gefunden.");
+  if (!bestehend) throw new Error("Wunsch nicht gefunden.");
   if (person.rolle !== "ELTERN" && bestehend.kindId !== person.id) throw new Error("Nicht erlaubt.");
   if (bestehend.status !== "OFFEN") throw new Error("Nur ein noch nicht entschiedener Wunsch kann bearbeitet werden.");
   await prisma.einkaufsWunsch.update({ where: { id }, data });
@@ -461,7 +448,7 @@ export async function updateWunsch(id: string, data: { artikelName?: string; men
 export async function deleteWunsch(id: string) {
   const person = await requirePerson();
   const bestehend = await prisma.einkaufsWunsch.findUnique({ where: { id } });
-  if (!bestehend || bestehend.familieId !== person.familieId) throw new Error("Wunsch nicht gefunden.");
+  if (!bestehend) throw new Error("Wunsch nicht gefunden.");
   if (person.rolle !== "ELTERN" && bestehend.kindId !== person.id) throw new Error("Nicht erlaubt.");
   if (person.rolle !== "ELTERN" && bestehend.status !== "OFFEN") throw new Error("Nur ein noch nicht entschiedener Wunsch kann zurückgezogen werden.");
   await prisma.einkaufsWunsch.delete({ where: { id } });
@@ -470,15 +457,13 @@ export async function deleteWunsch(id: string) {
 
 export async function entscheideWunsch(id: string, genehmigt: boolean, kategorieId?: string) {
   const person = await requireParent();
-  const bestehend = await prisma.einkaufsWunsch.findUnique({ where: { id } });
-  if (!bestehend || bestehend.familieId !== person.familieId) return;
   const wunsch = await prisma.einkaufsWunsch.update({
     where: { id },
     data: { status: genehmigt ? "GENEHMIGT" : "ABGELEHNT", entschiedenAm: new Date() },
     include: { kind: true },
   });
   if (genehmigt) {
-    const bestehender = await findeOffenenArtikel(wunsch.artikelName, wunsch.notiz, person.familieId);
+    const bestehender = await findeOffenenArtikel(wunsch.artikelName, wunsch.notiz);
     let artikelId: string;
     if (bestehender) {
       await prisma.einkaufsArtikel.update({
@@ -495,7 +480,6 @@ export async function entscheideWunsch(id: string, genehmigt: boolean, kategorie
       const finalKategorieId = kategorieId || (await autoKategorieId(wunsch.artikelName));
       const neu = await prisma.einkaufsArtikel.create({
         data: {
-          familieId: person.familieId,
           name: wunsch.artikelName,
           menge: wunsch.menge,
           notiz: wunsch.notiz,
@@ -520,9 +504,7 @@ export async function entscheideWunsch(id: string, genehmigt: boolean, kategorie
 // ---------- Quellen-Aufschlüsselung je Artikel (Fahrplan §3, Batch 2) ----------
 
 export async function listArtikelQuellen(artikelId: string) {
-  const person = await requireParent();
-  const artikel = await prisma.einkaufsArtikel.findUnique({ where: { id: artikelId } });
-  if (!artikel || artikel.familieId !== person.familieId) return [];
+  await requireParent();
   const [quellen, essensplanHerkuenfte, extraMahlzeitHerkuenfte] = await Promise.all([
     prisma.artikelQuelle.findMany({ where: { artikelId } }),
     prisma.essensplanHerkunft.findMany({ where: { artikelId }, include: { eintrag: { include: { rezept: true } } } }),
@@ -555,10 +537,10 @@ export async function listArtikelQuellen(artikelId: string) {
 // erzeugt beim erneuten Hinzufügen einen neuen Artikel-Datensatz, da findeOffenenArtikel
 // nur unerledigte Artikel matcht) statt eines separaten Kauf-Historie-Modells.
 export async function listVorschlaege() {
-  const person = await requireParent();
+  await requireParent();
   const [alleArtikel, offene, dismisses] = await Promise.all([
-    prisma.einkaufsArtikel.findMany({ where: { familieId: person.familieId }, select: { name: true, menge: true, createdAt: true } }),
-    prisma.einkaufsArtikel.findMany({ where: { familieId: person.familieId, erledigt: false }, select: { name: true } }),
+    prisma.einkaufsArtikel.findMany({ select: { name: true, menge: true, createdAt: true } }),
+    prisma.einkaufsArtikel.findMany({ where: { erledigt: false }, select: { name: true } }),
     prisma.vorschlagDismiss.findMany(),
   ]);
   const dismissMap = new Map(dismisses.map((d) => [d.name, d.anzahl]));

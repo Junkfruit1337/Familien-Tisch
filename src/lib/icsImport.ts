@@ -138,9 +138,7 @@ async function parseMitKi(text: string): Promise<IcsVorschauEreignis[]> {
     .filter((e) => !Number.isNaN(new Date(e.start).getTime()));
 }
 
-// Fix-Batch 137: kiErlaubt (Default true, damit sich für Florians Familie nichts ändert)
-// steuert, ob die kostenpflichtige KI-Rückfallebene überhaupt versucht werden darf.
-export async function parseIcsDatei(text: string, kiErlaubt = true): Promise<IcsImportErgebnis> {
+export async function parseIcsDatei(text: string): Promise<IcsImportErgebnis> {
   try {
     const ereignisse = parseMitNodeIcal(text);
     if (ereignisse.length > 0) return { ok: true, ereignisse, quelle: "ics" };
@@ -148,10 +146,6 @@ export async function parseIcsDatei(text: string, kiErlaubt = true): Promise<Ics
     // node-ical nicht sauber lesen konnte. Rückfall auf KI, um sicherzugehen.
   } catch (err) {
     console.error("ICS-Import: node-ical konnte die Datei nicht lesen, versuche KI-Rückfallebene:", err);
-  }
-
-  if (!kiErlaubt) {
-    return { ok: false, fehler: "Konnte die Datei nicht automatisch lesen, und KI-Funktionen sind für eure Familie nicht aktiviert." };
   }
 
   try {

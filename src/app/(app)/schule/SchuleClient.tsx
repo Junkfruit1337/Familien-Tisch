@@ -507,13 +507,11 @@ function SchulEintraegeSektion({
 export default function SchuleClient({
   istEltern,
   eigeneId,
-  thgUrl,
   kinder,
   schulEintraege,
 }: {
   istEltern: boolean;
   eigeneId: string;
-  thgUrl: string | null;
   kinder: Kind[];
   schulEintraege: SchulEintrag[];
 }) {
@@ -945,7 +943,7 @@ export default function SchuleClient({
         {/* Fix-Batch 106 (Florians Wunsch): kompakter Button statt der ganzen THG-Karte, die
             hier zu viel Platz eingenommen hat. Fix-Batch 108: auch für Kinder hier (statt des
             entfernten eigenen THG-Reiters) — jeder meldet sich für sich selbst an. */}
-        <ThgVollbild compact url={thgUrl} />
+        <ThgVollbild compact />
       </div>
 
       {/* Fix-Batch 115 (Florians Bug-Meldung: die alte "Für alle Kinder"-Übersicht war nur ein

@@ -1,7 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { requireParent, requirePerson, kiErlaubt, KI_DEAKTIVIERT_FEHLER } from "@/lib/auth";
+import { requireParent } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import { autoKategorieId, findeOffenenArtikel, findeOffenenUnbestaetigtenArtikel, mergeMenge } from "../einkaufsliste/actions";
 import {
@@ -29,22 +29,19 @@ function getSamstagWocheStart(date: Date): Date {
 }
 
 export async function listRezepte() {
-  const person = await requirePerson();
-  return prisma.rezept.findMany({ where: { familieId: person.familieId }, orderBy: { name: "asc" } });
+  return prisma.rezept.findMany({ orderBy: { name: "asc" } });
 }
 
 // Rezeptdatenbank: vollständige Übersicht mit Detailfeldern, unabhängig vom
 // Essensplan-Auswahlformular (Fahrplan §3, Batch 5).
 export async function listRezepteDetail() {
-  const person = await requirePerson();
-  return prisma.rezept.findMany({ where: { familieId: person.familieId }, orderBy: { name: "asc" } });
+  return prisma.rezept.findMany({ orderBy: { name: "asc" } });
 }
 
 export async function addRezept(name: string, zutaten: string, zubereitung?: string, portionenBasis?: number, kategorie?: string) {
-  const person = await requireParent();
+  await requireParent();
   await prisma.rezept.create({
     data: {
-      familieId: person.familieId,
       name,
       zutaten,
       zubereitung: zubereitung || undefined,
@@ -58,10 +55,8 @@ export async function addRezept(name: string, zutaten: string, zubereitung?: str
 // Korrigiert nachträglich, für wie viele Portionen ein bereits gespeichertes Rezept
 // geschrieben ist (Fix-Batch 22) — z.B. wenn beim Anlegen der Wert falsch geschätzt wurde.
 export async function updateRezeptPortionenBasis(rezeptId: string, portionenBasis: number) {
-  const person = await requireParent();
+  await requireParent();
   if (!portionenBasis || portionenBasis < 1) return;
-  const rezept = await prisma.rezept.findUnique({ where: { id: rezeptId } });
-  if (!rezept || rezept.familieId !== person.familieId) return;
   await prisma.rezept.update({ where: { id: rezeptId }, data: { portionenBasis } });
   revalidatePath("/essensplan");
   revalidatePath("/einkaufsliste");
@@ -71,9 +66,7 @@ export async function updateRezeptPortionenBasis(rezeptId: string, portionenBasi
 // vorher war nur die Portionsgrundlage nachträglich änderbar, nicht die Zutatenmengen oder
 // die Zubereitung selbst.
 export async function updateRezept(rezeptId: string, data: { name?: string; zutaten?: string; zubereitung?: string; kategorie?: string }) {
-  const person = await requireParent();
-  const rezept = await prisma.rezept.findUnique({ where: { id: rezeptId } });
-  if (!rezept || rezept.familieId !== person.familieId) return;
+  await requireParent();
   await prisma.rezept.update({
     where: { id: rezeptId },
     data: {
@@ -94,8 +87,7 @@ export async function updateRezept(rezeptId: string, data: { name?: string; zuta
 export async function erkenneRezeptAusFoto(
   datenUrl: string
 ): Promise<{ ok: true; rezept: ErkanntesRezept } | { ok: false; fehler: string }> {
-  const person = await requireParent();
-  if (!kiErlaubt(person)) return { ok: false, fehler: KI_DEAKTIVIERT_FEHLER };
+  await requireParent();
   try {
     const rezept = await erkenneRezeptAusDatei(datenUrl);
     return { ok: true, rezept };
@@ -112,8 +104,7 @@ export async function erkenneRezeptAusFoto(
 export async function erkenneRezeptAusText(
   text: string
 ): Promise<{ ok: true; rezept: ErkanntesRezept } | { ok: false; fehler: string }> {
-  const person = await requireParent();
-  if (!kiErlaubt(person)) return { ok: false, fehler: KI_DEAKTIVIERT_FEHLER };
+  await requireParent();
   try {
     const rezept = await erkenneRezeptAusSprache(text);
     return { ok: true, rezept };
@@ -137,8 +128,7 @@ function aktuelleSaison(datum = new Date()): string {
 }
 
 export async function schlageSaisonaleIdeeVor(): Promise<{ ok: true; rezept: ErkanntesRezept } | { ok: false; fehler: string }> {
-  const person = await requireParent();
-  if (!kiErlaubt(person)) return { ok: false, fehler: KI_DEAKTIVIERT_FEHLER };
+  await requireParent();
   try {
     const saison = aktuelleSaison();
     const bisherige = await prisma.saisonVorschlag.findMany({
@@ -169,8 +159,7 @@ export async function schlageSaisonaleIdeeVor(): Promise<{ ok: true; rezept: Erk
 export async function schlageRezeptZuBeschreibungVorschau(
   beschreibung: string
 ): Promise<{ ok: true; rezept: ErkanntesRezept } | { ok: false; fehler: string }> {
-  const person = await requireParent();
-  if (!kiErlaubt(person)) return { ok: false, fehler: KI_DEAKTIVIERT_FEHLER };
+  await requireParent();
   try {
     const rezept = await schlageRezeptZuBeschreibungVor(beschreibung);
     return { ok: true, rezept };
@@ -184,8 +173,7 @@ export async function schlageRezeptZuBeschreibungVorschau(
 export async function findeRezeptImInternetVorschau(
   beschreibung: string
 ): Promise<{ ok: true; rezept: ErkanntesRezept } | { ok: false; fehler: string }> {
-  const person = await requireParent();
-  if (!kiErlaubt(person)) return { ok: false, fehler: KI_DEAKTIVIERT_FEHLER };
+  await requireParent();
   try {
     const rezept = await findeRezeptImInternet(beschreibung);
     if (!rezept.name) {
@@ -204,8 +192,7 @@ export async function findeRezeptImInternetVorschau(
 export async function verdichteZubereitungVorschau(
   zubereitung: string
 ): Promise<{ ok: true; zubereitung: string } | { ok: false; fehler: string }> {
-  const person = await requireParent();
-  if (!kiErlaubt(person)) return { ok: false, fehler: KI_DEAKTIVIERT_FEHLER };
+  await requireParent();
   try {
     const ergebnis = await verdichteZubereitung(zubereitung);
     return { ok: true, zubereitung: ergebnis };
@@ -223,8 +210,7 @@ export async function pruefeZutatenZubereitungVorschau(
   zutaten: string,
   zubereitung: string
 ): Promise<{ ok: true; ergebnis: ZutatenZubereitungAbgleich } | { ok: false; fehler: string }> {
-  const person = await requireParent();
-  if (!kiErlaubt(person)) return { ok: false, fehler: KI_DEAKTIVIERT_FEHLER };
+  await requireParent();
   try {
     const ergebnis = await pruefeZutatenZubereitungAbgleich(zutaten, zubereitung);
     return { ok: true, ergebnis };
@@ -245,9 +231,9 @@ const FLEISCH_FISCH_STICHWORTE = [
 ];
 
 export async function pruefeAusgewogenheitDerWoche(wocheStartIso: string): Promise<{ fleischGerichte: number; gesamtGerichte: number; hinweis: string | null }> {
-  const person = await requireParent();
+  await requireParent();
   const wocheStart = new Date(wocheStartIso);
-  const eintraege = await prisma.essensplanEintrag.findMany({ where: { wocheStart, familieId: person.familieId }, include: { rezept: true } });
+  const eintraege = await prisma.essensplanEintrag.findMany({ where: { wocheStart }, include: { rezept: true } });
   const gesamtGerichte = eintraege.length;
   const fleischGerichte = eintraege.filter((e) => {
     const text = `${e.rezept.name} ${e.rezept.zutaten}`.toLowerCase();
@@ -269,11 +255,10 @@ export async function schreibeRezeptUmVorschau(
   rezeptId: string,
   anweisung: string
 ): Promise<{ ok: true; rezept: ErkanntesRezept } | { ok: false; fehler: string }> {
-  const person = await requireParent();
-  if (!kiErlaubt(person)) return { ok: false, fehler: KI_DEAKTIVIERT_FEHLER };
+  await requireParent();
   try {
     const rezept = await prisma.rezept.findUnique({ where: { id: rezeptId } });
-    if (!rezept || rezept.familieId !== person.familieId) return { ok: false, fehler: "Rezept nicht gefunden." };
+    if (!rezept) return { ok: false, fehler: "Rezept nicht gefunden." };
     const ergebnis = await schreibeRezeptUm(
       { name: rezept.name, zutaten: rezept.zutaten, zubereitung: rezept.zubereitung ?? "" },
       anweisung
@@ -297,9 +282,7 @@ export async function schreibeRezeptUmVorschau(
 // Verwendungen werden beim Löschen automatisch mitentfernt (ihre Einkaufslisten-Herkunfts-
 // Verknüpfung kaskadiert ohnehin schon, siehe EssensplanHerkunft/ExtraMahlzeitHerkunft).
 export async function deleteRezept(id: string) {
-  const person = await requireParent();
-  const rezept = await prisma.rezept.findUnique({ where: { id } });
-  if (!rezept || rezept.familieId !== person.familieId) return;
+  await requireParent();
   const heute = new Date(new Date().toDateString());
   const [naechsterEintrag, naechsteExtra] = await Promise.all([
     prisma.essensplanEintrag.findFirst({ where: { rezeptId: id, tag: { gte: heute } }, orderBy: { tag: "asc" } }),
@@ -325,14 +308,12 @@ export async function deleteRezept(id: string) {
 // (nie/am längsten her zuerst, Fragenkatalog Bereich G) und ohne die für diese
 // Woche ausgeblendeten Rezepte (Fahrplan §3, Batch 5).
 export async function listRezepteFuerWoche(wocheStartIso: string) {
-  const person = await requirePerson();
   const wocheStart = new Date(wocheStartIso);
   const [rezepte, ausblendungen] = await Promise.all([
     prisma.rezept.findMany({
-      where: { familieId: person.familieId },
       include: { planEintraege: { where: { tag: { lt: new Date() } }, orderBy: { tag: "desc" }, take: 1 } },
     }),
-    prisma.rezeptAusblendung.findMany({ where: { wocheStart, rezept: { familieId: person.familieId } } }),
+    prisma.rezeptAusblendung.findMany({ where: { wocheStart } }),
   ]);
   const ausgeblendeteIds = new Set(ausblendungen.map((a) => a.rezeptId));
   return rezepte
@@ -342,19 +323,14 @@ export async function listRezepteFuerWoche(wocheStartIso: string) {
 }
 
 export async function listAusgeblendeteFuerWoche(wocheStartIso: string) {
-  const person = await requireParent();
+  await requireParent();
   const wocheStart = new Date(wocheStartIso);
-  const ausblendungen = await prisma.rezeptAusblendung.findMany({
-    where: { wocheStart, rezept: { familieId: person.familieId } },
-    include: { rezept: true },
-  });
+  const ausblendungen = await prisma.rezeptAusblendung.findMany({ where: { wocheStart }, include: { rezept: true } });
   return ausblendungen.map((a) => ({ rezeptId: a.rezeptId, name: a.rezept.name }));
 }
 
 export async function blendeRezeptAus(rezeptId: string, wocheStartIso: string) {
-  const person = await requireParent();
-  const rezept = await prisma.rezept.findUnique({ where: { id: rezeptId } });
-  if (!rezept || rezept.familieId !== person.familieId) return;
+  await requireParent();
   const wocheStart = new Date(wocheStartIso);
   await prisma.rezeptAusblendung.upsert({
     where: { rezeptId_wocheStart: { rezeptId, wocheStart } },
@@ -365,22 +341,18 @@ export async function blendeRezeptAus(rezeptId: string, wocheStartIso: string) {
 }
 
 export async function zeigeRezeptWiederAn(rezeptId: string, wocheStartIso: string) {
-  const person = await requireParent();
-  const rezept = await prisma.rezept.findUnique({ where: { id: rezeptId } });
-  if (!rezept || rezept.familieId !== person.familieId) return;
+  await requireParent();
   const wocheStart = new Date(wocheStartIso);
   await prisma.rezeptAusblendung.deleteMany({ where: { rezeptId, wocheStart } });
   revalidatePath("/essensplan");
 }
 
 export async function listAlleFamilienmitglieder() {
-  const person = await requirePerson();
-  return prisma.person.findMany({ where: { aktiv: true, familieId: person.familieId }, orderBy: { reihenfolge: "asc" } });
+  return prisma.person.findMany({ where: { aktiv: true }, orderBy: { reihenfolge: "asc" } });
 }
 
 // 3-Wochen-Vorschau: diese/nächste/übernächste Woche (offsetWochen 0-2, Fahrplan §3).
 export async function getWochenplan(offsetWochen = 0) {
-  const person = await requirePerson();
   const basis = getSamstagWocheStart(new Date());
   const wocheStart = new Date(basis);
   wocheStart.setUTCDate(wocheStart.getUTCDate() + offsetWochen * 7);
@@ -388,7 +360,7 @@ export async function getWochenplan(offsetWochen = 0) {
   wocheEnde.setUTCDate(wocheEnde.getUTCDate() + 6);
 
   const eintraege = await prisma.essensplanEintrag.findMany({
-    where: { wocheStart, familieId: person.familieId },
+    where: { wocheStart },
     include: { rezept: true, _count: { select: { herkuenfte: true } } },
   });
 
@@ -425,15 +397,15 @@ export async function getWochenplan(offsetWochen = 0) {
 }
 
 export async function setTag(wocheStartIso: string, tagIso: string, rezeptId: string) {
-  const person = await requireParent();
+  await requireParent();
   const wocheStart = new Date(wocheStartIso);
   const tag = new Date(tagIso);
-  const bestehend = await prisma.essensplanEintrag.findFirst({ where: { wocheStart, tag, familieId: person.familieId } });
+  const bestehend = await prisma.essensplanEintrag.findFirst({ where: { wocheStart, tag } });
   if (bestehend) {
     if (bestehend.gelockt) throw new Error("Diese Woche ist gesperrt. Erst entsperren.");
     await prisma.essensplanEintrag.update({ where: { id: bestehend.id }, data: { rezeptId } });
   } else {
-    await prisma.essensplanEintrag.create({ data: { wocheStart, tag, rezeptId, familieId: person.familieId } });
+    await prisma.essensplanEintrag.create({ data: { wocheStart, tag, rezeptId } });
   }
   revalidatePath("/essensplan");
 }
@@ -445,10 +417,10 @@ export async function setTag(wocheStartIso: string, tagIso: string, rezeptId: st
 // keine essensplanHerkuenfte mehr an diesem Eintrag hängen (die werden beim Entsperren bereits
 // vollständig aufgelöst), ein einfaches Löschen des Eintrags reicht daher aus.
 export async function entferneTag(wocheStartIso: string, tagIso: string) {
-  const person = await requireParent();
+  await requireParent();
   const wocheStart = new Date(wocheStartIso);
   const tag = new Date(tagIso);
-  const bestehend = await prisma.essensplanEintrag.findFirst({ where: { wocheStart, tag, familieId: person.familieId } });
+  const bestehend = await prisma.essensplanEintrag.findFirst({ where: { wocheStart, tag } });
   if (!bestehend) return;
   if (bestehend.gelockt) throw new Error("Diese Woche ist gesperrt. Erst entsperren.");
   await prisma.essensplanHerkunft.deleteMany({ where: { eintragId: bestehend.id } });
@@ -459,9 +431,7 @@ export async function entferneTag(wocheStartIso: string, tagIso: string) {
 // Sperrt einen Tag manuell — folgenlos, da noch keine Zutaten übernommen wurden
 // (sonst wäre der Tag durch fuegeZutatenDesTagsHinzu ohnehin schon gesperrt).
 export async function sperren(eintragId: string) {
-  const person = await requireParent();
-  const eintrag = await prisma.essensplanEintrag.findUnique({ where: { id: eintragId } });
-  if (!eintrag || eintrag.familieId !== person.familieId) return;
+  await requireParent();
   await prisma.essensplanEintrag.update({ where: { id: eintragId }, data: { gelockt: true } });
   revalidatePath("/essensplan");
 }
@@ -479,9 +449,9 @@ async function berechneFaktor(personIds: string[], extraPortionen: number, porti
 }
 
 export async function setEsser(eintragId: string, personIds: string[]) {
-  const person = await requireParent();
+  await requireParent();
   const eintrag = await prisma.essensplanEintrag.findUnique({ where: { id: eintragId }, include: { rezept: true } });
-  if (!eintrag || eintrag.familieId !== person.familieId) return;
+  if (!eintrag) return;
   const faktor = await berechneFaktor(personIds, eintrag.extraPortionen, eintrag.rezept.portionenBasis);
   await prisma.essensplanEintrag.update({ where: { id: eintragId }, data: { esserIds: personIds, esserFaktor: faktor } });
   revalidatePath("/essensplan");
@@ -490,9 +460,9 @@ export async function setEsser(eintragId: string, personIds: string[]) {
 // Extra-Portionen für spontane Gäste an einem Tag (Fix-Batch 33 Nachtrag, Florians Wunsch)
 // — addiert sich zum gewichteten Esser-Total, bevor durch die Rezept-Portionsbasis geteilt wird.
 export async function setExtraPortionen(eintragId: string, extraPortionen: number) {
-  const person = await requireParent();
+  await requireParent();
   const eintrag = await prisma.essensplanEintrag.findUnique({ where: { id: eintragId }, include: { rezept: true } });
-  if (!eintrag || eintrag.familieId !== person.familieId) return;
+  if (!eintrag) return;
   const wert = Number.isFinite(extraPortionen) && extraPortionen >= 0 ? extraPortionen : 0;
   const faktor = await berechneFaktor(eintrag.esserIds, wert, eintrag.rezept.portionenBasis);
   await prisma.essensplanEintrag.update({ where: { id: eintragId }, data: { extraPortionen: wert, esserFaktor: faktor } });
@@ -506,9 +476,9 @@ export async function setExtraPortionen(eintragId: string, extraPortionen: numbe
 // der Hebel gehört nur zur unabhängigen Extra-Rezept-Funktion, siehe pruefeZutatenFuerRezept
 // unten). Sperrt den Tag automatisch, da jetzt Mengen auf der Einkaufsliste davon abhängen.
 export async function fuegeZutatenDesTagsHinzu(eintragId: string) {
-  const person = await requireParent();
+  await requireParent();
   const eintrag = await prisma.essensplanEintrag.findUnique({ where: { id: eintragId }, include: { rezept: true } });
-  if (!eintrag || eintrag.familieId !== person.familieId) return;
+  if (!eintrag) return;
   const zeilen = eintrag.rezept.zutaten
     .split("\n")
     .map((z) => z.trim())
@@ -516,7 +486,7 @@ export async function fuegeZutatenDesTagsHinzu(eintragId: string) {
     .map((z) => skaliereZeile(parseZutatZeile(z), eintrag.esserFaktor || 1));
 
   for (const zeile of zeilen) {
-    const bestehender = await findeOffenenUnbestaetigtenArtikel(zeile.name, undefined, person.familieId);
+    const bestehender = await findeOffenenUnbestaetigtenArtikel(zeile.name);
     let artikelId: string;
     if (bestehender) {
       await prisma.einkaufsArtikel.update({
@@ -527,7 +497,7 @@ export async function fuegeZutatenDesTagsHinzu(eintragId: string) {
     } else {
       const kategorieId = await autoKategorieId(zeile.name);
       const neu = await prisma.einkaufsArtikel.create({
-        data: { familieId: person.familieId, name: zeile.name, menge: zeile.menge, kategorieId: kategorieId || null, quelle: "essensplan", bestaetigt: false },
+        data: { name: zeile.name, menge: zeile.menge, kategorieId: kategorieId || null, quelle: "essensplan", bestaetigt: false },
       });
       artikelId = neu.id;
     }
@@ -548,11 +518,9 @@ export async function fuegeZutatenDesTagsHinzu(eintragId: string) {
 // geplantem Gericht auf (bereits gesperrte Tage wurden schon hinzugefügt, sonst würden
 // ihre Zutaten doppelt gezählt).
 export async function fuegeZutatenDerWocheHinzu(wocheStartIso: string) {
-  const person = await requireParent();
+  await requireParent();
   const wocheStart = new Date(wocheStartIso);
-  const eintraege = await prisma.essensplanEintrag.findMany({
-    where: { wocheStart, gelockt: false, familieId: person.familieId },
-  });
+  const eintraege = await prisma.essensplanEintrag.findMany({ where: { wocheStart, gelockt: false } });
   for (const e of eintraege) {
     await fuegeZutatenDesTagsHinzu(e.id);
   }
@@ -563,9 +531,9 @@ export async function fuegeZutatenDerWocheHinzu(wocheStartIso: string) {
 // weil an dem Tag gegrillt wird. faktor bezieht sich direkt auf die im Rezept geschriebene
 // Menge (1 = wie geschrieben, 2 = doppelte Menge), unabhängig von der Esser-Auswahl.
 export async function pruefeZutatenFuerRezept(rezeptId: string, faktor = 1) {
-  const person = await requireParent();
+  await requireParent();
   const rezept = await prisma.rezept.findUnique({ where: { id: rezeptId } });
-  if (!rezept || rezept.familieId !== person.familieId) return [];
+  if (!rezept) return [];
   const zeilen = rezept.zutaten.split("\n").map((z) => z.trim()).filter(Boolean);
   return zeilen.map((z) => skaliereZeile(parseZutatZeile(z), faktor || 1));
 }
@@ -577,11 +545,11 @@ export async function pruefeZutatenFuerRezept(rezeptId: string, faktor = 1) {
 // Zusatzmahlzeiten, damit z.B. "eine Prise Salz" (die man ohnehin meist schon hat) vor dem
 // Einkauf nochmal bestätigt oder abgelehnt werden kann.
 export async function uebernehmeZusaetzlicheZutaten(rezeptId: string, zeilen: { name: string; menge?: string }[], faktorLabel: string) {
-  const person = await requireParent();
+  await requireParent();
   const rezept = await prisma.rezept.findUnique({ where: { id: rezeptId } });
-  if (!rezept || rezept.familieId !== person.familieId) return;
+  if (!rezept) return;
   for (const zeile of zeilen) {
-    const bestehender = await findeOffenenUnbestaetigtenArtikel(zeile.name, undefined, person.familieId);
+    const bestehender = await findeOffenenUnbestaetigtenArtikel(zeile.name);
     let artikelId: string;
     if (bestehender) {
       await prisma.einkaufsArtikel.update({
@@ -592,7 +560,7 @@ export async function uebernehmeZusaetzlicheZutaten(rezeptId: string, zeilen: { 
     } else {
       const kategorieId = await autoKategorieId(zeile.name);
       const neu = await prisma.einkaufsArtikel.create({
-        data: { familieId: person.familieId, name: zeile.name, menge: zeile.menge, kategorieId: kategorieId || null, quelle: "essensplan", bestaetigt: false },
+        data: { name: zeile.name, menge: zeile.menge, kategorieId: kategorieId || null, quelle: "essensplan", bestaetigt: false },
       });
       artikelId = neu.id;
     }
@@ -608,10 +576,9 @@ export async function uebernehmeZusaetzlicheZutaten(rezeptId: string, zeilen: { 
 // Hauptgericht (z.B. Frühstück, ein zusätzliches warmes Essen, ein Mittags-Snack) — bewusst
 // beliebig viele pro Tag, ganz ohne die Sperr-/Herkunfts-Logik des Hauptgerichts zu berühren.
 export async function listExtraMahlzeitenFuerWoche(wocheStartIso: string) {
-  const person = await requirePerson();
   const wocheStart = new Date(wocheStartIso);
   const eintraege = await prisma.extraMahlzeit.findMany({
-    where: { wocheStart, familieId: person.familieId },
+    where: { wocheStart },
     include: { rezept: true, _count: { select: { herkuenfte: true } } },
     orderBy: { createdAt: "asc" },
   });
@@ -632,11 +599,10 @@ export async function listExtraMahlzeitenFuerWoche(wocheStartIso: string) {
 }
 
 export async function fuegeExtraMahlzeitHinzu(wocheStartIso: string, tagIso: string, bezeichnung: string, rezeptId: string, faktor: number) {
-  const person = await requireParent();
+  await requireParent();
   if (!bezeichnung.trim() || !rezeptId) return;
   await prisma.extraMahlzeit.create({
     data: {
-      familieId: person.familieId,
       wocheStart: new Date(wocheStartIso),
       tag: new Date(tagIso),
       bezeichnung: bezeichnung.trim(),
@@ -652,9 +618,9 @@ export async function fuegeExtraMahlzeitHinzu(wocheStartIso: string, tagIso: str
 // Mengen als Karteileiche stehen. Erst "entsperreExtraMahlzeit" (mit Entfernen/Behalten-
 // Abfrage) auflösen, danach löschen.
 export async function entferneExtraMahlzeit(id: string) {
-  const person = await requireParent();
+  await requireParent();
   const eintrag = await prisma.extraMahlzeit.findUnique({ where: { id } });
-  if (!eintrag || eintrag.familieId !== person.familieId) return;
+  if (!eintrag) return;
   if (eintrag.gelockt) throw new Error("Diese Zusatzmahlzeit ist gesperrt. Erst entsperren.");
   await prisma.extraMahlzeit.delete({ where: { id } }).catch(() => {});
   revalidatePath("/essensplan");
@@ -674,9 +640,9 @@ export async function entferneExtraMahlzeit(id: string) {
 // Artikel — vorher gingen Zusatzmahlzeit-Zutaten ohne jede Vorprüfung direkt auf die Liste,
 // selbst Dinge wie "eine Prise Salz", die man ohnehin meist schon zu Hause hat.
 export async function fuegeZutatenFuerExtraMahlzeitHinzu(id: string) {
-  const person = await requireParent();
+  await requireParent();
   const eintrag = await prisma.extraMahlzeit.findUnique({ where: { id }, include: { rezept: true } });
-  if (!eintrag || eintrag.familieId !== person.familieId || eintrag.gelockt) return;
+  if (!eintrag || eintrag.gelockt) return;
   const zeilen = eintrag.rezept.zutaten
     .split("\n")
     .map((z) => z.trim())
@@ -684,7 +650,7 @@ export async function fuegeZutatenFuerExtraMahlzeitHinzu(id: string) {
     .map((z) => skaliereZeile(parseZutatZeile(z), eintrag.faktor || 1));
 
   for (const zeile of zeilen) {
-    const bestehender = await findeOffenenUnbestaetigtenArtikel(zeile.name, undefined, person.familieId);
+    const bestehender = await findeOffenenUnbestaetigtenArtikel(zeile.name);
     let artikelId: string;
     if (bestehender) {
       await prisma.einkaufsArtikel.update({
@@ -695,7 +661,7 @@ export async function fuegeZutatenFuerExtraMahlzeitHinzu(id: string) {
     } else {
       const kategorieId = await autoKategorieId(zeile.name);
       const neu = await prisma.einkaufsArtikel.create({
-        data: { familieId: person.familieId, name: zeile.name, menge: zeile.menge, kategorieId: kategorieId || null, quelle: "essensplan", bestaetigt: false },
+        data: { name: zeile.name, menge: zeile.menge, kategorieId: kategorieId || null, quelle: "essensplan", bestaetigt: false },
       });
       artikelId = neu.id;
     }
@@ -713,9 +679,7 @@ export async function fuegeZutatenFuerExtraMahlzeitHinzu(id: string) {
 // Prüft vor dem Entsperren, ob für diese Zusatzmahlzeit schon Zutaten übernommen wurden —
 // analog pruefeGelocktenTagWechsel beim Hauptgericht.
 export async function pruefeGelocktenExtraMahlzeitWechsel(extraMahlzeitId: string) {
-  const person = await requireParent();
-  const extraMahlzeit = await prisma.extraMahlzeit.findUnique({ where: { id: extraMahlzeitId } });
-  if (!extraMahlzeit || extraMahlzeit.familieId !== person.familieId) return [];
+  await requireParent();
   const herkuenfte = await prisma.extraMahlzeitHerkunft.findMany({ where: { extraMahlzeitId }, include: { artikel: true } });
   return herkuenfte.map((h) => ({ artikelId: h.artikelId, artikelName: h.artikel.name, menge: h.menge }));
 }
@@ -752,9 +716,7 @@ async function berechneVerbleibendeMenge(
 // Entsperrt eine Zusatzmahlzeit — dieselbe Entfernen/Behalten-Logik wie beim Hauptgericht
 // (siehe wendeEntscheidungenAn), nur auf ExtraMahlzeitHerkunft statt EssensplanHerkunft.
 export async function entsperreExtraMahlzeit(extraMahlzeitId: string, entscheidungen: { artikelId: string; aktion: "entfernen" | "behalten" }[]) {
-  const person = await requireParent();
-  const extraMahlzeit = await prisma.extraMahlzeit.findUnique({ where: { id: extraMahlzeitId } });
-  if (!extraMahlzeit || extraMahlzeit.familieId !== person.familieId) return;
+  await requireParent();
   for (const e of entscheidungen) {
     if (e.aktion === "entfernen") {
       const neueMenge = await berechneVerbleibendeMenge(e.artikelId, { extraMahlzeitId });
@@ -777,9 +739,7 @@ export async function entsperreExtraMahlzeit(extraMahlzeitId: string, entscheidu
 // Prüft vor einer Änderung/Entsperrung eines gesperrten Tages, ob dafür schon Zutaten auf
 // die Einkaufsliste übertragen wurden — nur dann muss überhaupt gefragt werden.
 export async function pruefeGelocktenTagWechsel(eintragId: string) {
-  const person = await requireParent();
-  const eintrag = await prisma.essensplanEintrag.findUnique({ where: { id: eintragId } });
-  if (!eintrag || eintrag.familieId !== person.familieId) return [];
+  await requireParent();
   const herkuenfte = await prisma.essensplanHerkunft.findMany({ where: { eintragId }, include: { artikel: true } });
   return herkuenfte.map((h) => ({ artikelId: h.artikelId, artikelName: h.artikel.name, menge: h.menge }));
 }
@@ -814,9 +774,7 @@ async function wendeEntscheidungenAn(eintragId: string, entscheidungen: { artike
 // Jetzt: Dropdown ist gesperrt, solange der Tag gesperrt ist — erst entsperren (mit
 // derselben Entfernen/Behalten-Abfrage wie zuvor), dann normal per Dropdown ändern).
 export async function entsperren(eintragId: string, entscheidungen: { artikelId: string; aktion: "entfernen" | "behalten" }[]) {
-  const person = await requireParent();
-  const eintrag = await prisma.essensplanEintrag.findUnique({ where: { id: eintragId } });
-  if (!eintrag || eintrag.familieId !== person.familieId) return;
+  await requireParent();
   await wendeEntscheidungenAn(eintragId, entscheidungen);
   await prisma.essensplanEintrag.update({ where: { id: eintragId }, data: { gelockt: false } });
   revalidatePath("/essensplan");

@@ -18,10 +18,9 @@ import { Icon } from "@/lib/uiIcons";
 // selbst bleibt laut Fix-Batch 103/104 ausdrücklich IMMER hell, unabhängig vom Familientisch-
 // Theme, sonst wird sie bei aktivem Dunkelmodus teils unlesbar. Bewusst wieder zurück auf
 // feste helle Farben statt Theme-Variablen — hier absichtlich, keine Nachlässigkeit.
-// Fix-Batch 137 (Multi-Tenant, Florians Wunsch): die URL war bisher hier fest hinterlegt und
-// damit fix für ALLE Familien sichtbar — jetzt pro Familie über Familie.thgUrl einstellbar
-// (siehe einstellungen/actions.ts). Ohne gesetzte URL erscheint der Button gar nicht erst.
-export default function ThgVollbild({ compact, url }: { compact?: boolean; url: string | null }) {
+const THG_URL = "https://app.thg-lu.de/";
+
+export default function ThgVollbild({ compact }: { compact?: boolean }) {
   const [offen, setOffen] = useState(false);
   const [headerHoehe, setHeaderHoehe] = useState(64);
 
@@ -30,8 +29,6 @@ export default function ThgVollbild({ compact, url }: { compact?: boolean; url: 
     const header = document.querySelector("header");
     if (header) setHeaderHoehe(header.getBoundingClientRect().height);
   }, [offen]);
-
-  if (!url) return null;
 
   return (
     <>
@@ -57,7 +54,7 @@ export default function ThgVollbild({ compact, url }: { compact?: boolean; url: 
               <Icon id="close" /> Schließen
             </button>
           </div>
-          <iframe src={url} title="THG-App" style={{ flex: 1, width: "100%", border: 0 }} />
+          <iframe src={THG_URL} title="THG-App" style={{ flex: 1, width: "100%", border: 0 }} />
         </div>
       )}
     </>

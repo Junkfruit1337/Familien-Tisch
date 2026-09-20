@@ -67,7 +67,6 @@ export default async function SchulePage() {
     <SchuleClient
       istEltern={!!istEltern}
       eigeneId={person!.id}
-      thgUrl={person!.familie?.thgUrl ?? null}
       kinder={kinderDaten}
       schulEintraege={schulEintraege.map((s) => ({
         id: s.id,

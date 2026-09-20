@@ -35,11 +35,9 @@ export async function getHistorie(entityTyp: EntityTyp, entityId: string) {
 // Für Sammel-Ansichten wie "Dienste-Historie" im Dienstplan-Tab (Fix-Batch 35) — im
 // Unterschied zu getHistorie() NICHT auf eine einzelne entityId beschränkt, sondern alle
 // Einträge eines Typs (z.B. alle DIENST_TAUSCH-Änderungen, egal welcher Tausch/welche Woche).
-// familieId wird über die Person gefiltert (AenderungsLog selbst hat keine eigene familieId-
-// Spalte — die Änderung "gehört" zur Familie der Person, die sie vorgenommen hat).
-export async function getHistorieFuerTyp(entityTyp: EntityTyp, familieId: string | null, limit = 30) {
+export async function getHistorieFuerTyp(entityTyp: EntityTyp, limit = 30) {
   return prisma.aenderungsLog.findMany({
-    where: { entityTyp, geaendertVon: { familieId } },
+    where: { entityTyp },
     include: { geaendertVon: true },
     orderBy: { zeitpunkt: "desc" },
     take: limit,

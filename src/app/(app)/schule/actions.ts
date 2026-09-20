@@ -1,7 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { requirePerson, requireParent, kiErlaubt, KI_DEAKTIVIERT_FEHLER } from "@/lib/auth";
+import { requirePerson, requireParent } from "@/lib/auth";
 import { logAenderung } from "@/lib/history";
 import { revalidatePath } from "next/cache";
 import { sendePushAnEltern, sendePushAnPerson } from "@/lib/push";
@@ -22,8 +22,7 @@ const ART_KURZ: Record<string, string> = {
 };
 
 export async function listKinder() {
-  const person = await requirePerson();
-  return prisma.person.findMany({ where: { rolle: "KIND", familieId: person.familieId }, orderBy: { reihenfolge: "asc" } });
+  return prisma.person.findMany({ where: { rolle: "KIND" }, orderBy: { reihenfolge: "asc" } });
 }
 
 // Aktuelles Schuljahr nach der bundesweit einheitlichen Konvention (1. August – 31. Juli,
@@ -45,8 +44,6 @@ function aktuellesSchuljahrStart(datum: Date = new Date()): Date {
 export async function setSchulProfil(kindId: string, data: { bundesland?: string; klassenstufe?: number; klasse?: string }) {
   const person = await requirePerson();
   if (person.rolle !== "ELTERN" && person.id !== kindId) throw new Error("Nicht erlaubt.");
-  const kind = await prisma.person.findUnique({ where: { id: kindId } });
-  if (!kind || kind.familieId !== person.familieId) throw new Error("Nicht erlaubt.");
   await prisma.person.update({
     where: { id: kindId },
     data: {
@@ -62,9 +59,8 @@ export async function setSchulProfil(kindId: string, data: { bundesland?: string
 // Ferien-Countdown fürs Schule-Tab (Fix-Batch 27) — null, wenn das Kind noch kein
 // Bundesland gewählt hat.
 export async function listFerienFuerKind(kindId: string) {
-  const person = await requirePerson();
   const kind = await prisma.person.findUnique({ where: { id: kindId } });
-  if (!kind || kind.familieId !== person.familieId || !kind.bundesland) return null;
+  if (!kind?.bundesland) return null;
   const schuljahr = aktuellesSchuljahr();
   const eintraege = await prisma.schulferien.findMany({
     where: { bundesland: kind.bundesland, schuljahr },
@@ -88,10 +84,9 @@ export async function erkenneNoteAusText(
   text: string,
   kindId: string
 ): Promise<{ ok: true; note: ErkannteNote } | { ok: false; fehler: string }> {
-  const person = await requirePerson();
-  if (!kiErlaubt(person)) return { ok: false, fehler: KI_DEAKTIVIERT_FEHLER };
+  await requirePerson();
   try {
-    const faecher = await prisma.fach.findMany({ where: { kindId, familieId: person.familieId }, select: { id: true, name: true } });
+    const faecher = await prisma.fach.findMany({ where: { kindId }, select: { id: true, name: true } });
     const note = await erkenneNoteAusSprache(text, faecher);
     return { ok: true, note };
   } catch (err) {
@@ -102,18 +97,17 @@ export async function erkenneNoteAusText(
 }
 
 export async function listFaecher(kindId: string) {
-  const person = await requirePerson();
-  return prisma.fach.findMany({ where: { kindId, familieId: person.familieId }, orderBy: { name: "asc" } });
+  return prisma.fach.findMany({ where: { kindId }, orderBy: { name: "asc" } });
 }
 
 export async function addFach(kindId: string, name: string) {
   const person = await requirePerson();
   if (person.rolle !== "ELTERN" && person.id !== kindId) throw new Error("Nicht erlaubt.");
-  const bestehende = await prisma.fach.findMany({ where: { kindId, familieId: person.familieId } });
+  const bestehende = await prisma.fach.findMany({ where: { kindId } });
   if (bestehende.some((f) => f.name.trim().toLowerCase() === name.trim().toLowerCase())) {
     throw new Error(`„${name}" ist für dieses Kind schon angelegt.`);
   }
-  await prisma.fach.create({ data: { kindId, name: name.trim(), familieId: person.familieId } });
+  await prisma.fach.create({ data: { kindId, name: name.trim() } });
   revalidatePath("/schule");
   revalidatePath("/einstellungen");
 }
@@ -123,11 +117,11 @@ export async function addFach(kindId: string, name: string) {
 // nicht abdeckt. Gibt bei einem KI-Fehler bewusst "kein Duplikat" zurück, damit das Anlegen
 // eines Fachs nie an einem Spracherkennungs-Ausfall scheitert.
 export async function pruefeFachDuplikat(kindId: string, name: string) {
-  const person = await requirePerson();
-  const bestehende = await prisma.fach.findMany({ where: { kindId, familieId: person.familieId } });
+  await requirePerson();
+  const bestehende = await prisma.fach.findMany({ where: { kindId } });
   const exakt = bestehende.find((f) => f.name.trim().toLowerCase() === name.trim().toLowerCase());
   if (exakt) return { istVermutlichDuplikat: true, aehnlichesFach: exakt.name };
-  if (bestehende.length === 0 || !kiErlaubt(person)) return { istVermutlichDuplikat: false, aehnlichesFach: null };
+  if (bestehende.length === 0) return { istVermutlichDuplikat: false, aehnlichesFach: null };
   try {
     return await pruefeFachDuplikatKI(name, bestehende.map((f) => f.name));
   } catch {
@@ -139,7 +133,7 @@ export async function pruefeFachDuplikat(kindId: string, name: string) {
 export async function updateFach(id: string, name: string) {
   const person = await requirePerson();
   const fach = await prisma.fach.findUnique({ where: { id } });
-  if (!fach || fach.familieId !== person.familieId) throw new Error("Fach nicht gefunden.");
+  if (!fach) throw new Error("Fach nicht gefunden.");
   if (person.rolle !== "ELTERN" && person.id !== fach.kindId) throw new Error("Nicht erlaubt.");
   const bestehende = await prisma.fach.findMany({ where: { kindId: fach.kindId, id: { not: id } } });
   if (bestehende.some((f) => f.name.trim().toLowerCase() === name.trim().toLowerCase())) {
@@ -151,9 +145,7 @@ export async function updateFach(id: string, name: string) {
 }
 
 export async function deleteFach(id: string) {
-  const person = await requireParent();
-  const fach = await prisma.fach.findUnique({ where: { id } });
-  if (!fach || fach.familieId !== person.familieId) return;
+  await requireParent();
   try {
     await prisma.fach.delete({ where: { id } });
   } catch {
@@ -165,24 +157,18 @@ export async function deleteFach(id: string) {
 
 export async function listNoten(kindId?: string) {
   const person = await requirePerson();
-  const where =
-    person.rolle === "ELTERN"
-      ? kindId
-        ? { kindId, familieId: person.familieId }
-        : { familieId: person.familieId }
-      : { kindId: person.id, familieId: person.familieId };
+  const where = person.rolle === "ELTERN" ? (kindId ? { kindId } : {}) : { kindId: person.id };
   return prisma.note.findMany({ where, include: { fach: true, kind: true }, orderBy: { datum: "desc" } });
 }
 
 export async function pruefeNotenDuplikat(params: { fachId: string; art: string; datum: string; ausschlussId?: string }) {
-  const person = await requirePerson();
+  await requirePerson();
   const start = new Date(params.datum);
   start.setHours(0, 0, 0, 0);
   const ende = new Date(start);
   ende.setDate(ende.getDate() + 1);
   const treffer = await prisma.note.findFirst({
     where: {
-      familieId: person.familieId,
       fachId: params.fachId,
       art: params.art as any,
       datum: { gte: start, lt: ende },
@@ -210,7 +196,7 @@ export async function einreichenNote(data: {
   if (!data.fotoBase64) throw new Error("Bitte ein Foto vom Notenzettel mit der Kamera aufnehmen.");
   const istEltern = person.rolle === "ELTERN";
   const fach = await prisma.fach.findUnique({ where: { id: data.fachId } });
-  if (!fach || fach.familieId !== person.familieId) throw new Error("Fach nicht gefunden.");
+  if (!fach) throw new Error("Fach nicht gefunden.");
   const kindId = istEltern ? fach.kindId : person.id;
   if (!istEltern && fach.kindId !== person.id) throw new Error("Das ist nicht dein Fach.");
 
@@ -221,7 +207,6 @@ export async function einreichenNote(data: {
   const status = istEltern ? "GENEHMIGT" : "OFFEN";
   const note = await prisma.note.create({
     data: {
-      familieId: person.familieId,
       kindId,
       fachId: data.fachId,
       art: data.art as any,
@@ -243,7 +228,6 @@ export async function einreichenNote(data: {
     if (betrag > 0) {
       await prisma.taschengeldTransaktion.create({
         data: {
-          familieId: person.familieId,
           kindId,
           betrag,
           typ: "GUTSCHRIFT",
@@ -262,7 +246,7 @@ export async function einreichenNote(data: {
       title: "Neue Note wartet auf Freigabe",
       body: `${kind?.name ?? "Ein Kind"} — ${fach.name}: Note ${note.note}`,
       url: "/schule",
-    }, person.familieId);
+    });
   }
 
   revalidatePath("/schule");
@@ -277,7 +261,7 @@ export async function korrigiereNote(
 ) {
   const person = await requirePerson();
   const bestehend = await prisma.note.findUnique({ where: { id } });
-  if (!bestehend || bestehend.familieId !== person.familieId) throw new Error("Note nicht gefunden.");
+  if (!bestehend) throw new Error("Note nicht gefunden.");
   if (person.rolle !== "ELTERN" && bestehend.kindId !== person.id) throw new Error("Nicht erlaubt.");
   if (bestehend.status !== "OFFEN") throw new Error("Nur offene (noch nicht entschiedene) Noten können korrigiert werden.");
 
@@ -317,7 +301,7 @@ export async function erneutEinreichen(
 ) {
   const person = await requirePerson();
   const bestehend = await prisma.note.findUnique({ where: { id } });
-  if (!bestehend || bestehend.familieId !== person.familieId) throw new Error("Note nicht gefunden.");
+  if (!bestehend) throw new Error("Note nicht gefunden.");
   if (bestehend.kindId !== person.id) throw new Error("Das ist nicht deine Note.");
   if (bestehend.status !== "ABGELEHNT") throw new Error("Nur abgelehnte Noten können erneut eingereicht werden.");
 
@@ -338,8 +322,6 @@ export async function erneutEinreichen(
 
 export async function entscheideNote(id: string, genehmigt: boolean) {
   const person = await requireParent();
-  const bestehend = await prisma.note.findUnique({ where: { id } });
-  if (!bestehend || bestehend.familieId !== person.familieId) return;
   const note = await prisma.note.update({
     where: { id },
     data: { status: genehmigt ? "GENEHMIGT" : "ABGELEHNT" },
@@ -358,7 +340,6 @@ export async function entscheideNote(id: string, genehmigt: boolean) {
     if (betrag > 0) {
       await prisma.taschengeldTransaktion.create({
         data: {
-          familieId: person.familieId,
           kindId: note.kindId,
           betrag,
           typ: "GUTSCHRIFT",
@@ -384,7 +365,7 @@ export async function entscheideNote(id: string, genehmigt: boolean) {
 export async function loescheNote(id: string) {
   const person = await requirePerson();
   const bestehend = await prisma.note.findUnique({ where: { id } });
-  if (!bestehend || bestehend.familieId !== person.familieId) throw new Error("Note nicht gefunden.");
+  if (!bestehend) throw new Error("Note nicht gefunden.");
   if (person.rolle !== "ELTERN") {
     if (bestehend.kindId !== person.id) throw new Error("Nicht erlaubt.");
     if (bestehend.status !== "OFFEN") throw new Error("Nur eine noch nicht entschiedene Note kannst du selbst löschen.");
@@ -396,26 +377,22 @@ export async function loescheNote(id: string) {
 }
 
 export async function kontostand(kindId: string) {
-  const person = await requirePerson();
-  const transaktionen = await prisma.taschengeldTransaktion.findMany({ where: { kindId, familieId: person.familieId } });
+  const transaktionen = await prisma.taschengeldTransaktion.findMany({ where: { kindId } });
   return transaktionen.reduce((sum, t) => sum + (t.typ === "GUTSCHRIFT" ? t.betrag : -t.betrag), 0);
 }
 
 export async function listTaschengeld(kindId: string) {
-  const person = await requirePerson();
-  return prisma.taschengeldTransaktion.findMany({ where: { kindId, familieId: person.familieId }, orderBy: { createdAt: "desc" } });
+  return prisma.taschengeldTransaktion.findMany({ where: { kindId }, orderBy: { createdAt: "desc" } });
 }
 
 export async function auszahlen(kindId: string, betrag: number, grund?: string) {
   const person = await requireParent();
-  const kind = await prisma.person.findUnique({ where: { id: kindId } });
-  if (!kind || kind.familieId !== person.familieId) throw new Error("Kind nicht gefunden.");
   const stand = await kontostand(kindId);
   if (betrag > stand) {
     throw new Error(`Auszahlung (${betrag} €) übersteigt den Kontostand (${stand} €).`);
   }
   const t = await prisma.taschengeldTransaktion.create({
-    data: { familieId: person.familieId, kindId, betrag, typ: "AUSZAHLUNG", grund, erstelltVonId: person.id },
+    data: { kindId, betrag, typ: "AUSZAHLUNG", grund, erstelltVonId: person.id },
   });
   await logAenderung({ entityTyp: "TASCHENGELD", entityId: t.id, aktion: "auszahlung", neuerWert: `${betrag} €`, geaendertVonId: person.id });
   revalidatePath("/schule");
@@ -427,10 +404,8 @@ export async function manuelleGutschrift(kindId: string, betrag: number, grund: 
   const person = await requireParent();
   if (!(betrag > 0)) throw new Error("Bitte einen Betrag größer als 0 eingeben.");
   if (!grund.trim()) throw new Error("Bitte eine Notiz angeben, wofür das Geld ist.");
-  const kind = await prisma.person.findUnique({ where: { id: kindId } });
-  if (!kind || kind.familieId !== person.familieId) throw new Error("Kind nicht gefunden.");
   const t = await prisma.taschengeldTransaktion.create({
-    data: { familieId: person.familieId, kindId, betrag, typ: "GUTSCHRIFT", grund: grund.trim(), erstelltVonId: person.id },
+    data: { kindId, betrag, typ: "GUTSCHRIFT", grund: grund.trim(), erstelltVonId: person.id },
   });
   await logAenderung({
     entityTyp: "TASCHENGELD",
@@ -450,16 +425,13 @@ export async function setSparziel(kindId: string, bezeichnung: string, zielbetra
   await prisma.sparziel.upsert({
     where: { kindId },
     update: { bezeichnung, zielbetrag },
-    create: { kindId, bezeichnung, zielbetrag, familieId: person.familieId },
+    create: { kindId, bezeichnung, zielbetrag },
   });
   revalidatePath("/schule");
 }
 
 export async function getSparziel(kindId: string) {
-  const person = await requirePerson();
-  const ziel = await prisma.sparziel.findUnique({ where: { kindId } });
-  if (!ziel || ziel.familieId !== person.familieId) return null;
-  return ziel;
+  return prisma.sparziel.findUnique({ where: { kindId } });
 }
 
 // ---------- Notengewichtung (Frage 21) ----------
@@ -467,9 +439,9 @@ export async function getSparziel(kindId: string) {
 const NOTE_ARTEN = ["KLASSENARBEIT", "HAUSAUFGABEN_KONTROLLE", "EPOCHALNOTE"] as const;
 
 export async function listNotenGewichtung(kindId: string) {
-  const person = await requireParent();
-  const faecher = await prisma.fach.findMany({ where: { kindId, familieId: person.familieId }, orderBy: { name: "asc" } });
-  const gewichtungen = await prisma.notenGewichtung.findMany({ where: { kindId, familieId: person.familieId } });
+  await requireParent();
+  const faecher = await prisma.fach.findMany({ where: { kindId }, orderBy: { name: "asc" } });
+  const gewichtungen = await prisma.notenGewichtung.findMany({ where: { kindId } });
   const map = new Map(gewichtungen.map((g) => [`${g.fachId}_${g.art}`, g.gewichtung]));
   return faecher.map((f) => ({
     fachId: f.id,
@@ -491,13 +463,11 @@ async function wendeGewichtungRueckwirkendAn(kindId: string, fachId: string, art
 }
 
 export async function setNotenGewichtung(kindId: string, fachId: string, art: string, gewichtung: number) {
-  const person = await requireParent();
-  const fach = await prisma.fach.findUnique({ where: { id: fachId } });
-  if (!fach || fach.familieId !== person.familieId) return;
+  await requireParent();
   await prisma.notenGewichtung.upsert({
     where: { kindId_fachId_art: { kindId, fachId, art: art as any } },
     update: { gewichtung },
-    create: { kindId, fachId, art: art as any, gewichtung, familieId: person.familieId },
+    create: { kindId, fachId, art: art as any, gewichtung },
   });
   await wendeGewichtungRueckwirkendAn(kindId, fachId, art, gewichtung);
   revalidatePath("/einstellungen");
@@ -509,20 +479,13 @@ export async function setNotenGewichtung(kindId: string, fachId: string, art: st
 export async function listAnstehendeSchulEintraege() {
   const person = await requirePerson();
   const where =
-    person.rolle === "ELTERN"
-      ? { familieId: person.familieId, datum: { gte: new Date() } }
-      : { familieId: person.familieId, personId: person.id, datum: { gte: new Date() } };
+    person.rolle === "ELTERN" ? { datum: { gte: new Date() } } : { personId: person.id, datum: { gte: new Date() } };
   return prisma.schulEintrag.findMany({ where, include: { person: true, fach: true }, orderBy: { datum: "asc" }, take: 5 });
 }
 
 export async function listSchulEintraege(kindId?: string) {
   const person = await requirePerson();
-  const where =
-    person.rolle === "ELTERN"
-      ? kindId
-        ? { personId: kindId, familieId: person.familieId }
-        : { familieId: person.familieId }
-      : { personId: person.id, familieId: person.familieId };
+  const where = person.rolle === "ELTERN" ? (kindId ? { personId: kindId } : {}) : { personId: person.id };
   return prisma.schulEintrag.findMany({ where, include: { person: true, fach: true }, orderBy: { datum: "asc" } });
 }
 
@@ -533,13 +496,9 @@ export async function erkenneSchulEintragAusText(
   text: string,
   fachOptionen: { id: string; name: string }[]
 ): Promise<{ ok: true; eintrag: ErkannterSchulEintrag } | { ok: false; fehler: string }> {
-  const person = await requirePerson();
-  if (!kiErlaubt(person)) return { ok: false, fehler: KI_DEAKTIVIERT_FEHLER };
+  await requirePerson();
   try {
-    const personen = await prisma.person.findMany({
-      where: { rolle: "KIND", aktiv: true, familieId: person.familieId },
-      select: { id: true, name: true },
-    });
+    const personen = await prisma.person.findMany({ where: { rolle: "KIND", aktiv: true }, select: { id: true, name: true } });
     const eintrag = await erkenneSchulEintragAusSprache(text, fachOptionen, personen);
     return { ok: true, eintrag };
   } catch (err) {
@@ -569,7 +528,6 @@ export async function createSchulEintrag(data: { thema: string; fachName?: strin
         fachId = fach?.id ?? null;
       }
       return {
-        familieId: person.familieId,
         titel: data.thema,
         fachName: data.fachName || undefined,
         fachId,
@@ -589,7 +547,7 @@ export async function createSchulEintrag(data: { thema: string; fachName?: strin
 export async function updateSchulEintrag(id: string, data: { thema?: string; fachName?: string; art?: string; datum?: string }) {
   const person = await requirePerson();
   const bestehend = await prisma.schulEintrag.findUnique({ where: { id } });
-  if (!bestehend || bestehend.familieId !== person.familieId) throw new Error("Eintrag nicht gefunden.");
+  if (!bestehend) throw new Error("Eintrag nicht gefunden.");
   if (person.rolle !== "ELTERN" && bestehend.personId !== person.id) throw new Error("Nicht erlaubt.");
   let fachId: string | null | undefined = undefined;
   if (data.fachName !== undefined) {
@@ -614,7 +572,7 @@ export async function updateSchulEintrag(id: string, data: { thema?: string; fac
 export async function deleteSchulEintrag(id: string) {
   const person = await requirePerson();
   const bestehend = await prisma.schulEintrag.findUnique({ where: { id } });
-  if (!bestehend || bestehend.familieId !== person.familieId) return;
+  if (!bestehend) return;
   if (person.rolle !== "ELTERN" && bestehend.personId !== person.id) throw new Error("Nicht erlaubt.");
   await prisma.schulEintrag.delete({ where: { id } });
   revalidatePath("/schule");

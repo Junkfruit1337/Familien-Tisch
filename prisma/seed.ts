@@ -6,8 +6,6 @@ import { erkenneKategorie } from "../src/lib/kategorisierung";
 
 const prisma = new PrismaClient();
 
-const FLORIAN_FAMILIE_ID = "seed-familie-florian";
-
 const FAMILIE = [
   { name: "Flo", rolle: "ELTERN" as const, farbe: "#a97155" },
   { name: "Tugce", rolle: "ELTERN" as const, farbe: "#8a9a6e" },
@@ -24,47 +22,8 @@ const KATEGORIEN = [
   "Konserven", "Vorrat", "Getränke", "Drogerie", "Sonstiges",
 ];
 
-// Fix-Batch 132 (Multi-Tenant): jedes Modell, das eine familieId-Spalte bekommen hat — genutzt
-// für die einmalige, aber gefahrlos wiederholbare Nachrüstung aller Bestandsdaten (siehe unten).
-const FAMILIE_SKALIERTE_MODELLE = [
-  "person", "termin", "aufgabe", "einkaufsKategorie", "einkaufsArtikel", "einkaufsWunsch",
-  "vorschlagDismiss", "gelernteArtikelIcons", "saisonVorschlag", "gelernteArtikelKategorie",
-  "fach", "notenGewichtung", "note", "taschengeldTransaktion", "sparziel", "schulEintrag",
-  "dienstDefinition", "dienstZuweisung", "dienstTausch", "badZuweisung", "dauerhafteZuordnung",
-  "tagesroutine", "koerperpflegetag", "rezept", "essensplanEintrag", "extraMahlzeit",
-  "ticket", "hausproblem",
-] as const;
-
 async function main() {
   console.log("Seed: Standard-PIN für alle Login-Personen ist 0000 — bitte in den Einstellungen sofort ändern!");
-
-  // Fix-Batch 132 (Florians Wunsch: "eine App für alle Familien", mit der harten Vorgabe,
-  // dass dabei auf KEINEN FALL Bestandsdaten verloren gehen dürfen): legt Florians eigene
-  // Familie an (slug=null → bleibt auf der bisherigen Root-Login-URL) und weist ALLEN bereits
-  // existierenden Zeilen ohne familieId automatisch diese Familie zu. Reine Nachrüstung, löscht
-  // oder überschreibt nie etwas Bestehendes — bei jedem weiteren Deploy laufen die updateMany-
-  // Aufrufe einfach ins Leere, sobald keine Zeile mit familieId=null mehr übrig ist.
-  await prisma.familie.upsert({
-    where: { id: FLORIAN_FAMILIE_ID },
-    update: {},
-    create: { id: FLORIAN_FAMILIE_ID, name: "Familie", slug: null },
-  });
-
-  // Fix-Batch 137: die THG-URL stand bisher fest im Code (ThgVollbild.tsx), jetzt ist sie pro
-  // Familie einstellbar (Familie.thgUrl). Einmalige Übernahme des bisherigen festen Werts für
-  // Florians Familie — bewusst nur, wenn dort noch nichts gesetzt ist, damit eine spätere
-  // eigene Änderung über die Einstellungen hier nie wieder überschrieben wird.
-  const florianFamilie = await prisma.familie.findUnique({ where: { id: FLORIAN_FAMILIE_ID } });
-  if (florianFamilie && florianFamilie.thgUrl === null) {
-    await prisma.familie.update({ where: { id: FLORIAN_FAMILIE_ID }, data: { thgUrl: "https://app.thg-lu.de/" } });
-  }
-
-  for (const modell of FAMILIE_SKALIERTE_MODELLE) {
-    await (prisma as any)[modell].updateMany({
-      where: { familieId: null },
-      data: { familieId: FLORIAN_FAMILIE_ID },
-    });
-  }
 
   const standardPinHash = await bcrypt.hash("0000", 10);
 
@@ -72,10 +31,9 @@ async function main() {
     const f = FAMILIE[i];
     await prisma.person.upsert({
       where: { id: `seed-${f.name.toLowerCase()}` },
-      update: { familieId: FLORIAN_FAMILIE_ID },
+      update: {},
       create: {
         id: `seed-${f.name.toLowerCase()}`,
-        familieId: FLORIAN_FAMILIE_ID,
         name: f.name,
         rolle: f.rolle,
         farbe: f.farbe,
@@ -98,22 +56,18 @@ async function main() {
   }
 
   for (const d of DIENSTE_VORLAGE) {
-    const existing = await prisma.dienstDefinition.findFirst({
-      where: { familieId: FLORIAN_FAMILIE_ID, schichtNummer: d.schichtNummer, reihenfolge: d.reihenfolge },
-    });
+    const existing = await prisma.dienstDefinition.findFirst({ where: { schichtNummer: d.schichtNummer, reihenfolge: d.reihenfolge } });
     if (existing) {
       await prisma.dienstDefinition.update({ where: { id: existing.id }, data: { bezeichnung: d.bezeichnung, beschreibung: d.beschreibung } });
     } else {
-      await prisma.dienstDefinition.create({ data: { ...d, familieId: FLORIAN_FAMILIE_ID } });
+      await prisma.dienstDefinition.create({ data: d });
     }
   }
 
-  if ((await prisma.tagesroutine.count({ where: { familieId: FLORIAN_FAMILIE_ID } })) === 0) {
+  if ((await prisma.tagesroutine.count()) === 0) {
     for (const gruppe of TAGESROUTINEN_VORLAGE) {
       for (let i = 0; i < gruppe.texte.length; i++) {
-        await prisma.tagesroutine.create({
-          data: { familieId: FLORIAN_FAMILIE_ID, kategorie: gruppe.kategorie, reihenfolge: i, text: gruppe.texte[i] },
-        });
+        await prisma.tagesroutine.create({ data: { kategorie: gruppe.kategorie, reihenfolge: i, text: gruppe.texte[i] } });
       }
     }
   }
@@ -122,7 +76,7 @@ async function main() {
     await prisma.koerperpflegetag.upsert({
       where: { wochentag: Number(wochentag) },
       update: { text },
-      create: { familieId: FLORIAN_FAMILIE_ID, wochentag: Number(wochentag), text },
+      create: { wochentag: Number(wochentag), text },
     });
   }
 
@@ -130,7 +84,7 @@ async function main() {
     await prisma.einkaufsKategorie.upsert({
       where: { name: KATEGORIEN[i] },
       update: {},
-      create: { familieId: FLORIAN_FAMILIE_ID, name: KATEGORIEN[i], reihenfolge: i },
+      create: { name: KATEGORIEN[i], reihenfolge: i },
     });
   }
 
@@ -189,8 +143,7 @@ async function main() {
   }
 
   // Schulferien-Referenzdaten (Fix-Batch 27) — jedes Jahr per Deploy neu synchronisiert,
-  // sobald schulferienDaten.ts um ein weiteres Schuljahr ergänzt wird. Bewusst OHNE familieId:
-  // öffentliche Bundesland-Referenzdaten, nicht familienspezifisch.
+  // sobald schulferienDaten.ts um ein weiteres Schuljahr ergänzt wird.
   for (const f of SCHULFERIEN) {
     await prisma.schulferien.upsert({
       where: { bundesland_schuljahr_typ: { bundesland: f.bundesland, schuljahr: f.schuljahr, typ: f.typ } },

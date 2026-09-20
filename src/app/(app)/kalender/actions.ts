@@ -1,7 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { requirePerson, requireParent, kiErlaubt, KI_DEAKTIVIERT_FEHLER } from "@/lib/auth";
+import { requirePerson, requireParent } from "@/lib/auth";
 import { logAenderung } from "@/lib/history";
 import { erkenneTerminKategorie } from "@/lib/terminkategorisierung";
 import { erkenneTerminAusSprache, type ErkannterTermin } from "@/lib/spracheErkennung";
@@ -48,8 +48,8 @@ export async function listTermine() {
   const person = await requirePerson();
   const where =
     person.rolle === "ELTERN"
-      ? { familieId: person.familieId }
-      : { familieId: person.familieId, OR: [{ personId: person.id }, { personId: null }] };
+      ? {}
+      : { OR: [{ personId: person.id }, { personId: null }] };
   const rows = await prisma.termin.findMany({
     where,
     include: { person: true },
@@ -112,8 +112,7 @@ export async function listTermine() {
 }
 
 export async function listPersonenFuerFilter() {
-  const person = await requirePerson();
-  return prisma.person.findMany({ where: { aktiv: true, familieId: person.familieId }, orderBy: { reihenfolge: "asc" } });
+  return prisma.person.findMany({ where: { aktiv: true }, orderBy: { reihenfolge: "asc" } });
 }
 
 // Aufgaben mit Fälligkeitsdatum sollen automatisch im Kalender erscheinen.
@@ -121,8 +120,8 @@ export async function listAufgabenMitFaelligkeit() {
   const person = await requirePerson();
   const where =
     person.rolle === "ELTERN"
-      ? { familieId: person.familieId, faelligkeit: { not: null } }
-      : { familieId: person.familieId, faelligkeit: { not: null }, OR: [{ personId: person.id }, { personId: null }] };
+      ? { faelligkeit: { not: null } }
+      : { faelligkeit: { not: null }, OR: [{ personId: person.id }, { personId: null }] };
   return prisma.aufgabe.findMany({
     where,
     include: { person: true },
@@ -139,10 +138,8 @@ export async function listAufgabenMitFaelligkeit() {
 const GEBURTSTAG_FARBE = "#c99a3f";
 
 export async function listGeburtstageFuerKalender() {
-  const person = await requirePerson();
-  const personen = await prisma.person.findMany({
-    where: { aktiv: true, geburtsdatum: { not: null }, familieId: person.familieId },
-  });
+  await requirePerson();
+  const personen = await prisma.person.findMany({ where: { aktiv: true, geburtsdatum: { not: null } } });
   const heute = new Date();
   const eintraege: { id: string; titel: string; start: Date; personName: string; personFarbe: string }[] = [];
   for (const p of personen) {
@@ -169,13 +166,9 @@ export async function listGeburtstageFuerKalender() {
 export async function erkenneTerminAusText(
   text: string
 ): Promise<{ ok: true; termin: ErkannterTermin } | { ok: false; fehler: string }> {
-  const person = await requirePerson();
-  if (!kiErlaubt(person)) return { ok: false, fehler: KI_DEAKTIVIERT_FEHLER };
+  await requirePerson();
   try {
-    const personen = await prisma.person.findMany({
-      where: { aktiv: true, familieId: person.familieId },
-      select: { id: true, name: true },
-    });
+    const personen = await prisma.person.findMany({ where: { aktiv: true }, select: { id: true, name: true } });
     const termin = await erkenneTerminAusSprache(text, personen);
     return { ok: true, termin };
   } catch (err) {
@@ -191,7 +184,7 @@ export async function erkenneTerminAusText(
 // Ausflug auf den Tag einer Arbeit legt. Rein informativ (siehe Bestätigungsdialog im
 // Formular) — verhindert das Anlegen nicht, warnt nur vorher.
 export async function pruefeTerminKonflikt(datumIso: string, personIds: string[]): Promise<string[]> {
-  const person = await requirePerson();
+  await requirePerson();
   if (personIds.length === 0) return [];
   const tag = new Date(datumIso);
   const tagStart = new Date(tag.getFullYear(), tag.getMonth(), tag.getDate());
@@ -200,11 +193,11 @@ export async function pruefeTerminKonflikt(datumIso: string, personIds: string[]
 
   const [schulEintraege, termine] = await Promise.all([
     prisma.schulEintrag.findMany({
-      where: { familieId: person.familieId, personId: { in: personIds }, datum: { gte: tagStart, lt: tagEnde } },
+      where: { personId: { in: personIds }, datum: { gte: tagStart, lt: tagEnde } },
       include: { person: true },
     }),
     prisma.termin.findMany({
-      where: { familieId: person.familieId, personId: { in: personIds }, start: { gte: tagStart, lt: tagEnde } },
+      where: { personId: { in: personIds }, start: { gte: tagStart, lt: tagEnde } },
       include: { person: true },
     }),
   ]);
@@ -268,7 +261,6 @@ export async function createTermin(data: {
     for (const start of startDaten) {
       const termin = await prisma.termin.create({
         data: {
-          familieId: person.familieId,
           titel: data.titel,
           start,
           ende: enDauer !== null ? new Date(start.getTime() + enDauer) : null,
@@ -308,7 +300,7 @@ export async function createTermin(data: {
 export async function updateTermin(id: string, data: { titel: string; start: string; ende?: string; anhaenge?: string[]; notiz?: string }) {
   const person = await requirePerson();
   const termin = await prisma.termin.findUnique({ where: { id } });
-  if (!termin || termin.familieId !== person.familieId) return;
+  if (!termin) return;
   if (person.rolle !== "ELTERN" && termin.personId !== person.id) {
     throw new Error("Das darfst du nicht bearbeiten.");
   }
@@ -344,7 +336,7 @@ export async function updateTermin(id: string, data: { titel: string; start: str
 export async function updateTerminSerie(id: string, titel: string) {
   const person = await requirePerson();
   const termin = await prisma.termin.findUnique({ where: { id } });
-  if (!termin || termin.familieId !== person.familieId) return;
+  if (!termin) return;
   if (person.rolle !== "ELTERN" && termin.erstelltVonId !== person.id) {
     throw new Error("Das darfst du nicht bearbeiten.");
   }
@@ -371,7 +363,7 @@ export async function updateTerminSerie(id: string, titel: string) {
 export async function deleteTermin(id: string, scope: "eins" | "serie" = "eins") {
   const person = await requirePerson();
   const termin = await prisma.termin.findUnique({ where: { id } });
-  if (!termin || termin.familieId !== person.familieId) return;
+  if (!termin) return;
   if (person.rolle !== "ELTERN" && termin.erstelltVonId !== person.id) {
     throw new Error("Das darfst du nicht löschen — nur selbst angelegte Termine.");
   }
@@ -399,8 +391,7 @@ export async function deleteTermin(id: string, scope: "eins" | "serie" = "eins")
 // Schul-Einträge (Klassenarbeiten/HÜ-Kontrollen) erscheinen automatisch im Kalender (read-only).
 export async function listSchulEintraegeFuerKalender() {
   const person = await requirePerson();
-  const where =
-    person.rolle === "ELTERN" ? { familieId: person.familieId } : { familieId: person.familieId, personId: person.id };
+  const where = person.rolle === "ELTERN" ? {} : { personId: person.id };
   return prisma.schulEintrag.findMany({ where, include: { person: true, fach: true }, orderBy: { datum: "asc" } });
 }
 
@@ -408,8 +399,8 @@ export async function listSchulEintraegeFuerKalender() {
 // Nur Vorschau — es wird noch nichts gespeichert, siehe icsImport.ts für die Begründung, warum
 // das Parsen selbst deterministisch (nicht primär per KI) läuft.
 export async function parseIcsVorschau(icsText: string) {
-  const person = await requireParent();
-  return parseIcsDatei(icsText, kiErlaubt(person));
+  await requireParent();
+  return parseIcsDatei(icsText);
 }
 
 // Übernimmt die in der Vorschau bestätigten Ereignisse als eigenständige Termine — bewusst
@@ -425,7 +416,6 @@ export async function importiereIcsTermine(personId: string | null, ereignisse: 
     const kategorie = erkenneTerminKategorie(e.titel);
     await prisma.termin.create({
       data: {
-        familieId: person.familieId,
         titel: e.titel.trim(),
         start: new Date(e.start),
         ende: e.ende ? new Date(e.ende) : null,
