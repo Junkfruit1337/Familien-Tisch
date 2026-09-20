@@ -34,8 +34,8 @@ export async function listAufgaben() {
   const person = await requirePerson();
   const where =
     person.rolle === "ELTERN"
-      ? {}
-      : { OR: [{ personId: person.id }, { personId: null }] };
+      ? { familieId: person.familieId }
+      : { familieId: person.familieId, OR: [{ personId: person.id }, { personId: null }] };
   return prisma.aufgabe.findMany({
     where,
     include: { person: true },
@@ -50,9 +50,12 @@ export async function listAufgaben() {
 export async function erkenneAufgabeAusText(
   text: string
 ): Promise<{ ok: true; aufgabe: ErkannteAufgabe } | { ok: false; fehler: string }> {
-  await requirePerson();
+  const person = await requirePerson();
   try {
-    const personen = await prisma.person.findMany({ where: { aktiv: true }, select: { id: true, name: true } });
+    const personen = await prisma.person.findMany({
+      where: { aktiv: true, familieId: person.familieId },
+      select: { id: true, name: true },
+    });
     const aufgabe = await erkenneAufgabeAusSprache(text, personen);
     return { ok: true, aufgabe };
   } catch (err) {
@@ -98,6 +101,7 @@ export async function createAufgabe(data: {
     for (const faelligkeit of faelligkeitsDaten) {
       const aufgabe = await prisma.aufgabe.create({
         data: {
+          familieId: person.familieId,
           titel: data.titel,
           faelligkeit,
           personId,
@@ -125,7 +129,7 @@ export async function createAufgabe(data: {
 export async function toggleAufgabe(id: string) {
   const person = await requirePerson();
   const aufgabe = await prisma.aufgabe.findUnique({ where: { id } });
-  if (!aufgabe) return;
+  if (!aufgabe || aufgabe.familieId !== person.familieId) return;
   if (person.rolle !== "ELTERN" && aufgabe.personId !== null && aufgabe.personId !== person.id) {
     throw new Error("Das ist nicht deine Aufgabe.");
   }
@@ -147,7 +151,7 @@ export async function toggleAufgabe(id: string) {
 export async function deleteAufgabe(id: string, scope: "eins" | "serie" = "eins") {
   const person = await requirePerson();
   const aufgabe = await prisma.aufgabe.findUnique({ where: { id } });
-  if (!aufgabe) return;
+  if (!aufgabe || aufgabe.familieId !== person.familieId) return;
   if (person.rolle !== "ELTERN" && aufgabe.erstelltVonId !== person.id) {
     throw new Error("Das darfst du nicht löschen — nur selbst angelegte Aufgaben.");
   }
