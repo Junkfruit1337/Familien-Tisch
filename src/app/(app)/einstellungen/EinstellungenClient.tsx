@@ -1158,7 +1158,12 @@ export default function EinstellungenClient({
               <span style={{ minWidth: 90 }}>{p.name}</span>
               <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{ROLLEN.find((r) => r.value === p.rolle)?.label}</span>
               <input type="color" value={p.farbe} onChange={(e) => startTransition(() => setFarbe(p.id, e.target.value))} style={{ width: 32, padding: 0 }} />
-              {p.rolle !== "KIND_OHNE_ZUGANG" && (
+              {/* Fix-Batch 139 (Florians Bug-Meldung): die eigene PIN hier UND zusätzlich über
+                  "Meine PIN ändern" setzen zu können, war verwirrend doppelt (seit Fix-Batch 131
+                  kann jede Person ihre eigene PIN dort selbst ändern) — für die eigene Zeile
+                  bleibt deshalb nur noch der Hinweis, für alle anderen Personen (z. B. ein Kind,
+                  das seine PIN vergessen hat) bleibt das Eltern-Reset hier unverändert nötig. */}
+              {p.rolle !== "KIND_OHNE_ZUGANG" && p.id !== eigeneId && (
                 <>
                   <input
                     placeholder="Neuer PIN"
@@ -1178,6 +1183,9 @@ export default function EinstellungenClient({
                     PIN setzen
                   </button>
                 </>
+              )}
+              {p.rolle !== "KIND_OHNE_ZUGANG" && p.id === eigeneId && (
+                <span style={{ fontSize: 12, color: "var(--text-muted)" }}>PIN oben über „Meine PIN ändern" änderbar</span>
               )}
               <label style={{ fontSize: 12, display: "flex", alignItems: "center", gap: 4 }}>
                 Portionsgröße
