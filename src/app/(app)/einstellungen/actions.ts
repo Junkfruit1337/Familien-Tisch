@@ -1,7 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { requireParent, requirePerson, hashPin } from "@/lib/auth";
+import { requireParent, requirePerson, hashPin, kiErlaubt, KI_DEAKTIVIERT_FEHLER } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import { erkenneTicketAusSprache, verbessereFormulierung, type ErkanntesTicket } from "@/lib/spracheErkennung";
 
@@ -86,7 +86,8 @@ export async function setGeburtsdatum(personId: string, datum: string) {
 // eingereicht (analog Rezept-Foto/Termine/Aufgaben/Noten). Ergebnis-Objekt statt Wurf,
 // damit Next.js' Fehler-Redaction in Server Actions die echte Meldung nicht verschluckt.
 export async function erkenneTicketAusText(text: string): Promise<{ ok: true; ticket: ErkanntesTicket } | { ok: false; fehler: string }> {
-  await requirePerson();
+  const person = await requirePerson();
+  if (!kiErlaubt(person)) return { ok: false, fehler: KI_DEAKTIVIERT_FEHLER };
   try {
     const ticket = await erkenneTicketAusSprache(text);
     return { ok: true, ticket };
@@ -104,7 +105,8 @@ export async function verbessereEntwurf(
   titel: string,
   beschreibung: string
 ): Promise<{ ok: true; titel: string; beschreibung: string } | { ok: false; fehler: string }> {
-  await requirePerson();
+  const person = await requirePerson();
+  if (!kiErlaubt(person)) return { ok: false, fehler: KI_DEAKTIVIERT_FEHLER };
   try {
     const ergebnis = await verbessereFormulierung(titel, beschreibung);
     return { ok: true, titel: ergebnis.titel, beschreibung: ergebnis.beschreibung };
@@ -180,7 +182,8 @@ export async function erstelleHausproblem(data: {
 // Spracheingabe fürs Hausreparatur-Formular — nutzt bewusst dieselbe Erkennungsfunktion wie
 // Tickets (identisches {titel, beschreibung}-Format), keine eigene Funktion nötig.
 export async function erkenneHausproblemAusText(text: string): Promise<{ ok: true; titel: string; beschreibung: string } | { ok: false; fehler: string }> {
-  await requireParent();
+  const person = await requireParent();
+  if (!kiErlaubt(person)) return { ok: false, fehler: KI_DEAKTIVIERT_FEHLER };
   try {
     const ergebnis = await erkenneTicketAusSprache(text);
     return { ok: true, titel: ergebnis.titel, beschreibung: ergebnis.beschreibung };

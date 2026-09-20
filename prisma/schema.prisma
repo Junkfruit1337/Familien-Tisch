@@ -17,17 +17,25 @@ datasource db {
 // bisherigen Root-Login-URL erreichbar (siehe login/actions.ts) — für ihn ändert sich im
 // Alltag nichts. Neue Familien bekommen einen slug und loggen sich über /f/<slug> ein.
 model Familie {
-  id              String   @id @default(cuid())
-  name            String
-  slug            String?  @unique
+  id                String   @id @default(cuid())
+  name              String
+  slug              String?  @unique
   // Pro-Familie ein-/ausblendbare Bereiche (Florians Wunsch: "z.B. das mit den Diensten, ich
   // denke viele haben das gar nicht") — steuert, welche Reiter in Navigation/Tutorial erscheinen.
-  dienstplanAktiv Boolean  @default(true)
-  schuleAktiv     Boolean  @default(true)
+  dienstplanAktiv   Boolean  @default(true)
+  schuleAktiv       Boolean  @default(true)
   // Pro-Familie individuell einstellbare externe Verlinkung (Florians Beispiel: "wie bei uns
   // mit der THG-App") — erscheint im Dashboard nur, wenn gesetzt.
-  thgUrl          String?
-  createdAt       DateTime @default(now())
+  thgUrl            String?
+  // Fix-Batch 137 (Florians Wunsch: "möchte das nicht tragen" — die Kosten für KI-Funktionen
+  // bei anderen Familien): schaltet ALLE kostenpflichtigen KI-Funktionen (Spracheingabe,
+  // Rezept-/Einkaufslisten-Fotoerkennung, Formulierungshilfe, Rezept-Vorschläge/-Umschreibung
+  // usw.) für eine Familie komplett ab. Default true, damit Florians Bestandsfamilie (die
+  // einzige, die diese Kosten bisher trägt) unverändert weiterläuft — neue Familien sollten
+  // beim Anlegen explizit auf false gesetzt werden, wenn sie eine abgespeckte Version ohne
+  // laufende KI-Kosten bekommen sollen.
+  kiFunktionenAktiv Boolean  @default(true)
+  createdAt         DateTime @default(now())
 
   personen                  Person[]
   termine                   Termin[]

@@ -1,7 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { requirePerson, requireParent } from "@/lib/auth";
+import { requirePerson, requireParent, kiErlaubt, KI_DEAKTIVIERT_FEHLER } from "@/lib/auth";
 import { logAenderung } from "@/lib/history";
 import { erkenneKategorie } from "@/lib/kategorisierung";
 import { erkenneArtikelAusSprache, type ErkannterArtikel } from "@/lib/spracheErkennung";
@@ -12,7 +12,8 @@ import { revalidatePath } from "next/cache";
 // Spracheingabe fürs Artikel-/Wunsch-Formular (Fix-Batch 30) — für Eltern (Artikel direkt
 // hinzufügen) und Kinder (Wunsch einreichen) gleichermaßen nutzbar.
 export async function erkenneArtikelAusText(text: string): Promise<{ ok: true; artikel: ErkannterArtikel } | { ok: false; fehler: string }> {
-  await requirePerson();
+  const person = await requirePerson();
+  if (!kiErlaubt(person)) return { ok: false, fehler: KI_DEAKTIVIERT_FEHLER };
   try {
     const artikel = await erkenneArtikelAusSprache(text);
     return { ok: true, artikel };
@@ -28,7 +29,8 @@ export async function erkenneArtikelAusText(text: string): Promise<{ ok: true; a
 export async function erkenneEinkaufslisteAusFoto(
   fotoDataUrl: string
 ): Promise<{ ok: true; artikel: ErkannterListenArtikel[] } | { ok: false; fehler: string }> {
-  await requireParent();
+  const person = await requireParent();
+  if (!kiErlaubt(person)) return { ok: false, fehler: KI_DEAKTIVIERT_FEHLER };
   try {
     const artikel = await erkenneEinkaufslisteAusBild(fotoDataUrl);
     return { ok: true, artikel };

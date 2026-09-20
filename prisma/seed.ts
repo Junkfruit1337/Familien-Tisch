@@ -49,6 +49,16 @@ async function main() {
     update: {},
     create: { id: FLORIAN_FAMILIE_ID, name: "Familie", slug: null },
   });
+
+  // Fix-Batch 137: die THG-URL stand bisher fest im Code (ThgVollbild.tsx), jetzt ist sie pro
+  // Familie einstellbar (Familie.thgUrl). Einmalige Übernahme des bisherigen festen Werts für
+  // Florians Familie — bewusst nur, wenn dort noch nichts gesetzt ist, damit eine spätere
+  // eigene Änderung über die Einstellungen hier nie wieder überschrieben wird.
+  const florianFamilie = await prisma.familie.findUnique({ where: { id: FLORIAN_FAMILIE_ID } });
+  if (florianFamilie && florianFamilie.thgUrl === null) {
+    await prisma.familie.update({ where: { id: FLORIAN_FAMILIE_ID }, data: { thgUrl: "https://app.thg-lu.de/" } });
+  }
+
   for (const modell of FAMILIE_SKALIERTE_MODELLE) {
     await (prisma as any)[modell].updateMany({
       where: { familieId: null },

@@ -1,7 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { requireParent, requirePerson } from "@/lib/auth";
+import { requireParent, requirePerson, kiErlaubt, KI_DEAKTIVIERT_FEHLER } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import { autoKategorieId, findeOffenenArtikel, findeOffenenUnbestaetigtenArtikel, mergeMenge } from "../einkaufsliste/actions";
 import {
@@ -94,7 +94,8 @@ export async function updateRezept(rezeptId: string, data: { name?: string; zuta
 export async function erkenneRezeptAusFoto(
   datenUrl: string
 ): Promise<{ ok: true; rezept: ErkanntesRezept } | { ok: false; fehler: string }> {
-  await requireParent();
+  const person = await requireParent();
+  if (!kiErlaubt(person)) return { ok: false, fehler: KI_DEAKTIVIERT_FEHLER };
   try {
     const rezept = await erkenneRezeptAusDatei(datenUrl);
     return { ok: true, rezept };
@@ -111,7 +112,8 @@ export async function erkenneRezeptAusFoto(
 export async function erkenneRezeptAusText(
   text: string
 ): Promise<{ ok: true; rezept: ErkanntesRezept } | { ok: false; fehler: string }> {
-  await requireParent();
+  const person = await requireParent();
+  if (!kiErlaubt(person)) return { ok: false, fehler: KI_DEAKTIVIERT_FEHLER };
   try {
     const rezept = await erkenneRezeptAusSprache(text);
     return { ok: true, rezept };
@@ -135,7 +137,8 @@ function aktuelleSaison(datum = new Date()): string {
 }
 
 export async function schlageSaisonaleIdeeVor(): Promise<{ ok: true; rezept: ErkanntesRezept } | { ok: false; fehler: string }> {
-  await requireParent();
+  const person = await requireParent();
+  if (!kiErlaubt(person)) return { ok: false, fehler: KI_DEAKTIVIERT_FEHLER };
   try {
     const saison = aktuelleSaison();
     const bisherige = await prisma.saisonVorschlag.findMany({
@@ -166,7 +169,8 @@ export async function schlageSaisonaleIdeeVor(): Promise<{ ok: true; rezept: Erk
 export async function schlageRezeptZuBeschreibungVorschau(
   beschreibung: string
 ): Promise<{ ok: true; rezept: ErkanntesRezept } | { ok: false; fehler: string }> {
-  await requireParent();
+  const person = await requireParent();
+  if (!kiErlaubt(person)) return { ok: false, fehler: KI_DEAKTIVIERT_FEHLER };
   try {
     const rezept = await schlageRezeptZuBeschreibungVor(beschreibung);
     return { ok: true, rezept };
@@ -180,7 +184,8 @@ export async function schlageRezeptZuBeschreibungVorschau(
 export async function findeRezeptImInternetVorschau(
   beschreibung: string
 ): Promise<{ ok: true; rezept: ErkanntesRezept } | { ok: false; fehler: string }> {
-  await requireParent();
+  const person = await requireParent();
+  if (!kiErlaubt(person)) return { ok: false, fehler: KI_DEAKTIVIERT_FEHLER };
   try {
     const rezept = await findeRezeptImInternet(beschreibung);
     if (!rezept.name) {
@@ -199,7 +204,8 @@ export async function findeRezeptImInternetVorschau(
 export async function verdichteZubereitungVorschau(
   zubereitung: string
 ): Promise<{ ok: true; zubereitung: string } | { ok: false; fehler: string }> {
-  await requireParent();
+  const person = await requireParent();
+  if (!kiErlaubt(person)) return { ok: false, fehler: KI_DEAKTIVIERT_FEHLER };
   try {
     const ergebnis = await verdichteZubereitung(zubereitung);
     return { ok: true, zubereitung: ergebnis };
@@ -217,7 +223,8 @@ export async function pruefeZutatenZubereitungVorschau(
   zutaten: string,
   zubereitung: string
 ): Promise<{ ok: true; ergebnis: ZutatenZubereitungAbgleich } | { ok: false; fehler: string }> {
-  await requireParent();
+  const person = await requireParent();
+  if (!kiErlaubt(person)) return { ok: false, fehler: KI_DEAKTIVIERT_FEHLER };
   try {
     const ergebnis = await pruefeZutatenZubereitungAbgleich(zutaten, zubereitung);
     return { ok: true, ergebnis };
@@ -263,6 +270,7 @@ export async function schreibeRezeptUmVorschau(
   anweisung: string
 ): Promise<{ ok: true; rezept: ErkanntesRezept } | { ok: false; fehler: string }> {
   const person = await requireParent();
+  if (!kiErlaubt(person)) return { ok: false, fehler: KI_DEAKTIVIERT_FEHLER };
   try {
     const rezept = await prisma.rezept.findUnique({ where: { id: rezeptId } });
     if (!rezept || rezept.familieId !== person.familieId) return { ok: false, fehler: "Rezept nicht gefunden." };

@@ -1,7 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { requirePerson, requireParent } from "@/lib/auth";
+import { requirePerson, requireParent, kiErlaubt, KI_DEAKTIVIERT_FEHLER } from "@/lib/auth";
 import { logAenderung } from "@/lib/history";
 import { erkenneTerminKategorie } from "@/lib/terminkategorisierung";
 import { erkenneTerminAusSprache, type ErkannterTermin } from "@/lib/spracheErkennung";
@@ -170,6 +170,7 @@ export async function erkenneTerminAusText(
   text: string
 ): Promise<{ ok: true; termin: ErkannterTermin } | { ok: false; fehler: string }> {
   const person = await requirePerson();
+  if (!kiErlaubt(person)) return { ok: false, fehler: KI_DEAKTIVIERT_FEHLER };
   try {
     const personen = await prisma.person.findMany({
       where: { aktiv: true, familieId: person.familieId },
@@ -407,8 +408,8 @@ export async function listSchulEintraegeFuerKalender() {
 // Nur Vorschau — es wird noch nichts gespeichert, siehe icsImport.ts für die Begründung, warum
 // das Parsen selbst deterministisch (nicht primär per KI) läuft.
 export async function parseIcsVorschau(icsText: string) {
-  await requireParent();
-  return parseIcsDatei(icsText);
+  const person = await requireParent();
+  return parseIcsDatei(icsText, kiErlaubt(person));
 }
 
 // Übernimmt die in der Vorschau bestätigten Ereignisse als eigenständige Termine — bewusst

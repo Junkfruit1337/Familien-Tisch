@@ -1,7 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { requirePerson, requireParent } from "@/lib/auth";
+import { requirePerson, requireParent, kiErlaubt, KI_DEAKTIVIERT_FEHLER } from "@/lib/auth";
 import { logAenderung } from "@/lib/history";
 import { revalidatePath } from "next/cache";
 import { sendePushAnEltern, sendePushAnPerson } from "@/lib/push";
@@ -89,6 +89,7 @@ export async function erkenneNoteAusText(
   kindId: string
 ): Promise<{ ok: true; note: ErkannteNote } | { ok: false; fehler: string }> {
   const person = await requirePerson();
+  if (!kiErlaubt(person)) return { ok: false, fehler: KI_DEAKTIVIERT_FEHLER };
   try {
     const faecher = await prisma.fach.findMany({ where: { kindId, familieId: person.familieId }, select: { id: true, name: true } });
     const note = await erkenneNoteAusSprache(text, faecher);
@@ -126,7 +127,7 @@ export async function pruefeFachDuplikat(kindId: string, name: string) {
   const bestehende = await prisma.fach.findMany({ where: { kindId, familieId: person.familieId } });
   const exakt = bestehende.find((f) => f.name.trim().toLowerCase() === name.trim().toLowerCase());
   if (exakt) return { istVermutlichDuplikat: true, aehnlichesFach: exakt.name };
-  if (bestehende.length === 0) return { istVermutlichDuplikat: false, aehnlichesFach: null };
+  if (bestehende.length === 0 || !kiErlaubt(person)) return { istVermutlichDuplikat: false, aehnlichesFach: null };
   try {
     return await pruefeFachDuplikatKI(name, bestehende.map((f) => f.name));
   } catch {
@@ -533,6 +534,7 @@ export async function erkenneSchulEintragAusText(
   fachOptionen: { id: string; name: string }[]
 ): Promise<{ ok: true; eintrag: ErkannterSchulEintrag } | { ok: false; fehler: string }> {
   const person = await requirePerson();
+  if (!kiErlaubt(person)) return { ok: false, fehler: KI_DEAKTIVIERT_FEHLER };
   try {
     const personen = await prisma.person.findMany({
       where: { rolle: "KIND", aktiv: true, familieId: person.familieId },

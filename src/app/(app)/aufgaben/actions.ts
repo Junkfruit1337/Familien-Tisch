@@ -1,7 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { requirePerson } from "@/lib/auth";
+import { requirePerson, kiErlaubt, KI_DEAKTIVIERT_FEHLER } from "@/lib/auth";
 import { logAenderung } from "@/lib/history";
 import { erkenneAufgabeAusSprache, type ErkannteAufgabe } from "@/lib/spracheErkennung";
 import { revalidatePath } from "next/cache";
@@ -51,6 +51,7 @@ export async function erkenneAufgabeAusText(
   text: string
 ): Promise<{ ok: true; aufgabe: ErkannteAufgabe } | { ok: false; fehler: string }> {
   const person = await requirePerson();
+  if (!kiErlaubt(person)) return { ok: false, fehler: KI_DEAKTIVIERT_FEHLER };
   try {
     const personen = await prisma.person.findMany({
       where: { aktiv: true, familieId: person.familieId },
