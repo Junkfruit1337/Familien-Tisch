@@ -517,7 +517,9 @@ model DienstZuweisung {
   kindId        String
   kind          Person   @relation(fields: [kindId], references: [id])
 
-  @@unique([wocheStart, schichtNummer])
+  // Fix-Batch 135 (Multi-Tenant, Query-Scoping Dienstplan): jetzt mit familieId statt global —
+  // zwei Familien können sonst nicht beide eine Zuweisung für "Woche X, Schicht 1" haben.
+  @@unique([familieId, wocheStart, schichtNummer])
 }
 
 enum DienstTauschModus {
@@ -551,7 +553,8 @@ model BadZuweisung {
   kindId     String
   kind       Person   @relation(fields: [kindId], references: [id])
 
-  @@unique([wocheStart, zeitpunkt, position])
+  // Fix-Batch 135: siehe Kommentar bei DienstZuweisung.familieId.
+  @@unique([familieId, wocheStart, zeitpunkt, position])
 }
 
 // Dauerhafte Tausche (Fix-Batch 35, Florians Wunsch) — im Unterschied zu DienstTausch/
@@ -575,7 +578,8 @@ model DauerhafteZuordnung {
   kind      Person       @relation(fields: [kindId], references: [id])
   updatedAt DateTime     @updatedAt
 
-  @@unique([art, slot])
+  // Fix-Batch 135: siehe Kommentar bei DienstZuweisung.familieId.
+  @@unique([familieId, art, slot])
 }
 
 // ---------- Dienstplan-Nachschlagewerk & Zusatzaufgaben (Fahrplan §3, Batch 4) ----------

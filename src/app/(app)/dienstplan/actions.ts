@@ -8,14 +8,16 @@ import { DIENSTE_VORLAGE, TAGESROUTINEN_VORLAGE, KOERPERPFLEGE_VORLAGE } from "@
 import { revalidatePath } from "next/cache";
 
 export async function getWoche(datum?: string) {
+  const person = await requirePerson();
   const wocheStart = getWeekStart(datum ? new Date(datum) : new Date());
-  const woche = await getEffectiveWeek(wocheStart);
+  const woche = await getEffectiveWeek(wocheStart, person.familieId!);
   return { wocheStart: wocheStart.toISOString(), woche };
 }
 
 export async function getBadplan(wocheStartIso: string) {
+  const person = await requirePerson();
   const wocheStart = new Date(wocheStartIso);
-  return getBadReihenfolge(wocheStart);
+  return getBadReihenfolge(wocheStart, person.familieId!);
 }
 
 // Eltern: zwei Positionen der Bad-Reihenfolge (morgens ODER abends) tauschen.
@@ -32,10 +34,10 @@ export async function tauscheBadPosition(data: {
 
   const [rowA, rowB] = await Promise.all([
     prisma.badZuweisung.findUnique({
-      where: { wocheStart_zeitpunkt_position: { wocheStart, zeitpunkt: data.zeitpunkt, position: data.positionA } },
+      where: { familieId_wocheStart_zeitpunkt_position: { familieId: person.familieId!, wocheStart, zeitpunkt: data.zeitpunkt, position: data.positionA } },
     }),
     prisma.badZuweisung.findUnique({
-      where: { wocheStart_zeitpunkt_position: { wocheStart, zeitpunkt: data.zeitpunkt, position: data.positionB } },
+      where: { familieId_wocheStart_zeitpunkt_position: { familieId: person.familieId!, wocheStart, zeitpunkt: data.zeitpunkt, position: data.positionB } },
     }),
   ]);
   if (!rowA || !rowB) return;
@@ -66,28 +68,30 @@ async function setzeDauerhafteZuordnungIntern(
   art: "DIENST" | "BAD_MORGENS" | "BAD_ABENDS",
   slot: number,
   kindId: string,
-  abWocheStart: Date
+  abWocheStart: Date,
+  familieId: string
 ) {
   await prisma.dauerhafteZuordnung.upsert({
-    where: { art_slot: { art, slot } },
+    where: { familieId_art_slot: { familieId, art, slot } },
     update: { kindId },
-    create: { art, slot, kindId },
+    create: { familieId, art, slot, kindId },
   });
   if (art === "DIENST") {
     await prisma.dienstZuweisung.updateMany({
-      where: { schichtNummer: slot, wocheStart: { gte: abWocheStart } },
+      where: { familieId, schichtNummer: slot, wocheStart: { gte: abWocheStart } },
       data: { kindId },
     });
   } else {
     await prisma.badZuweisung.updateMany({
-      where: { zeitpunkt: art === "BAD_MORGENS" ? "morgens" : "abends", position: slot, wocheStart: { gte: abWocheStart } },
+      where: { familieId, zeitpunkt: art === "BAD_MORGENS" ? "morgens" : "abends", position: slot, wocheStart: { gte: abWocheStart } },
       data: { kindId },
     });
   }
 }
 
 export async function listDauerhafteZuordnungen() {
-  return prisma.dauerhafteZuordnung.findMany({ include: { kind: true } });
+  const person = await requirePerson();
+  return prisma.dauerhafteZuordnung.findMany({ where: { familieId: person.familieId }, include: { kind: true } });
 }
 
 // Dienst dauerhaft abgeben/tauschen — ermittelt zuerst, welche Schicht von/mit gerade
@@ -101,14 +105,14 @@ export async function erstelleDauerhaftenTausch(data: {
 }) {
   const person = await requireParent();
   const wocheStart = new Date(data.wocheStartIso);
-  const effektiv = await getEffectiveWeek(wocheStart);
+  const effektiv = await getEffectiveWeek(wocheStart, person.familieId!);
   const vonSchicht = effektiv.find((s) => s.kind?.id === data.vonKindId)?.schichtNummer;
   const mitSchicht = effektiv.find((s) => s.kind?.id === data.mitKindId)?.schichtNummer;
   if (!vonSchicht) throw new Error("Diese Person hat aktuell keinen Dienst.");
 
-  await setzeDauerhafteZuordnungIntern("DIENST", vonSchicht, data.mitKindId, wocheStart);
+  await setzeDauerhafteZuordnungIntern("DIENST", vonSchicht, data.mitKindId, wocheStart, person.familieId!);
   if (data.modus === "TAUSCH" && mitSchicht) {
-    await setzeDauerhafteZuordnungIntern("DIENST", mitSchicht, data.vonKindId, wocheStart);
+    await setzeDauerhafteZuordnungIntern("DIENST", mitSchicht, data.vonKindId, wocheStart, person.familieId!);
   }
 
   await logAenderung({
@@ -130,7 +134,7 @@ export async function setzeDauerhafteBadZuordnung(data: {
 }) {
   const person = await requireParent();
   const wocheStart = new Date(data.wocheStartIso);
-  await setzeDauerhafteZuordnungIntern(data.zeitpunkt === "morgens" ? "BAD_MORGENS" : "BAD_ABENDS", data.position, data.kindId, wocheStart);
+  await setzeDauerhafteZuordnungIntern(data.zeitpunkt === "morgens" ? "BAD_MORGENS" : "BAD_ABENDS", data.position, data.kindId, wocheStart, person.familieId!);
   await logAenderung({
     entityTyp: "DIENST_TAUSCH",
     entityId: `dauerhaft-bad-${data.zeitpunkt}-${data.position}`,
@@ -145,8 +149,8 @@ export async function setzeDauerhafteBadZuordnung(data: {
 // Dienst-/Bad-Reihenfolge-Tausche (auch aufgehobene/vergangene Wochen), nicht nur die
 // aktuell aktiven. Jede Person darf mitlesen, nicht nur Eltern (reine Info, keine Aktion).
 export async function listDienstHistorie() {
-  await requirePerson();
-  const eintraege = await getHistorieFuerTyp("DIENST_TAUSCH", 40);
+  const person = await requirePerson();
+  const eintraege = await getHistorieFuerTyp("DIENST_TAUSCH", person.familieId!, 40);
   return eintraege.map((e) => ({
     id: e.id,
     zeitpunkt: e.zeitpunkt.toISOString(),
@@ -157,9 +161,10 @@ export async function listDienstHistorie() {
 }
 
 export async function listAktiveTausche(wocheStartIso: string) {
+  const person = await requirePerson();
   const wocheStart = new Date(wocheStartIso);
   return prisma.dienstTausch.findMany({
-    where: { wocheStart, aufgehoben: false },
+    where: { wocheStart, aufgehoben: false, familieId: person.familieId },
     include: { vonKind: true, mitKind: true },
     orderBy: { createdAt: "desc" },
   });
@@ -177,6 +182,7 @@ export async function erstelleTausch(data: {
 
   const tausch = await prisma.dienstTausch.create({
     data: {
+      familieId: person.familieId,
       wocheStart: new Date(data.wocheStartIso),
       tag: data.tag ? new Date(data.tag) : null,
       modus: data.modus,
@@ -200,6 +206,8 @@ export async function erstelleTausch(data: {
 
 export async function hebeTauschAuf(id: string) {
   const person = await requireParent();
+  const tausch = await prisma.dienstTausch.findUnique({ where: { id } });
+  if (!tausch || tausch.familieId !== person.familieId) return;
   await prisma.dienstTausch.update({ where: { id }, data: { aufgehoben: true } });
   await logAenderung({ entityTyp: "DIENST_TAUSCH", entityId: id, aktion: "aufgehoben", geaendertVonId: person.id });
   revalidatePath("/dienstplan");
@@ -209,7 +217,9 @@ export async function hebeTauschAuf(id: string) {
 // ---------- Dienstkatalog: Regeltexte bearbeiten (Fahrplan §3, Batch 4) ----------
 
 export async function updateDienstBeschreibung(id: string, beschreibung: string) {
-  await requireParent();
+  const person = await requireParent();
+  const dienst = await prisma.dienstDefinition.findUnique({ where: { id } });
+  if (!dienst || dienst.familieId !== person.familieId) return;
   await prisma.dienstDefinition.update({ where: { id }, data: { beschreibung } });
   revalidatePath("/dienstplan");
 }
@@ -266,19 +276,25 @@ export async function setKoerperpflegetag(wochentag: number, text: string) {
 // gefahrlos möglich und wirkt sich sofort (auch rückwirkend) auf die Anzeige aus.
 
 export async function listDienstkatalog() {
-  return prisma.dienstDefinition.findMany({ orderBy: [{ schichtNummer: "asc" }, { reihenfolge: "asc" }] });
+  const person = await requirePerson();
+  return prisma.dienstDefinition.findMany({
+    where: { familieId: person.familieId },
+    orderBy: [{ schichtNummer: "asc" }, { reihenfolge: "asc" }],
+  });
 }
 
 export async function addDienst(schichtNummer: number, bezeichnung: string, beschreibung?: string) {
-  await requireParent();
-  const anzahl = await prisma.dienstDefinition.count({ where: { schichtNummer } });
-  await prisma.dienstDefinition.create({ data: { schichtNummer, reihenfolge: anzahl + 1, bezeichnung, beschreibung } });
+  const person = await requireParent();
+  const anzahl = await prisma.dienstDefinition.count({ where: { schichtNummer, familieId: person.familieId } });
+  await prisma.dienstDefinition.create({ data: { familieId: person.familieId, schichtNummer, reihenfolge: anzahl + 1, bezeichnung, beschreibung } });
   revalidatePath("/dienstplan");
   revalidatePath("/einstellungen");
 }
 
 export async function updateDienst(id: string, data: { bezeichnung?: string; beschreibung?: string }) {
-  await requireParent();
+  const person = await requireParent();
+  const dienst = await prisma.dienstDefinition.findUnique({ where: { id } });
+  if (!dienst || dienst.familieId !== person.familieId) return;
   await prisma.dienstDefinition.update({ where: { id }, data });
   revalidatePath("/dienstplan");
   revalidatePath("/einstellungen");
@@ -286,19 +302,21 @@ export async function updateDienst(id: string, data: { bezeichnung?: string; bes
 
 // Verschiebt einen Dienst dauerhaft in eine andere Schicht (ans Ende der Ziel-Schicht).
 export async function verschiebeDienstSchicht(id: string, neueSchichtNummer: number) {
-  await requireParent();
-  const anzahl = await prisma.dienstDefinition.count({ where: { schichtNummer: neueSchichtNummer } });
+  const person = await requireParent();
+  const bestehend = await prisma.dienstDefinition.findUnique({ where: { id } });
+  if (!bestehend || bestehend.familieId !== person.familieId) return;
+  const anzahl = await prisma.dienstDefinition.count({ where: { schichtNummer: neueSchichtNummer, familieId: person.familieId } });
   await prisma.dienstDefinition.update({ where: { id }, data: { schichtNummer: neueSchichtNummer, reihenfolge: anzahl + 1 } });
   revalidatePath("/dienstplan");
   revalidatePath("/einstellungen");
 }
 
 export async function verschiebeDienstReihenfolge(id: string, richtung: "hoch" | "runter") {
-  await requireParent();
+  const person = await requireParent();
   const dienst = await prisma.dienstDefinition.findUnique({ where: { id } });
-  if (!dienst) return;
+  if (!dienst || dienst.familieId !== person.familieId) return;
   const geschwister = await prisma.dienstDefinition.findMany({
-    where: { schichtNummer: dienst.schichtNummer },
+    where: { schichtNummer: dienst.schichtNummer, familieId: person.familieId },
     orderBy: { reihenfolge: "asc" },
   });
   const index = geschwister.findIndex((d) => d.id === id);
@@ -315,7 +333,9 @@ export async function verschiebeDienstReihenfolge(id: string, richtung: "hoch" |
 }
 
 export async function deleteDienst(id: string) {
-  await requireParent();
+  const person = await requireParent();
+  const dienst = await prisma.dienstDefinition.findUnique({ where: { id } });
+  if (!dienst || dienst.familieId !== person.familieId) return;
   await prisma.dienstDefinition.delete({ where: { id } });
   revalidatePath("/dienstplan");
   revalidatePath("/einstellungen");
@@ -326,14 +346,16 @@ export async function deleteDienst(id: string) {
 // mehrfach ausgeführt werden (Dienste/Körperpflegeplan werden überschrieben, nicht verdoppelt;
 // Tagesroutinen werden komplett ersetzt, damit keine doppelten Einträge entstehen).
 export async function installiereSchichtsystemVorlage() {
-  await requireParent();
+  const person = await requireParent();
 
   for (const d of DIENSTE_VORLAGE) {
-    const existing = await prisma.dienstDefinition.findFirst({ where: { schichtNummer: d.schichtNummer, reihenfolge: d.reihenfolge } });
+    const existing = await prisma.dienstDefinition.findFirst({
+      where: { familieId: person.familieId, schichtNummer: d.schichtNummer, reihenfolge: d.reihenfolge },
+    });
     if (existing) {
       await prisma.dienstDefinition.update({ where: { id: existing.id }, data: { bezeichnung: d.bezeichnung, beschreibung: d.beschreibung } });
     } else {
-      await prisma.dienstDefinition.create({ data: d });
+      await prisma.dienstDefinition.create({ data: { ...d, familieId: person.familieId } });
     }
   }
 

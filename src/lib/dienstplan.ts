@@ -23,23 +23,23 @@ const ROTATIONS_KINDER_NAMEN = ["Lina", "Emil", "Emma"];
 // Dauerhafte Zuordnungen (Fix-Batch 35) überschreiben die algorithmische Rotation für neu
 // erzeugte Wochen-Zeilen — bereits erzeugte Zeilen werden separat beim Setzen einmalig
 // nachaktualisiert (siehe setzeDauerhafteZuordnungIntern in actions.ts).
-async function holeDauerhafteZuordnungen(art: "DIENST" | "BAD_MORGENS" | "BAD_ABENDS"): Promise<Record<number, string>> {
-  const rows = await prisma.dauerhafteZuordnung.findMany({ where: { art } });
+async function holeDauerhafteZuordnungen(art: "DIENST" | "BAD_MORGENS" | "BAD_ABENDS", familieId: string): Promise<Record<number, string>> {
+  const rows = await prisma.dauerhafteZuordnung.findMany({ where: { art, familieId } });
   return Object.fromEntries(rows.map((r) => [r.slot, r.kindId]));
 }
 
-export async function ensureWeekAssignments(wocheStart: Date) {
-  const existing = await prisma.dienstZuweisung.findMany({ where: { wocheStart } });
+export async function ensureWeekAssignments(wocheStart: Date, familieId: string) {
+  const existing = await prisma.dienstZuweisung.findMany({ where: { wocheStart, familieId } });
   if (existing.length === 3) return existing;
 
   const kinder = await prisma.person.findMany({
-    where: { name: { in: ROTATIONS_KINDER_NAMEN } },
+    where: { name: { in: ROTATIONS_KINDER_NAMEN }, familieId },
   });
   if (kinder.length !== 3) return existing; // Personen noch nicht angelegt
 
   const byName = Object.fromEntries(kinder.map((k) => [k.name, k]));
   const offset = ((weeksSinceAnchor(wocheStart) % 3) + 3) % 3;
-  const dauerhaft = await holeDauerhafteZuordnungen("DIENST");
+  const dauerhaft = await holeDauerhafteZuordnungen("DIENST", familieId);
 
   const created = [];
   for (let schicht = 1; schicht <= 3; schicht++) {
@@ -54,9 +54,9 @@ export async function ensureWeekAssignments(wocheStart: Date) {
     const kindId = dauerhaft[schicht] ?? berechnetesKindId;
     if (!kindId) continue;
     const row = await prisma.dienstZuweisung.upsert({
-      where: { wocheStart_schichtNummer: { wocheStart, schichtNummer: schicht } },
+      where: { familieId_wocheStart_schichtNummer: { familieId, wocheStart, schichtNummer: schicht } },
       update: {},
-      create: { wocheStart, schichtNummer: schicht, kindId },
+      create: { familieId, wocheStart, schichtNummer: schicht, kindId },
     });
     created.push(row);
   }
@@ -75,19 +75,20 @@ function tagKey(d: Date): string {
 // tagesgenaue Tausche wirken sich tatsächlich auf die Zuordnung des jeweiligen Tages aus,
 // nicht mehr nur als Banner-Hinweis. Wochenweite Tausche gelten für alle 7 Tage, ein
 // tagesgenauer Tausch überschreibt zusätzlich nur den einen betroffenen Tag.
-export async function getEffectiveWeek(wocheStart: Date) {
-  const basis = await ensureWeekAssignments(wocheStart);
+export async function getEffectiveWeek(wocheStart: Date, familieId: string) {
+  const basis = await ensureWeekAssignments(wocheStart, familieId);
   const definitionen = await prisma.dienstDefinition.findMany({
+    where: { familieId },
     orderBy: [{ schichtNummer: "asc" }, { reihenfolge: "asc" }],
   });
-  const personen = await prisma.person.findMany();
+  const personen = await prisma.person.findMany({ where: { familieId } });
   const personById = Object.fromEntries(personen.map((p) => [p.id, p]));
 
   const wochenweiteTausche = await prisma.dienstTausch.findMany({
-    where: { wocheStart, aufgehoben: false, tag: null },
+    where: { wocheStart, familieId, aufgehoben: false, tag: null },
   });
   const tagesTausche = await prisma.dienstTausch.findMany({
-    where: { wocheStart, aufgehoben: false, tag: { not: null } },
+    where: { wocheStart, familieId, aufgehoben: false, tag: { not: null } },
   });
 
   // 1. Basis + wochenweite Tausche -> gilt für die ganze Woche.
@@ -153,39 +154,39 @@ export async function getEffectiveWeek(wocheStart: Date) {
 // Wird aus der Basis-Schicht-Reihenfolge der Woche abgeleitet (unabhängig von Dienst-Tauschen):
 // morgens = Schicht 1→2→3, abends = Umkehrung. Danach unabhängig tauschbar (BadZuweisung.kindId).
 
-export async function ensureBadZuweisungen(wocheStart: Date) {
-  const bestehende = await prisma.badZuweisung.findMany({ where: { wocheStart } });
+export async function ensureBadZuweisungen(wocheStart: Date, familieId: string) {
+  const bestehende = await prisma.badZuweisung.findMany({ where: { wocheStart, familieId } });
   if (bestehende.length === 6) return bestehende;
 
-  const basis = await ensureWeekAssignments(wocheStart);
+  const basis = await ensureWeekAssignments(wocheStart, familieId);
   if (basis.length !== 3) return bestehende;
 
   const sortiert = [...basis].sort((a, b) => a.schichtNummer - b.schichtNummer);
   const morgensReihenfolge = sortiert.map((b) => b.kindId);
   const abendsReihenfolge = [...morgensReihenfolge].reverse();
-  const dauerhaftMorgens = await holeDauerhafteZuordnungen("BAD_MORGENS");
-  const dauerhaftAbends = await holeDauerhafteZuordnungen("BAD_ABENDS");
+  const dauerhaftMorgens = await holeDauerhafteZuordnungen("BAD_MORGENS", familieId);
+  const dauerhaftAbends = await holeDauerhafteZuordnungen("BAD_ABENDS", familieId);
 
   const rows = [];
   for (let i = 0; i < 3; i++) {
     const m = await prisma.badZuweisung.upsert({
-      where: { wocheStart_zeitpunkt_position: { wocheStart, zeitpunkt: "morgens", position: i + 1 } },
+      where: { familieId_wocheStart_zeitpunkt_position: { familieId, wocheStart, zeitpunkt: "morgens", position: i + 1 } },
       update: {},
-      create: { wocheStart, zeitpunkt: "morgens", position: i + 1, kindId: dauerhaftMorgens[i + 1] ?? morgensReihenfolge[i] },
+      create: { familieId, wocheStart, zeitpunkt: "morgens", position: i + 1, kindId: dauerhaftMorgens[i + 1] ?? morgensReihenfolge[i] },
     });
     const a = await prisma.badZuweisung.upsert({
-      where: { wocheStart_zeitpunkt_position: { wocheStart, zeitpunkt: "abends", position: i + 1 } },
+      where: { familieId_wocheStart_zeitpunkt_position: { familieId, wocheStart, zeitpunkt: "abends", position: i + 1 } },
       update: {},
-      create: { wocheStart, zeitpunkt: "abends", position: i + 1, kindId: dauerhaftAbends[i + 1] ?? abendsReihenfolge[i] },
+      create: { familieId, wocheStart, zeitpunkt: "abends", position: i + 1, kindId: dauerhaftAbends[i + 1] ?? abendsReihenfolge[i] },
     });
     rows.push(m, a);
   }
   return rows;
 }
 
-export async function getBadReihenfolge(wocheStart: Date) {
-  const rows = await ensureBadZuweisungen(wocheStart);
-  const personen = await prisma.person.findMany();
+export async function getBadReihenfolge(wocheStart: Date, familieId: string) {
+  const rows = await ensureBadZuweisungen(wocheStart, familieId);
+  const personen = await prisma.person.findMany({ where: { familieId } });
   const personById = Object.fromEntries(personen.map((p) => [p.id, p]));
 
   const bauen = (zeitpunkt: "morgens" | "abends") =>
