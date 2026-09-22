@@ -65,6 +65,8 @@ import {
   Pin,
   Plane,
   Palmtree,
+  Send,
+  MessageCircle,
   type LucideIcon,
 } from "lucide-react";
 
@@ -147,6 +149,8 @@ export const UI_ICONS_BUNT: Record<string, string> = {
   moodTop: "🌟",
   plane: "✈️",
   vacation: "🏖️",
+  send: "📨",
+  message: "💬",
 };
 
 export const UI_ICONS_MINIMAL: Record<string, LucideIcon> = {
@@ -218,6 +222,8 @@ export const UI_ICONS_MINIMAL: Record<string, LucideIcon> = {
   moodTop: Star,
   plane: Plane,
   vacation: Palmtree,
+  send: Send,
+  message: MessageCircle,
 };
 
 export type UiIconId = keyof typeof UI_ICONS_BUNT;

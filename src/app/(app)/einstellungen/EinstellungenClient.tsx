@@ -36,6 +36,7 @@ import PushBenachrichtigungen from "@/components/PushBenachrichtigungen";
 import DesignAuswahl from "@/components/DesignAuswahl";
 import IconStilAuswahl from "@/components/IconStilAuswahl";
 import KioskModusAuswahl from "@/components/KioskModusAuswahl";
+import TicketNachrichtenThread from "@/components/TicketNachrichtenThread";
 import IcsImportSektion from "@/components/IcsImportSektion";
 import NotengewichtungSektion from "@/components/NotengewichtungSektion";
 import TutorialModal from "@/components/TutorialModal";
@@ -594,6 +595,7 @@ export default function EinstellungenClient({
                   <Icon id="clock" size={12} /> Eingereicht: {formatiereDatumUhrzeit(t.createdAt)}
                 </span>
                 {t.begruendung && <span style={{ color: "var(--text-muted)", fontSize: 12 }}>Begründung: „{t.begruendung}"</span>}
+                <TicketNachrichtenThread ticketId={t.id} />
               </div>
             </details>
           );
@@ -1109,6 +1111,7 @@ export default function EinstellungenClient({
                 </button>
               ))}
             </div>
+            <TicketNachrichtenThread ticketId={t.id} />
           </div>
         );
         // Fix-Batch 60 (Florians Wunsch): nur noch wirklich offene (eingereichte) Tickets

@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { requireParent, requirePerson, requireAdmin, hashPin } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import { erkenneTicketAusSprache, verbessereFormulierung, type ErkanntesTicket } from "@/lib/spracheErkennung";
+import { sendePushAnPerson } from "@/lib/push";
 
 export async function listPersonen() {
   await requirePerson();
@@ -128,6 +129,66 @@ export async function listAlleTickets() {
 export async function setzeTicketStatus(id: string, status: string, begruendung?: string) {
   await requireAdmin();
   await prisma.ticket.update({ where: { id }, data: { status: status as any, begruendung: begruendung || undefined } });
+  revalidatePath("/einstellungen");
+}
+
+// ---------- Ticket-Nachrichten (Fix-Batch 142, Florians Wunsch) ----------
+// Kinder sollen auf ihre eigenen Tickets noch etwas ergänzen können, und der Admin soll darauf
+// antworten können — ein einfacher Nachrichten-Thread je Ticket, zusätzlich zur festen
+// Titel/Beschreibung/Begründung. Zugriff bewusst auf genau dieselben zwei Seiten beschränkt,
+// die das Ticket überhaupt sehen: der/die Ersteller:in und der Admin.
+async function pruefeTicketZugriff(ticketId: string, person: { id: string; rolle: string; istAdmin: boolean }) {
+  const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } });
+  if (!ticket) throw new Error("Ticket nicht gefunden.");
+  const istEigenes = ticket.erstelltVonId === person.id;
+  const istAdmin = person.rolle === "ELTERN" && person.istAdmin;
+  if (!istEigenes && !istAdmin) throw new Error("Nicht erlaubt.");
+  return ticket;
+}
+
+export async function listTicketNachrichten(ticketId: string) {
+  const person = await requirePerson();
+  await pruefeTicketZugriff(ticketId, person);
+  const nachrichten = await prisma.ticketNachricht.findMany({
+    where: { ticketId },
+    include: { erstelltVon: true },
+    orderBy: { createdAt: "asc" },
+  });
+  return nachrichten.map((n) => ({
+    id: n.id,
+    text: n.text,
+    erstellerName: n.erstelltVon.name,
+    istEigene: n.erstelltVonId === person.id,
+    createdAt: n.createdAt.toISOString(),
+  }));
+}
+
+export async function erstelleTicketNachricht(ticketId: string, text: string) {
+  const person = await requirePerson();
+  const ticket = await pruefeTicketZugriff(ticketId, person);
+  if (!text.trim()) throw new Error("Nachricht darf nicht leer sein.");
+  await prisma.ticketNachricht.create({ data: { ticketId, text: text.trim(), erstelltVonId: person.id } });
+
+  if (person.id === ticket.erstelltVonId) {
+    // Ersteller:in hat geschrieben -> alle Admins benachrichtigen.
+    const admins = await prisma.person.findMany({ where: { rolle: "ELTERN", istAdmin: true, aktiv: true } });
+    await Promise.all(
+      admins.map((a) =>
+        sendePushAnPerson(a.id, {
+          title: "Neue Nachricht zu einem Ticket",
+          body: `${person.name} zu „${ticket.titel}": ${text.trim().slice(0, 80)}`,
+          url: "/einstellungen",
+        })
+      )
+    );
+  } else {
+    // Admin hat geantwortet -> Ersteller:in benachrichtigen.
+    await sendePushAnPerson(ticket.erstelltVonId, {
+      title: "Antwort zu deinem Ticket",
+      body: `${person.name} zu „${ticket.titel}": ${text.trim().slice(0, 80)}`,
+      url: "/einstellungen",
+    });
+  }
   revalidatePath("/einstellungen");
 }
 

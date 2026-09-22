@@ -116,7 +116,8 @@ export const TUTORIAL_KAPITEL: TutorialKapitel[] = [
     nutzen: "Alles rund um die App selbst — Aussehen, Benachrichtigungen und Feedback.",
     punkte: [
       "Design-Vorlage, Icon-Stil (bunt/minimalistisch) und Hell/Dunkel-Modus wählen",
-      "Fehler melden oder Verbesserungen vorschlagen",
+      // Fix-Batch 142: Nachrichten-Thread je Ticket ergänzt.
+      "Fehler melden oder Verbesserungen vorschlagen, per Nachricht nachträglich ergänzen",
       "Eigene PIN jederzeit selbst ändern",
     ],
     punkteEltern: [

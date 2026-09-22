@@ -77,6 +77,7 @@ model Person {
   pushSubscriptions     PushSubscription[]
   schulEintraege        SchulEintrag[]           @relation("SchulEintragPerson")
   tickets               Ticket[]
+  ticketNachrichten     TicketNachricht[]
   dauerhafteZuordnungen DauerhafteZuordnung[]
   hausprobleme          Hausproblem[]
 }
@@ -648,6 +649,22 @@ model Ticket {
   erstelltVon   Person       @relation(fields: [erstelltVonId], references: [id])
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
+
+  nachrichten TicketNachricht[]
+}
+
+// Fix-Batch 142 (Florians Wunsch): einfacher Nachrichten-Thread je Ticket — der/die
+// Ersteller:in kann etwas ergänzen, der Admin kann nachfragen/antworten, jeweils auch per
+// Spracheingabe. Bewusst ein eigenes, simples Modell statt AenderungsLog zu erweitern (das ist
+// für strukturierte Feldänderungen gedacht, nicht für freien Nachrichtentext).
+model TicketNachricht {
+  id            String   @id @default(cuid())
+  ticketId      String
+  ticket        Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  text          String
+  erstelltVonId String
+  erstelltVon   Person   @relation(fields: [erstelltVonId], references: [id])
+  createdAt     DateTime @default(now())
 }
 
 // ---------- Hausreparaturen/Vermieterkommunikation (Fix-Batch 35 Nachtrag) ----------
