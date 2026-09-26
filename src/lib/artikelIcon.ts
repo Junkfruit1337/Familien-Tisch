@@ -55,6 +55,9 @@ const REGELN: { icon: string; keywords: string[] }[] = [
   { icon: "🍇", keywords: ["granatapfel"] },
   { icon: "🥝", keywords: ["litschi", "physalis"] },
   { icon: "🌿", keywords: ["rhabarber"] },
+  // Fix-Batch 145 (Ticket #8): muss vor der generischen "milch"-Regel stehen, siehe
+  // kategorisierung.ts für die Begründung (Kokosmilch ist kein Kühlregal-/Molkerei-Produkt).
+  { icon: "🥥", keywords: ["kokosmilch", "kokosraspel", "kokosflocken", "kokosnuss"] },
   { icon: "🥛", keywords: ["milch", "buttermilch", "kefir"] },
   { icon: "🧀", keywords: ["käse", "mozzarella", "parmesan", "frischkäse", "gouda", "feta", "hüttenkäse"] },
   { icon: "🥣", keywords: ["joghurt", "quark", "schmand", "skyr", "crème fraîche"] },

@@ -220,6 +220,7 @@ export default function EinkaufslisteClient({
   unbestaetigt: initialUnbestaetigt,
   rezepte,
   gelernteIcons,
+  bekannteArtikelNamen,
 }: {
   istEltern: boolean;
   artikel: Artikel[];
@@ -230,6 +231,7 @@ export default function EinkaufslisteClient({
   unbestaetigt: Unbestaetigt[];
   rezepte: RezeptKurz[];
   gelernteIcons: Record<string, string>;
+  bekannteArtikelNamen: string[];
 }) {
   // Fix-Batch 63 (Icon-Lerndatenbank): Priorität iconOverride (dieser eine Artikel) >
   // gelerntes Icon (global für diesen Namen, aus einer früheren Korrektur) > Stichwort-
@@ -463,6 +465,14 @@ export default function EinkaufslisteClient({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      {/* Fix-Batch 145 (Ticket #8, "intelligente Logik und Suchfunktion"): Autovervollständigung
+          fürs Namensfeld unten — schlägt beim Tippen bereits bekannte Artikelnamen vor, statt
+          dass jede Schreibweise-Variante als eigener Artikel landet. */}
+      <datalist id="einkaufsliste-bekannte-namen">
+        {bekannteArtikelNamen.map((n) => (
+          <option key={n} value={n} />
+        ))}
+      </datalist>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
         <SeitenTitel bereich="einkaufsliste">Einkaufsliste</SeitenTitel>
         {istEltern && (
@@ -492,144 +502,6 @@ export default function EinkaufslisteClient({
         <p style={{ margin: "-8px 0 0", fontSize: 13, color: "var(--text-muted)" }}>
           {sessionErledigt} von {artikel.length + sessionErledigt} erledigt — Bildschirm bleibt an, solange der Einkaufsmodus läuft.
         </p>
-      )}
-
-      {einkaufsmodus ? null : istEltern ? (
-        <div className="card" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          <Spracheingabe onErgebnis={spracheErkannt} disabled={spracheVerarbeitung} />
-          {spracheVerarbeitung && <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>Spracheingabe wird verarbeitet …</p>}
-          <input placeholder="Artikel" value={name} onChange={(e) => setName(e.target.value)} />
-          <input placeholder="Menge (optional)" value={menge} onChange={(e) => setMenge(e.target.value)} />
-          <input placeholder="Notizen (optional, z. B. Körnerbrot)" value={notiz} onChange={(e) => setNotiz(e.target.value)} />
-          <select value={kategorieId} onChange={(e) => setKategorieId(e.target.value)}>
-            <option value="">Automatisch{erkannteKategorieName ? ` (erkannt: ${erkannteKategorieName})` : ""}</option>
-            {kategorien.map((k) => (
-              <option key={k.id} value={k.id}>
-                {k.name}
-              </option>
-            ))}
-          </select>
-          {!kategorieId && name && (
-            <p style={{ margin: 0, fontSize: 13, color: "var(--text-muted)" }}>
-              {erkannteKategorieName
-                ? `→ wird automatisch als ${erkannteKategorieName} einsortiert`
-                : `→ keine Kategorie erkannt, landet in Sonstiges (oben manuell wählbar)`}
-            </p>
-          )}
-          <button
-            className="btn"
-            disabled={pending}
-            onClick={() =>
-              startTransition(async () => {
-                if (!name) return;
-                await addArtikel({ name, menge: menge || undefined, notiz: notiz || undefined, kategorieId: kategorieId || undefined });
-                setName("");
-                setMenge("");
-                setNotiz("");
-                setKategorieId("");
-              })
-            }
-          >
-            Hinzufügen
-          </button>
-        </div>
-      ) : (
-        <div className="card" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          <p style={{ margin: 0, fontSize: 14, color: "var(--text-muted)" }}>
-            Du kannst die Liste nicht direkt ändern — reiche stattdessen einen Wunsch ein, den die Eltern genehmigen.
-          </p>
-          <Spracheingabe onErgebnis={spracheErkannt} disabled={spracheVerarbeitung} />
-          {spracheVerarbeitung && <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>Spracheingabe wird verarbeitet …</p>}
-          <input placeholder="Was wünschst du dir?" value={name} onChange={(e) => setName(e.target.value)} />
-          <input placeholder="Menge (optional)" value={menge} onChange={(e) => setMenge(e.target.value)} />
-          <input placeholder="Notizen (optional, z. B. Körnerbrot)" value={notiz} onChange={(e) => setNotiz(e.target.value)} />
-          <button
-            className="btn"
-            disabled={pending}
-            onClick={() =>
-              startTransition(async () => {
-                if (!name) return;
-                await submitWunsch({ artikelName: name, menge: menge || undefined, notiz: notiz || undefined });
-                setName("");
-                setMenge("");
-                setNotiz("");
-              })
-            }
-          >
-            Wunsch einreichen
-          </button>
-          {offeneWuensche.length > 0 && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 8, borderTop: "1px solid var(--border)", paddingTop: 10 }}>
-              <strong style={{ fontSize: 13 }}>Meine offenen Wünsche</strong>
-              {offeneWuensche.map((w) =>
-                wunschBearbeitenId === w.id ? (
-                  <div key={w.id} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                    <input value={wunschBearbeitenName} onChange={(e) => setWunschBearbeitenName(e.target.value)} autoFocus />
-                    <input placeholder="Menge (optional)" value={wunschBearbeitenMenge} onChange={(e) => setWunschBearbeitenMenge(e.target.value)} />
-                    <input placeholder="Notizen (optional)" value={wunschBearbeitenNotiz} onChange={(e) => setWunschBearbeitenNotiz(e.target.value)} />
-                    <div style={{ display: "flex", gap: 6 }}>
-                      <button
-                        className="btn"
-                        style={{ fontSize: 12, padding: "4px 10px" }}
-                        onClick={() =>
-                          startTransition(async () => {
-                            if (!wunschBearbeitenName.trim()) return;
-                            try {
-                              await updateWunsch(w.id, {
-                                artikelName: wunschBearbeitenName.trim(),
-                                menge: wunschBearbeitenMenge || undefined,
-                                notiz: wunschBearbeitenNotiz || undefined,
-                              });
-                              setWunschBearbeitenId(null);
-                            } catch (e: any) {
-                              alert(e.message);
-                            }
-                          })
-                        }
-                      >
-                        Speichern
-                      </button>
-                      <button className="btn-secondary" style={{ fontSize: 12, padding: "4px 10px" }} onClick={() => setWunschBearbeitenId(null)}>
-                        Abbrechen
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div key={w.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, fontSize: 14 }}>
-                    <span>
-                      {w.artikelName}
-                      {w.menge ? ` (${w.menge})` : ""}
-                      {w.notiz ? ` · ${w.notiz}` : ""}
-                    </span>
-                    <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-                      <button
-                        className="btn-secondary"
-                        style={{ fontSize: 12, padding: "3px 8px" }}
-                        onClick={() => {
-                          setWunschBearbeitenId(w.id);
-                          setWunschBearbeitenName(w.artikelName);
-                          setWunschBearbeitenMenge(w.menge ?? "");
-                          setWunschBearbeitenNotiz(w.notiz ?? "");
-                        }}
-                      >
-                        <Icon id="edit" size={13} />
-                      </button>
-                      <button
-                        className="btn-secondary"
-                        style={{ fontSize: 12, padding: "3px 8px" }}
-                        onClick={() => {
-                          if (confirm(`Wunsch „${w.artikelName}" wirklich zurückziehen?`)) startTransition(() => deleteWunsch(w.id));
-                        }}
-                      >
-                        <Icon id="delete" size={13} />
-                      </button>
-                    </div>
-                  </div>
-                )
-              )}
-            </div>
-          )}
-        </div>
       )}
 
       {!einkaufsmodus && istEltern && unbestaetigt.length > 0 && (
@@ -1055,6 +927,144 @@ export default function EinkaufslisteClient({
                     </button>
                   </div>
                 </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {einkaufsmodus ? null : istEltern ? (
+        <div className="card" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <Spracheingabe onErgebnis={spracheErkannt} disabled={spracheVerarbeitung} />
+          {spracheVerarbeitung && <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>Spracheingabe wird verarbeitet …</p>}
+          <input placeholder="Artikel" value={name} onChange={(e) => setName(e.target.value)} list="einkaufsliste-bekannte-namen" />
+          <input placeholder="Menge (optional)" value={menge} onChange={(e) => setMenge(e.target.value)} />
+          <input placeholder="Notizen (optional, z. B. Körnerbrot)" value={notiz} onChange={(e) => setNotiz(e.target.value)} />
+          <select value={kategorieId} onChange={(e) => setKategorieId(e.target.value)}>
+            <option value="">Automatisch{erkannteKategorieName ? ` (erkannt: ${erkannteKategorieName})` : ""}</option>
+            {kategorien.map((k) => (
+              <option key={k.id} value={k.id}>
+                {k.name}
+              </option>
+            ))}
+          </select>
+          {!kategorieId && name && (
+            <p style={{ margin: 0, fontSize: 13, color: "var(--text-muted)" }}>
+              {erkannteKategorieName
+                ? `→ wird automatisch als ${erkannteKategorieName} einsortiert`
+                : `→ keine Kategorie erkannt, landet in Sonstiges (oben manuell wählbar)`}
+            </p>
+          )}
+          <button
+            className="btn"
+            disabled={pending}
+            onClick={() =>
+              startTransition(async () => {
+                if (!name) return;
+                await addArtikel({ name, menge: menge || undefined, notiz: notiz || undefined, kategorieId: kategorieId || undefined });
+                setName("");
+                setMenge("");
+                setNotiz("");
+                setKategorieId("");
+              })
+            }
+          >
+            Hinzufügen
+          </button>
+        </div>
+      ) : (
+        <div className="card" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <p style={{ margin: 0, fontSize: 14, color: "var(--text-muted)" }}>
+            Du kannst die Liste nicht direkt ändern — reiche stattdessen einen Wunsch ein, den die Eltern genehmigen.
+          </p>
+          <Spracheingabe onErgebnis={spracheErkannt} disabled={spracheVerarbeitung} />
+          {spracheVerarbeitung && <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>Spracheingabe wird verarbeitet …</p>}
+          <input placeholder="Was wünschst du dir?" value={name} onChange={(e) => setName(e.target.value)} list="einkaufsliste-bekannte-namen" />
+          <input placeholder="Menge (optional)" value={menge} onChange={(e) => setMenge(e.target.value)} />
+          <input placeholder="Notizen (optional, z. B. Körnerbrot)" value={notiz} onChange={(e) => setNotiz(e.target.value)} />
+          <button
+            className="btn"
+            disabled={pending}
+            onClick={() =>
+              startTransition(async () => {
+                if (!name) return;
+                await submitWunsch({ artikelName: name, menge: menge || undefined, notiz: notiz || undefined });
+                setName("");
+                setMenge("");
+                setNotiz("");
+              })
+            }
+          >
+            Wunsch einreichen
+          </button>
+          {offeneWuensche.length > 0 && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, borderTop: "1px solid var(--border)", paddingTop: 10 }}>
+              <strong style={{ fontSize: 13 }}>Meine offenen Wünsche</strong>
+              {offeneWuensche.map((w) =>
+                wunschBearbeitenId === w.id ? (
+                  <div key={w.id} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    <input value={wunschBearbeitenName} onChange={(e) => setWunschBearbeitenName(e.target.value)} autoFocus />
+                    <input placeholder="Menge (optional)" value={wunschBearbeitenMenge} onChange={(e) => setWunschBearbeitenMenge(e.target.value)} />
+                    <input placeholder="Notizen (optional)" value={wunschBearbeitenNotiz} onChange={(e) => setWunschBearbeitenNotiz(e.target.value)} />
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <button
+                        className="btn"
+                        style={{ fontSize: 12, padding: "4px 10px" }}
+                        onClick={() =>
+                          startTransition(async () => {
+                            if (!wunschBearbeitenName.trim()) return;
+                            try {
+                              await updateWunsch(w.id, {
+                                artikelName: wunschBearbeitenName.trim(),
+                                menge: wunschBearbeitenMenge || undefined,
+                                notiz: wunschBearbeitenNotiz || undefined,
+                              });
+                              setWunschBearbeitenId(null);
+                            } catch (e: any) {
+                              alert(e.message);
+                            }
+                          })
+                        }
+                      >
+                        Speichern
+                      </button>
+                      <button className="btn-secondary" style={{ fontSize: 12, padding: "4px 10px" }} onClick={() => setWunschBearbeitenId(null)}>
+                        Abbrechen
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div key={w.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, fontSize: 14 }}>
+                    <span>
+                      {w.artikelName}
+                      {w.menge ? ` (${w.menge})` : ""}
+                      {w.notiz ? ` · ${w.notiz}` : ""}
+                    </span>
+                    <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                      <button
+                        className="btn-secondary"
+                        style={{ fontSize: 12, padding: "3px 8px" }}
+                        onClick={() => {
+                          setWunschBearbeitenId(w.id);
+                          setWunschBearbeitenName(w.artikelName);
+                          setWunschBearbeitenMenge(w.menge ?? "");
+                          setWunschBearbeitenNotiz(w.notiz ?? "");
+                        }}
+                      >
+                        <Icon id="edit" size={13} />
+                      </button>
+                      <button
+                        className="btn-secondary"
+                        style={{ fontSize: 12, padding: "3px 8px" }}
+                        onClick={() => {
+                          if (confirm(`Wunsch „${w.artikelName}" wirklich zurückziehen?`)) startTransition(() => deleteWunsch(w.id));
+                        }}
+                      >
+                        <Icon id="delete" size={13} />
+                      </button>
+                    </div>
+                  </div>
+                )
               )}
             </div>
           )}

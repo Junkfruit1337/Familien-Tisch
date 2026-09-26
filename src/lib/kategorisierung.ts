@@ -27,6 +27,14 @@ const SPEZIFIKATIONS_REGELN: { kategorie: string; keywords: string[] }[] = [
     kategorie: "Tiefkühl",
     keywords: ["tiefkühl", "tiefgefroren", "gefroren", "tk-", "tk ", "(tk)", " tk)", "tk)"],
   },
+  // Fix-Batch 145 (Ticket #8, Florians Bug-Meldung "Lebensmittelerkennung... erheblich
+  // verbessern"): "Kokosmilch" enthält als Substring "milch" und landete dadurch fälschlich
+  // bei Milchprodukten — tatsächlich ein lang haltbares Vorrats-Produkt (Curry/Asia-Küche),
+  // kein Kühlregal-Artikel. Muss vor der generischen "milch"-Regel geprüft werden.
+  {
+    kategorie: "Vorrat",
+    keywords: ["kokosmilch"],
+  },
 ];
 
 const REGELN: { kategorie: string; keywords: string[] }[] = [

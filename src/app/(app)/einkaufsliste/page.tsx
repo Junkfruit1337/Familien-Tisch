@@ -7,6 +7,7 @@ import {
   listVorschlaege,
   listUnbestaetigteArtikel,
   listGelernteIcons,
+  listBekannteArtikelNamen,
 } from "./actions";
 import { listRezepteDetail } from "../essensplan/actions";
 import EinkaufslisteClient from "./EinkaufslisteClient";
@@ -27,7 +28,7 @@ function zuArtikel(a: { id: string; name: string; menge: string | null; notiz: s
 export default async function EinkaufslistePage() {
   const person = await getCurrentPerson();
   const istEltern = person?.rolle === "ELTERN";
-  const [artikel, erledigtErgebnis, wuensche, kategorien, vorschlaege, unbestaetigt, rezepteAlle, gelernteIcons] = await Promise.all([
+  const [artikel, erledigtErgebnis, wuensche, kategorien, vorschlaege, unbestaetigt, rezepteAlle, gelernteIcons, bekannteArtikelNamen] = await Promise.all([
     listArtikel(),
     listErledigteArtikel(),
     listWuensche(),
@@ -36,6 +37,7 @@ export default async function EinkaufslistePage() {
     istEltern ? listUnbestaetigteArtikel() : Promise.resolve([]),
     istEltern ? listRezepteDetail() : Promise.resolve([]),
     listGelernteIcons(),
+    listBekannteArtikelNamen(),
   ]);
 
   return (
@@ -57,6 +59,7 @@ export default async function EinkaufslistePage() {
       unbestaetigt={unbestaetigt}
       rezepte={rezepteAlle.map((r) => ({ id: r.id, name: r.name, zutaten: r.zutaten, portionenBasis: r.portionenBasis }))}
       gelernteIcons={gelernteIcons}
+      bekannteArtikelNamen={bekannteArtikelNamen}
     />
   );
 }

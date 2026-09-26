@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { requirePerson, requireParent, requireAdmin } from "@/lib/auth";
 import { logAenderung } from "@/lib/history";
 import { erkenneKategorie } from "@/lib/kategorisierung";
+import { formatiereArtikelName } from "@/lib/artikelName";
 import { erkenneArtikelAusSprache, type ErkannterArtikel } from "@/lib/spracheErkennung";
 import { erkenneEinkaufslisteAusBild, type ErkannterListenArtikel } from "@/lib/einkaufslisteErkennung";
 import { sendePushAnEltern } from "@/lib/push";
@@ -125,6 +126,19 @@ const ZAEHL_EINHEITEN: Record<string, string> = {
   knolle: "Knolle", knollen: "Knolle",
   blatt: "Blatt", blätter: "Blatt",
   würfel: "Würfel",
+  // Fix-Batch 145 (Ticket #6, Florians Bug-Meldung "Mengenangabe... intelligentere
+  // Handhabung"): weitere, in Rezepten übliche Zähl-/Portions-Einheiten ergänzt, die bisher
+  // fehlten und deshalb nicht zusammengezählt wurden (z. B. "1 Stange" + "2 Stangen" Lauch).
+  stange: "Stange", stangen: "Stange",
+  msp: "Msp.", messerspitze: "Msp.", messerspitzen: "Msp.",
+  handvoll: "Handvoll",
+  becher: "Becher",
+  tasse: "Tasse", tassen: "Tasse",
+  kugel: "Kugel", kugeln: "Kugel",
+  rolle: "Rolle", rollen: "Rolle",
+  riegel: "Riegel",
+  portion: "Portion", portionen: "Portion",
+  filet: "Filet", filets: "Filet",
 };
 
 type Mengenfamilie = { kind: "gewicht" } | { kind: "volumen" } | { kind: "zaehl"; einheit: string };
@@ -274,7 +288,7 @@ export async function bestaetigeArtikel(id: string, data?: { menge?: string; nam
   const artikel = await prisma.einkaufsArtikel.findUnique({ where: { id } });
   if (!artikel) return;
   const menge = data?.menge !== undefined ? data.menge || null : artikel.menge;
-  const name = data?.name?.trim() ? data.name.trim() : artikel.name;
+  const name = formatiereArtikelName(data?.name?.trim() ? data.name.trim() : artikel.name);
   const bestehender = await findeOffenenArtikel(name, artikel.notiz);
   if (bestehender) {
     await prisma.einkaufsArtikel.update({
@@ -320,7 +334,8 @@ export async function listKategorien() {
 export async function addArtikel(data: { name: string; menge?: string; notiz?: string; kategorieId?: string }) {
   await requireParent();
 
-  const bestehender = await findeOffenenArtikel(data.name, data.notiz);
+  const name = formatiereArtikelName(data.name);
+  const bestehender = await findeOffenenArtikel(name, data.notiz);
   let artikelId: string;
   let artikel;
   if (bestehender) {
@@ -330,9 +345,9 @@ export async function addArtikel(data: { name: string; menge?: string; notiz?: s
     });
     artikelId = artikel.id;
   } else {
-    const kategorieId = data.kategorieId || (await autoKategorieId(data.name));
+    const kategorieId = data.kategorieId || (await autoKategorieId(name));
     artikel = await prisma.einkaufsArtikel.create({
-      data: { name: data.name, menge: data.menge, notiz: data.notiz || null, kategorieId: kategorieId || null },
+      data: { name, menge: data.menge, notiz: data.notiz || null, kategorieId: kategorieId || null },
     });
     artikelId = artikel.id;
   }
@@ -349,7 +364,7 @@ export async function updateArtikel(id: string, data: { name?: string; menge?: s
   const artikel = await prisma.einkaufsArtikel.update({
     where: { id },
     data: {
-      name: data.name,
+      name: data.name !== undefined ? formatiereArtikelName(data.name) : undefined,
       menge: data.menge,
       notiz: data.notiz !== undefined ? data.notiz || null : undefined,
       iconOverride: data.iconOverride !== undefined ? data.iconOverride || null : undefined,
@@ -375,6 +390,20 @@ export async function updateArtikel(id: string, data: { name?: string; menge?: s
 export async function listGelernteIcons(): Promise<Record<string, string>> {
   const eintraege = await prisma.gelernteArtikelIcons.findMany();
   return Object.fromEntries(eintraege.map((e) => [e.name, e.icon]));
+}
+
+// Fix-Batch 145 (Ticket #8, "intelligente Logik und Suchfunktion"): alle je verwendeten
+// Artikelnamen (egal ob aktuell auf der Liste, schon abgehakt oder aus dem Essensplan
+// übernommen) als Grundlage für eine Autovervollständigung im Eingabefeld — verhindert
+// Tippfehler-Varianten desselben Artikels ("Tomate" / "Tomaten" / "tomate" landen sonst als
+// getrennte Zeilen) und macht das erneute Eintippen schon bekannter Dinge schneller.
+export async function listBekannteArtikelNamen(): Promise<string[]> {
+  const eintraege = await prisma.einkaufsArtikel.findMany({
+    distinct: ["name"],
+    select: { name: true },
+    orderBy: { name: "asc" },
+  });
+  return eintraege.map((e) => e.name);
 }
 
 // Eltern: Artikel manuell in eine andere Kategorie verschieben (übersteuert die Auto-Erkennung dauerhaft).
@@ -420,8 +449,9 @@ export async function deleteArtikel(id: string) {
 // Benachrichtigung bei neu eingereichten Noten (siehe schule/actions.ts, einreichenNote).
 export async function submitWunsch(data: { artikelName: string; menge?: string; notiz?: string }) {
   const person = await requirePerson();
+  const artikelName = formatiereArtikelName(data.artikelName);
   const wunsch = await prisma.einkaufsWunsch.create({
-    data: { artikelName: data.artikelName, menge: data.menge, notiz: data.notiz || null, kindId: person.id },
+    data: { artikelName, menge: data.menge, notiz: data.notiz || null, kindId: person.id },
   });
   await logAenderung({ entityTyp: "EINKAUFS_WUNSCH", entityId: wunsch.id, aktion: "eingereicht", neuerWert: wunsch.artikelName, geaendertVonId: person.id });
   await sendePushAnEltern({
@@ -441,7 +471,10 @@ export async function updateWunsch(id: string, data: { artikelName?: string; men
   if (!bestehend) throw new Error("Wunsch nicht gefunden.");
   if (person.rolle !== "ELTERN" && bestehend.kindId !== person.id) throw new Error("Nicht erlaubt.");
   if (bestehend.status !== "OFFEN") throw new Error("Nur ein noch nicht entschiedener Wunsch kann bearbeitet werden.");
-  await prisma.einkaufsWunsch.update({ where: { id }, data });
+  await prisma.einkaufsWunsch.update({
+    where: { id },
+    data: { ...data, artikelName: data.artikelName !== undefined ? formatiereArtikelName(data.artikelName) : undefined },
+  });
   revalidatePath("/einkaufsliste");
 }
 

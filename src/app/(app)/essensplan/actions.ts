@@ -18,6 +18,7 @@ import {
 } from "@/lib/rezeptErkennung";
 import { istGueltigeKategorie } from "@/lib/rezeptKategorien";
 import { parseZutatZeile, skaliereZeile } from "@/lib/zutatenSkalierung";
+import { formatiereArtikelName } from "@/lib/artikelName";
 
 function getSamstagWocheStart(date: Date): Date {
   // Essensplan-Woche läuft Samstag–Samstag.
@@ -486,7 +487,11 @@ export async function fuegeZutatenDesTagsHinzu(eintragId: string) {
     .map((z) => skaliereZeile(parseZutatZeile(z), eintrag.esserFaktor || 1));
 
   for (const zeile of zeilen) {
-    const bestehender = await findeOffenenUnbestaetigtenArtikel(zeile.name);
+    // Fix-Batch 145 (Ticket #8, "korrekte Groß-/Kleinschreibung"): Rezept-Zutatenzeilen kommen
+    // oft komplett kleingeschrieben rein (KI-Erkennung oder Florians eigene Tipp-Gewohnheit) —
+    // der Name wird erst hier, beim tatsächlichen Anlegen auf der Einkaufsliste, normalisiert.
+    const name = formatiereArtikelName(zeile.name);
+    const bestehender = await findeOffenenUnbestaetigtenArtikel(name);
     let artikelId: string;
     if (bestehender) {
       await prisma.einkaufsArtikel.update({
@@ -495,9 +500,9 @@ export async function fuegeZutatenDesTagsHinzu(eintragId: string) {
       });
       artikelId = bestehender.id;
     } else {
-      const kategorieId = await autoKategorieId(zeile.name);
+      const kategorieId = await autoKategorieId(name);
       const neu = await prisma.einkaufsArtikel.create({
-        data: { name: zeile.name, menge: zeile.menge, kategorieId: kategorieId || null, quelle: "essensplan", bestaetigt: false },
+        data: { name, menge: zeile.menge, kategorieId: kategorieId || null, quelle: "essensplan", bestaetigt: false },
       });
       artikelId = neu.id;
     }
@@ -549,7 +554,11 @@ export async function uebernehmeZusaetzlicheZutaten(rezeptId: string, zeilen: { 
   const rezept = await prisma.rezept.findUnique({ where: { id: rezeptId } });
   if (!rezept) return;
   for (const zeile of zeilen) {
-    const bestehender = await findeOffenenUnbestaetigtenArtikel(zeile.name);
+    // Fix-Batch 145 (Ticket #8, "korrekte Groß-/Kleinschreibung"): Rezept-Zutatenzeilen kommen
+    // oft komplett kleingeschrieben rein (KI-Erkennung oder Florians eigene Tipp-Gewohnheit) —
+    // der Name wird erst hier, beim tatsächlichen Anlegen auf der Einkaufsliste, normalisiert.
+    const name = formatiereArtikelName(zeile.name);
+    const bestehender = await findeOffenenUnbestaetigtenArtikel(name);
     let artikelId: string;
     if (bestehender) {
       await prisma.einkaufsArtikel.update({
@@ -558,9 +567,9 @@ export async function uebernehmeZusaetzlicheZutaten(rezeptId: string, zeilen: { 
       });
       artikelId = bestehender.id;
     } else {
-      const kategorieId = await autoKategorieId(zeile.name);
+      const kategorieId = await autoKategorieId(name);
       const neu = await prisma.einkaufsArtikel.create({
-        data: { name: zeile.name, menge: zeile.menge, kategorieId: kategorieId || null, quelle: "essensplan", bestaetigt: false },
+        data: { name, menge: zeile.menge, kategorieId: kategorieId || null, quelle: "essensplan", bestaetigt: false },
       });
       artikelId = neu.id;
     }
@@ -650,7 +659,11 @@ export async function fuegeZutatenFuerExtraMahlzeitHinzu(id: string) {
     .map((z) => skaliereZeile(parseZutatZeile(z), eintrag.faktor || 1));
 
   for (const zeile of zeilen) {
-    const bestehender = await findeOffenenUnbestaetigtenArtikel(zeile.name);
+    // Fix-Batch 145 (Ticket #8, "korrekte Groß-/Kleinschreibung"): Rezept-Zutatenzeilen kommen
+    // oft komplett kleingeschrieben rein (KI-Erkennung oder Florians eigene Tipp-Gewohnheit) —
+    // der Name wird erst hier, beim tatsächlichen Anlegen auf der Einkaufsliste, normalisiert.
+    const name = formatiereArtikelName(zeile.name);
+    const bestehender = await findeOffenenUnbestaetigtenArtikel(name);
     let artikelId: string;
     if (bestehender) {
       await prisma.einkaufsArtikel.update({
@@ -659,9 +672,9 @@ export async function fuegeZutatenFuerExtraMahlzeitHinzu(id: string) {
       });
       artikelId = bestehender.id;
     } else {
-      const kategorieId = await autoKategorieId(zeile.name);
+      const kategorieId = await autoKategorieId(name);
       const neu = await prisma.einkaufsArtikel.create({
-        data: { name: zeile.name, menge: zeile.menge, kategorieId: kategorieId || null, quelle: "essensplan", bestaetigt: false },
+        data: { name, menge: zeile.menge, kategorieId: kategorieId || null, quelle: "essensplan", bestaetigt: false },
       });
       artikelId = neu.id;
     }
