@@ -219,8 +219,11 @@ export async function getDashboardDaten() {
 
   // Fix-Batch 49: eigene noch nicht abgeschlossene Tickets auf dem Dashboard anzeigen
   // (für alle, nicht nur Eltern) — Klick führt zum Ticket-Bereich in den Einstellungen.
+  // Fix-Batch 146 (Florians Bug-Meldung): "RUECKFRAGE" (Fix-Batch 143 eingeführt) fehlte hier
+  // in der Statusliste — ein Ticket mit einer offenen Rückfrage verschwand dadurch komplett
+  // aus dieser Übersicht, obwohl es dringender auf eine Reaktion wartet als jedes andere.
   const meineOffenenTickets = await prisma.ticket.findMany({
-    where: { erstelltVonId: person.id, status: { in: ["EINGEREICHT", "GENEHMIGT", "IN_UMSETZUNG"] } },
+    where: { erstelltVonId: person.id, status: { in: ["EINGEREICHT", "GENEHMIGT", "IN_UMSETZUNG", "RUECKFRAGE"] } },
     orderBy: { createdAt: "desc" },
   });
 

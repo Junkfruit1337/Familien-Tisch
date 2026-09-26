@@ -126,9 +126,23 @@ export async function listAlleTickets() {
   return prisma.ticket.findMany({ include: { erstelltVon: true }, orderBy: { createdAt: "desc" } });
 }
 
+// Fix-Batch 146 (Florians Bug-Meldung: "ich hatte auf ein Ticket geantwortet und um
+// Rückmeldung gebeten, aber die Kinder sehen es scheinbar in ihrer App gar nicht"): eine
+// Rückfrage blieb bisher komplett stumm — kein Push, keine Auffälligkeit im Dashboard (dort
+// filterte die Statusliste RUECKFRAGE gar nicht erst mit, siehe dashboard/actions.ts). Ein
+// Kind musste von sich aus in die Einstellungen gehen und dort nachschauen, um überhaupt zu
+// bemerken, dass eine Antwort erwartet wird — das Ticket hing dadurch "ewig in der Luft".
+// Jetzt gibt es bei einer Rückfrage sofort eine Push-Benachrichtigung mit der Frage selbst.
 export async function setzeTicketStatus(id: string, status: string, begruendung?: string) {
   await requireAdmin();
-  await prisma.ticket.update({ where: { id }, data: { status: status as any, begruendung: begruendung || undefined } });
+  const ticket = await prisma.ticket.update({ where: { id }, data: { status: status as any, begruendung: begruendung || undefined } });
+  if (status === "RUECKFRAGE") {
+    await sendePushAnPerson(ticket.erstelltVonId, {
+      title: "Rückfrage zu deinem Ticket",
+      body: begruendung ? `Zu „${ticket.titel}": ${begruendung.slice(0, 100)}` : `Zu „${ticket.titel}" — bitte antworten.`,
+      url: "/einstellungen",
+    });
+  }
   revalidatePath("/einstellungen");
 }
 

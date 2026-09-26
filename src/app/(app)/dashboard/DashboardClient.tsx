@@ -26,6 +26,9 @@ const TICKET_STATUS_LABEL: Record<string, string> = {
   EINGEREICHT: "Eingereicht",
   GENEHMIGT: "Genehmigt",
   IN_UMSETZUNG: "Genehmigt und in Umsetzung",
+  // Fix-Batch 146 (Florians Bug-Meldung, Rückfrage blieb unbemerkt): eigener, deutlich
+  // dringlicherer Text statt des rohen Enum-Namens.
+  RUECKFRAGE: "Rückfrage — bitte antworten",
 };
 
 type HeutigesGericht = { bezeichnung: string; rezeptName: string; zutaten: string[]; zubereitung: string | null; zutatenUebernommen: boolean };
@@ -122,15 +125,22 @@ export default function DashboardClient({ daten, istEltern }: { daten: Daten; is
             <Icon id="ticket" /> Meine offenen Tickets ({daten.meineOffenenTickets.length})
           </strong>
           <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
-            {daten.meineOffenenTickets.map((t) => (
+            {/* Fix-Batch 146 (Florians Bug-Meldung): eine offene Rückfrage wartet auf eine
+                Reaktion von genau dieser Person — steht deshalb ganz oben, statt zwischen
+                normalen Status-Updates unterzugehen. */}
+            {[...daten.meineOffenenTickets]
+              .sort((a, b) => (a.status === "RUECKFRAGE" ? -1 : b.status === "RUECKFRAGE" ? 1 : 0))
+              .map((t) => (
               <Link
                 key={t.id}
                 href={`/einstellungen?highlight=${t.id}`}
                 style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, borderTop: "1px solid var(--border)", paddingTop: 8, color: "inherit", textDecoration: "none" }}
               >
-                <span>{t.titel}</span>
+                <span style={{ fontWeight: t.status === "RUECKFRAGE" ? 700 : undefined }}>
+                  {t.status === "RUECKFRAGE" && <Icon id="warning" size={13} />} {t.titel}
+                </span>
                 <span style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-                  <span className={`pill pill-${t.status === "EINGEREICHT" ? "offen" : "genehmigt"}`}>{TICKET_STATUS_LABEL[t.status] ?? t.status}</span>
+                  <span className={`pill pill-${t.status === "RUECKFRAGE" ? "abgelehnt" : t.status === "EINGEREICHT" ? "offen" : "genehmigt"}`}>{TICKET_STATUS_LABEL[t.status] ?? t.status}</span>
                   <span style={{ color: "var(--accent)", fontSize: 18 }}>→</span>
                 </span>
               </Link>
