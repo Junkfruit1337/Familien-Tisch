@@ -12,6 +12,7 @@ const SCHUL_ART_LABEL: Record<string, string> = {
   KLASSENARBEIT: "Arbeit",
   HAUSAUFGABEN_KONTROLLE: "HÜ",
   EPOCHALNOTE: "Epo",
+  DIKTAT: "Diktat",
 };
 
 export default async function KalenderPage() {

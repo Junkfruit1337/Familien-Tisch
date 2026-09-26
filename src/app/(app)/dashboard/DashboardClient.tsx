@@ -12,6 +12,7 @@ const ART_LABEL: Record<string, string> = {
   KLASSENARBEIT: "Arbeit",
   HAUSAUFGABEN_KONTROLLE: "HÜ",
   EPOCHALNOTE: "Epo",
+  DIKTAT: "Diktat",
 };
 
 // Fix-Batch 120 (Florians Wunsch): manche Noten stehen "zwischen" zwei ganzen Noten (z. B.

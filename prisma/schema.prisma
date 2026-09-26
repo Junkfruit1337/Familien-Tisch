@@ -312,6 +312,9 @@ enum NoteArt {
   KLASSENARBEIT
   HAUSAUFGABEN_KONTROLLE
   EPOCHALNOTE
+  // Fix-Batch 143 (Tickets von Lina/Emma): regelmäßiges Monatsdiktat als eigene Art, sowohl
+  // für die Ankündigung (SchulEintrag) als auch als eigene, separat gewichtbare Notenart.
+  DIKTAT
 }
 
 enum NoteStatus {
@@ -636,6 +639,13 @@ enum TicketStatus {
   ABGELEHNT
   IN_UMSETZUNG
   UMGESETZT
+  // Fix-Batch 143 (Florians Ticket "Rückfragefunktion für Admin bei Tickets"): der Admin kann
+  // eine Rückfrage stellen, BEVOR er sich für Genehmigt/Abgelehnt entscheidet — die Frage selbst
+  // steht in `begruendung` (dieselbe Anzeige wie bisher), geantwortet wird über den bestehenden
+  // Nachrichten-Thread (TicketNachricht). Sobald der/die Ersteller:in dort antwortet, springt
+  // der Status automatisch zurück auf EINGEREICHT (siehe erstelleTicketNachricht), damit die
+  // Rückfrage nicht in Vergessenheit gerät.
+  RUECKFRAGE
 }
 
 model Ticket {

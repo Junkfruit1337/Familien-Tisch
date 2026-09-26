@@ -18,8 +18,17 @@ export default function TicketNachrichtenThread({ ticketId }: { ticketId: string
   const [text, setText] = useState("");
   const [pending, startTransition] = useTransition();
 
+  // Fix-Batch 143 (Florians Bug-Meldung "Man kann nichts abschicken"): beide Aufrufe geben
+  // jetzt {ok, fehler} statt zu werfen zurück (siehe Kommentar in actions.ts) — hier deshalb
+  // explizit geprüft und bei einem Fehler sichtbar per alert() gemeldet, statt dass ein Klick
+  // auf "Absenden" ohne jede Rückmeldung ins Leere läuft.
   async function laden() {
-    setNachrichten(await listTicketNachrichten(ticketId));
+    const ergebnis = await listTicketNachrichten(ticketId);
+    if (!ergebnis.ok) {
+      alert(ergebnis.fehler);
+      return;
+    }
+    setNachrichten(ergebnis.nachrichten);
   }
 
   return (
@@ -59,7 +68,11 @@ export default function TicketNachrichtenThread({ ticketId }: { ticketId: string
           disabled={pending || !text.trim()}
           onClick={() =>
             startTransition(async () => {
-              await erstelleTicketNachricht(ticketId, text);
+              const ergebnis = await erstelleTicketNachricht(ticketId, text);
+              if (!ergebnis.ok) {
+                alert(ergebnis.fehler);
+                return;
+              }
               setText("");
               await laden();
             })

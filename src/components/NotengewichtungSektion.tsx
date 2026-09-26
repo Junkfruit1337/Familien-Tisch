@@ -9,6 +9,7 @@ const ART_LABEL: Record<string, string> = {
   KLASSENARBEIT: "Arbeit",
   HAUSAUFGABEN_KONTROLLE: "HÜ",
   EPOCHALNOTE: "Epo",
+  DIKTAT: "Diktat",
 };
 
 type Gewichtung = { fachId: string; fachName: string; gewichtungen: { art: string; gewichtung: number }[] };

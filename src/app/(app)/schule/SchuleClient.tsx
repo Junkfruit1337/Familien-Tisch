@@ -106,6 +106,8 @@ const ART_LABEL: Record<string, string> = {
   KLASSENARBEIT: "Arbeit",
   HAUSAUFGABEN_KONTROLLE: "HÜ",
   EPOCHALNOTE: "Epo",
+  // Fix-Batch 143 (Tickets von Lina/Emma: "Monatsdiktat").
+  DIKTAT: "Diktat",
 };
 
 // Fix-Batch 86 (Florians Wunsch, Dashboard entlasten): die Sparziel-Hochrechnung ("bei X
@@ -378,6 +380,7 @@ function SchulEintraegeSektion({
           <select value={art} onChange={(e) => setArt(e.target.value)}>
             <option value="KLASSENARBEIT">Arbeit</option>
             <option value="HAUSAUFGABEN_KONTROLLE">HÜ</option>
+            <option value="DIKTAT">Diktat</option>
           </select>
           <input type="date" value={datum} onChange={(e) => setDatum(e.target.value)} />
 

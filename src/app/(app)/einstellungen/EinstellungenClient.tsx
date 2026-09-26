@@ -157,6 +157,8 @@ const TICKET_STATUS_LABEL: Record<string, string> = {
   ABGELEHNT: "Abgelehnt",
   IN_UMSETZUNG: "Genehmigt und in Umsetzung",
   UMGESETZT: "Umgesetzt",
+  // Fix-Batch 143 (Florians Ticket "Rückfragefunktion für Admin bei Tickets").
+  RUECKFRAGE: "Rückfrage",
 };
 
 export default function EinstellungenClient({
@@ -571,7 +573,7 @@ export default function EinstellungenClient({
             >
               <summary style={{ cursor: "pointer", display: "flex", justifyContent: "space-between", gap: 8, listStyle: "none" }}>
                 <span>{t.titel}</span>
-                <span className={`pill pill-${t.status === "ABGELEHNT" ? "abgelehnt" : t.status === "EINGEREICHT" ? "offen" : "genehmigt"}`}>
+                <span className={`pill pill-${t.status === "ABGELEHNT" ? "abgelehnt" : t.status === "EINGEREICHT" ? "offen" : t.status === "RUECKFRAGE" ? "info" : "genehmigt"}`}>
                   {TICKET_STATUS_LABEL[t.status] ?? t.status}
                 </span>
               </summary>
@@ -599,7 +601,9 @@ export default function EinstellungenClient({
               </div>
             </details>
           );
-          const eingereicht = meineTickets.filter((t) => t.status === "EINGEREICHT");
+          // Fix-Batch 143: eine Rückfrage braucht MEINE Antwort, bleibt also wie "Eingereicht"
+          // direkt sichtbar statt in einer eingeklappten Sektion zu verschwinden.
+          const eingereicht = meineTickets.filter((t) => t.status === "EINGEREICHT" || t.status === "RUECKFRAGE");
           // Fix-Batch 60 (Florians Wunsch): nicht nur Umgesetzte, auch Genehmigte und
           // Abgelehnte stehen jetzt jeweils in einer eigenen, standardmäßig eingeklappten
           // Sektion — in der Hauptansicht bleiben nur noch die wirklich offenen (noch nicht
@@ -1052,7 +1056,7 @@ export default function EinstellungenClient({
           <div key={t.id} className={`card${t.status === "EINGEREICHT" ? " card-action" : ""}`} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
               <strong style={{ fontSize: 14 }}>{t.titel}</strong>
-              <span className={`pill pill-${t.status === "ABGELEHNT" ? "abgelehnt" : t.status === "EINGEREICHT" ? "offen" : "genehmigt"}`}>
+              <span className={`pill pill-${t.status === "ABGELEHNT" ? "abgelehnt" : t.status === "EINGEREICHT" ? "offen" : t.status === "RUECKFRAGE" ? "info" : "genehmigt"}`}>
                 {TICKET_STATUS_LABEL[t.status] ?? t.status}
               </span>
             </div>
@@ -1087,14 +1091,36 @@ export default function EinstellungenClient({
                 </span>
               )}
             </div>
-            {t.begruendung && <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>Begründung: „{t.begruendung}"</p>}
+            {t.begruendung && (
+              <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>
+                {t.status === "RUECKFRAGE" ? "Rückfrage" : "Begründung"}: „{t.begruendung}"
+              </p>
+            )}
             <input
-              placeholder="Begründung (optional)"
+              placeholder="Begründung / Rückfrage (Text hier rein, dann unten Status wählen)"
               value={ticketBegruendungen[t.id] ?? ""}
               onChange={(e) => setTicketBegruendungen((prev) => ({ ...prev, [t.id]: e.target.value }))}
               style={{ fontSize: 13 }}
             />
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {/* Fix-Batch 143 (Florians Ticket "Rückfragefunktion für Admin bei Tickets"):
+                  Rückfrage stellen, BEVOR man sich für Genehmigt/Abgelehnt entscheidet — der
+                  Text im Begründungsfeld wird dabei zur sichtbaren Frage; ohne Text ergibt eine
+                  Rückfrage keinen Sinn, deshalb hier deaktiviert. Beantwortet wird sie über den
+                  Nachrichten-Thread unten (der Status springt dann automatisch zurück). */}
+              <button
+                className="btn-secondary"
+                style={{
+                  fontSize: 12,
+                  padding: "4px 10px",
+                  background: t.status === "RUECKFRAGE" ? "var(--accent)" : undefined,
+                  color: t.status === "RUECKFRAGE" ? "var(--accent-contrast)" : undefined,
+                }}
+                disabled={!ticketBegruendungen[t.id]?.trim()}
+                onClick={() => startTransition(() => setzeTicketStatus(t.id, "RUECKFRAGE", ticketBegruendungen[t.id]))}
+              >
+                {TICKET_STATUS_LABEL.RUECKFRAGE}
+              </button>
               {["GENEHMIGT", "ABGELEHNT", "UMGESETZT"].map((s) => (
                 <button
                   key={s}
@@ -1118,6 +1144,9 @@ export default function EinstellungenClient({
         // stehen direkt sichtbar in der Hauptansicht — Genehmigt/Abgelehnt/Umgesetzt stehen
         // jetzt jeweils in einer eigenen, standardmäßig eingeklappten Sektion.
         const gruppen: { status: string; label: string }[] = [
+          // Fix-Batch 143: Rückfrage liegt jetzt beim Kind, deshalb hier mit eingeklappt statt
+          // in der "neu"-Übersicht zu bleiben.
+          { status: "RUECKFRAGE", label: "Rückfragen (warten auf Antwort)" },
           { status: "GENEHMIGT", label: "Genehmigte Tickets" },
           { status: "ABGELEHNT", label: "Abgelehnte Tickets" },
           { status: "UMGESETZT", label: "Umgesetzte Tickets" },

@@ -25,7 +25,7 @@ export type ErkannteAufgabe = {
 
 export type ErkannteNote = {
   fachId: string | null;
-  art: "KLASSENARBEIT" | "HAUSAUFGABEN_KONTROLLE" | "EPOCHALNOTE";
+  art: "KLASSENARBEIT" | "HAUSAUFGABEN_KONTROLLE" | "EPOCHALNOTE" | "DIKTAT";
   note: number | null;
   datum: string | null; // JJJJ-MM-TT, null = heute (Client setzt Default)
   notiz: string | null;
@@ -44,7 +44,7 @@ export type ErkannterArtikel = {
 export type ErkannterSchulEintrag = {
   fachId: string | null;
   thema: string;
-  art: "KLASSENARBEIT" | "HAUSAUFGABEN_KONTROLLE" | "EPOCHALNOTE";
+  art: "KLASSENARBEIT" | "HAUSAUFGABEN_KONTROLLE" | "EPOCHALNOTE" | "DIKTAT";
   datum: string | null; // JJJJ-MM-TT, null = heute
   personIds: string[]; // leer = konnte kein Kind erkannt werden (Client fällt auf aktuell gewähltes Kind zurück)
 };
@@ -161,7 +161,7 @@ export async function erkenneAufgabeAusSprache(text: string, personen: PersonFue
   };
 }
 
-const NOTE_ART_WERTE = ["KLASSENARBEIT", "HAUSAUFGABEN_KONTROLLE", "EPOCHALNOTE"];
+const NOTE_ART_WERTE = ["KLASSENARBEIT", "HAUSAUFGABEN_KONTROLLE", "EPOCHALNOTE", "DIKTAT"];
 
 // Spracheingabe fürs Noten-Formular (Fix-Batch 26 — Florians Wunsch, Spracheingabe auch
 // für weitere Mehrfeld-Formulare anzubieten, nicht nur Termine/Aufgaben).
@@ -173,7 +173,7 @@ export async function erkenneNoteAusSprache(text: string, faecher: { id: string;
     `Bekannte Fächer dieses Kindes (ID = Name): ${faecherListe}\n\n` +
     "Extrahiere die Noten-Angaben und antworte AUSSCHLIESSLICH mit einem JSON-Objekt, ohne Markdown-Codeblock, ohne weiteren Text, in genau diesem Format:\n" +
     '{"fachId": "eine ID aus der Liste oder null, falls kein passendes Fach erkennbar ist", ' +
-    '"art": "KLASSENARBEIT oder HAUSAUFGABEN_KONTROLLE oder EPOCHALNOTE (Standard: KLASSENARBEIT, falls nichts erkennbar)", ' +
+    '"art": "KLASSENARBEIT oder HAUSAUFGABEN_KONTROLLE oder EPOCHALNOTE oder DIKTAT (Standard: KLASSENARBEIT, falls nichts erkennbar; DIKTAT nur bei einem tatsächlich genannten Diktat/Monatsdiktat)", ' +
     '"note": "Zahl von 1 bis 6, oder null falls nicht erkennbar", ' +
     '"datum": "JJJJ-MM-TT oder null, falls kein Datum genannt wurde (dann gilt heute)", ' +
     '"notiz": "kurze zusätzliche Anmerkung oder null, falls keine erkennbar ist"}\n' +
@@ -240,7 +240,7 @@ export async function erkenneArtikelAusSprache(text: string): Promise<ErkannterA
   };
 }
 
-const SCHUL_ART_WERTE = ["KLASSENARBEIT", "HAUSAUFGABEN_KONTROLLE", "EPOCHALNOTE"];
+const SCHUL_ART_WERTE = ["KLASSENARBEIT", "HAUSAUFGABEN_KONTROLLE", "EPOCHALNOTE", "DIKTAT"];
 
 // Spracheingabe für Klassenarbeiten/HÜ-Kontrollen (Fix-Batch 30) — erkennt Fach (gegen die
 // Fächerliste des jeweiligen Kindes), Thema, Art und Datum aus dem gesprochenen Text.
@@ -259,7 +259,7 @@ export async function erkenneSchulEintragAusSprache(
     "Extrahiere die Angaben und antworte AUSSCHLIESSLICH mit einem JSON-Objekt, ohne Markdown-Codeblock, ohne weiteren Text, in genau diesem Format:\n" +
     '{"fachId": "eine ID aus der Fächerliste oder null", ' +
     '"thema": "worum es geht, kurz und prägnant", ' +
-    '"art": "KLASSENARBEIT oder HAUSAUFGABEN_KONTROLLE oder EPOCHALNOTE (Standard: KLASSENARBEIT)", ' +
+    '"art": "KLASSENARBEIT oder HAUSAUFGABEN_KONTROLLE oder EPOCHALNOTE oder DIKTAT (Standard: KLASSENARBEIT; DIKTAT nur bei einem tatsächlich genannten Diktat/Monatsdiktat)", ' +
     '"datum": "JJJJ-MM-TT oder null, falls kein Datum genannt wurde", ' +
     '"personIds": ["IDs aus der Kinderliste, falls ein oder mehrere Kinder namentlich genannt wurden — sonst leeres Array"]}\n' +
     "Rechne relative Datumsangaben (\"nächsten Montag\", \"in zwei Wochen\") anhand des heutigen Datums in ein konkretes Datum um.";

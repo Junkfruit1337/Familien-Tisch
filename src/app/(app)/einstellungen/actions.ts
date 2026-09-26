@@ -132,45 +132,68 @@ export async function setzeTicketStatus(id: string, status: string, begruendung?
   revalidatePath("/einstellungen");
 }
 
-// ---------- Ticket-Nachrichten (Fix-Batch 142, Florians Wunsch) ----------
+// ---------- Ticket-Nachrichten (Fix-Batch 142/143, Florians Wunsch) ----------
 // Kinder sollen auf ihre eigenen Tickets noch etwas ergänzen können, und der Admin soll darauf
 // antworten können — ein einfacher Nachrichten-Thread je Ticket, zusätzlich zur festen
 // Titel/Beschreibung/Begründung. Zugriff bewusst auf genau dieselben zwei Seiten beschränkt,
 // die das Ticket überhaupt sehen: der/die Ersteller:in und der Admin.
-async function pruefeTicketZugriff(ticketId: string, person: { id: string; rolle: string; istAdmin: boolean }) {
+// Fix-Batch 143 (Florians Bug-Meldung "Man kann nichts abschicken"): beide Funktionen warfen
+// bisher rohe Errors — genau das Muster, das laut den KI-Funktionen weiter oben in dieser Datei
+// ("...weil Next.js Fehlermeldungen aus Server Actions im Produktions-Build sonst durch eine
+// generische Meldung ersetzt...") in Produktion dazu führt, dass beim Absenden schlicht NICHTS
+// sichtbar passiert — kein Fehler, keine Bestätigung. Jetzt wie überall sonst in dieser Datei
+// als {ok, fehler}-Ergebnis statt als Wurf, damit der Client die echte Meldung anzeigen kann.
+async function pruefeTicketZugriff(
+  ticketId: string,
+  person: { id: string; rolle: string; istAdmin: boolean }
+): Promise<{ ok: true; ticket: Awaited<ReturnType<typeof prisma.ticket.findUniqueOrThrow>> } | { ok: false; fehler: string }> {
   const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } });
-  if (!ticket) throw new Error("Ticket nicht gefunden.");
+  if (!ticket) return { ok: false, fehler: "Ticket nicht gefunden." };
   const istEigenes = ticket.erstelltVonId === person.id;
   const istAdmin = person.rolle === "ELTERN" && person.istAdmin;
-  if (!istEigenes && !istAdmin) throw new Error("Nicht erlaubt.");
-  return ticket;
+  if (!istEigenes && !istAdmin) return { ok: false, fehler: "Nicht erlaubt." };
+  return { ok: true, ticket };
 }
 
-export async function listTicketNachrichten(ticketId: string) {
+export async function listTicketNachrichten(
+  ticketId: string
+): Promise<{ ok: true; nachrichten: { id: string; text: string; erstellerName: string; istEigene: boolean; createdAt: string }[] } | { ok: false; fehler: string }> {
   const person = await requirePerson();
-  await pruefeTicketZugriff(ticketId, person);
+  const zugriff = await pruefeTicketZugriff(ticketId, person);
+  if (!zugriff.ok) return zugriff;
   const nachrichten = await prisma.ticketNachricht.findMany({
     where: { ticketId },
     include: { erstelltVon: true },
     orderBy: { createdAt: "asc" },
   });
-  return nachrichten.map((n) => ({
-    id: n.id,
-    text: n.text,
-    erstellerName: n.erstelltVon.name,
-    istEigene: n.erstelltVonId === person.id,
-    createdAt: n.createdAt.toISOString(),
-  }));
+  return {
+    ok: true,
+    nachrichten: nachrichten.map((n) => ({
+      id: n.id,
+      text: n.text,
+      erstellerName: n.erstelltVon.name,
+      istEigene: n.erstelltVonId === person.id,
+      createdAt: n.createdAt.toISOString(),
+    })),
+  };
 }
 
-export async function erstelleTicketNachricht(ticketId: string, text: string) {
+export async function erstelleTicketNachricht(ticketId: string, text: string): Promise<{ ok: true } | { ok: false; fehler: string }> {
   const person = await requirePerson();
-  const ticket = await pruefeTicketZugriff(ticketId, person);
-  if (!text.trim()) throw new Error("Nachricht darf nicht leer sein.");
+  const zugriff = await pruefeTicketZugriff(ticketId, person);
+  if (!zugriff.ok) return zugriff;
+  const ticket = zugriff.ticket;
+  if (!text.trim()) return { ok: false, fehler: "Nachricht darf nicht leer sein." };
   await prisma.ticketNachricht.create({ data: { ticketId, text: text.trim(), erstelltVonId: person.id } });
 
   if (person.id === ticket.erstelltVonId) {
-    // Ersteller:in hat geschrieben -> alle Admins benachrichtigen.
+    // Fix-Batch 143 (Ticket "Rückfragefunktion für Admin bei Tickets"): antwortet der/die
+    // Ersteller:in auf eine offene Rückfrage, springt der Status automatisch zurück auf
+    // EINGEREICHT, damit die Antwort nicht in der Rückfrage-Ablage untergeht und der Admin sie
+    // wieder in seiner normalen "neu"-Übersicht sieht.
+    if (ticket.status === "RUECKFRAGE") {
+      await prisma.ticket.update({ where: { id: ticketId }, data: { status: "EINGEREICHT" } });
+    }
     const admins = await prisma.person.findMany({ where: { rolle: "ELTERN", istAdmin: true, aktiv: true } });
     await Promise.all(
       admins.map((a) =>
@@ -182,7 +205,6 @@ export async function erstelleTicketNachricht(ticketId: string, text: string) {
       )
     );
   } else {
-    // Admin hat geantwortet -> Ersteller:in benachrichtigen.
     await sendePushAnPerson(ticket.erstelltVonId, {
       title: "Antwort zu deinem Ticket",
       body: `${person.name} zu „${ticket.titel}": ${text.trim().slice(0, 80)}`,
@@ -190,6 +212,7 @@ export async function erstelleTicketNachricht(ticketId: string, text: string) {
     });
   }
   revalidatePath("/einstellungen");
+  return { ok: true };
 }
 
 // ---------- Hausreparaturen/Vermieterkommunikation (Fix-Batch 35 Nachtrag) ----------

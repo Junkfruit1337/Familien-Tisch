@@ -19,6 +19,7 @@ const ART_KURZ: Record<string, string> = {
   KLASSENARBEIT: "Arbeit",
   HAUSAUFGABEN_KONTROLLE: "HÜ",
   EPOCHALNOTE: "Epo",
+  DIKTAT: "Diktat",
 };
 
 export async function listKinder() {
@@ -436,7 +437,7 @@ export async function getSparziel(kindId: string) {
 
 // ---------- Notengewichtung (Frage 21) ----------
 
-const NOTE_ARTEN = ["KLASSENARBEIT", "HAUSAUFGABEN_KONTROLLE", "EPOCHALNOTE"] as const;
+const NOTE_ARTEN = ["KLASSENARBEIT", "HAUSAUFGABEN_KONTROLLE", "EPOCHALNOTE", "DIKTAT"] as const;
 
 export async function listNotenGewichtung(kindId: string) {
   await requireParent();
