@@ -270,6 +270,12 @@ export default function EssensplanClient({
   const [ausgeblendete, setAusgeblendete] = useState(initialAusgeblendete);
   const [ausgewogenheit, setAusgewogenheit] = useState(ausgewogenheitInitial);
   const [extraMahlzeiten, setExtraMahlzeiten] = useState(extraMahlzeitenInitial);
+  // Fix-Batch 144 (Florians Ticket "Tage nach Planung automatisch einklappen"): ein Tag klappt
+  // automatisch ein, sobald er gesperrt (also fertig geplant) oder bereits vergangen ist — wird
+  // hier aber explizit gemerkt, sobald jemand von Hand auf-/zuklappt, damit ein Re-Render
+  // (z.B. nach dem Ändern eines ANDEREN Tages) diese bewusste Entscheidung nicht wieder
+  // überschreibt.
+  const [manuellOffenTage, setManuellOffenTage] = useState<Record<string, boolean>>({});
 
   // Fix-Batch 80: pro Tag getrennt steuerbar, ob das "+ Weitere Mahlzeit"-Formular offen ist,
   // plus dessen Entwurfswerte (mehrere Tage könnten sonst denselben Entwurf teilen).
@@ -438,21 +444,41 @@ export default function EssensplanClient({
       )}
 
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        {plan.tage.map((t) => (
-          <div key={t.tag} className="card" style={{ display: "flex", flexDirection: "column", gap: 8, opacity: t.vergangen ? 0.6 : 1 }}>
-            <div style={{ fontSize: 13, color: "var(--text-muted)" }}>
-              {new Date(t.tag).toLocaleDateString("de-DE", { weekday: "long", day: "2-digit", month: "2-digit" })}
-              {t.vergangen && " · ✓ erledigt"}
-            </div>
-            {/* Fix-Batch 87 (Florians Wunsch): Warnung, wenn für ein geplantes Gericht noch
-                keine Zutaten auf die Einkaufsliste übernommen wurden — bewusst NICHT über
-                "gelockt" geprüft, da ein Tag auch ohne Zutaten-Übernahme manuell gesperrt sein
-                kann; nur ein tatsächlicher Herkunfts-Eintrag zählt als "schon eingekauft". */}
-            {t.eintrag && !t.eintrag.zutatenUebernommen && (
-              <span className="pill pill-offen" style={{ alignSelf: "flex-start", display: "flex", alignItems: "center", gap: 4 }}>
-                <Icon id="warning" size={12} /> Zutaten noch nicht eingekauft
-              </span>
-            )}
+        {plan.tage.map((t) => {
+          // Fix-Batch 144 (Florians Ticket "Tage nach Planung automatisch einklappen"): ein
+          // fertig geplanter (gesperrter) oder bereits vergangener Tag klappt automatisch ein
+          // — Auf-/Zuklappen bleibt jederzeit per Klick auf die Kopfzeile möglich.
+          const istAbgeschlossen = t.vergangen || !!t.eintrag?.gelockt;
+          const offen = manuellOffenTage[t.tag] ?? !istAbgeschlossen;
+          return (
+          <details
+            key={t.tag}
+            className="card"
+            open={offen}
+            onToggle={(e) => setManuellOffenTage((prev) => ({ ...prev, [t.tag]: (e.target as HTMLDetailsElement).open }))}
+            style={{ opacity: t.vergangen ? 0.6 : 1 }}
+          >
+            <summary style={{ cursor: "pointer", display: "flex", flexDirection: "column", gap: 4 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                <span style={{ fontSize: 13, color: "var(--text-muted)" }}>
+                  {new Date(t.tag).toLocaleDateString("de-DE", { weekday: "long", day: "2-digit", month: "2-digit" })}
+                  {t.vergangen && " · ✓ erledigt"}
+                </span>
+                {t.eintrag?.gelockt && <span className="pill pill-neutral">Gesperrt</span>}
+              </div>
+              {t.eintrag && <strong style={{ fontSize: "var(--font-sm)" }}>{t.eintrag.rezeptName}</strong>}
+              {/* Fix-Batch 87 (Florians Wunsch): Warnung, wenn für ein geplantes Gericht noch
+                  keine Zutaten auf die Einkaufsliste übernommen wurden — bewusst NICHT über
+                  "gelockt" geprüft, da ein Tag auch ohne Zutaten-Übernahme manuell gesperrt sein
+                  kann; nur ein tatsächlicher Herkunfts-Eintrag zählt als "schon eingekauft".
+                  Bleibt bewusst in der Kopfzeile sichtbar, auch wenn der Tag eingeklappt ist. */}
+              {t.eintrag && !t.eintrag.zutatenUebernommen && (
+                <span className="pill pill-offen" style={{ alignSelf: "flex-start", display: "flex", alignItems: "center", gap: 4 }}>
+                  <Icon id="warning" size={12} /> Zutaten noch nicht eingekauft
+                </span>
+              )}
+            </summary>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
             {/* Fix-Batch 82 (Florians Wunsch): ein bereits vergangener Tag darf nicht mehr
                 bearbeitet werden — dieselbe schreibgeschützte Ansicht wie für Kinder. */}
             {istEltern && !t.vergangen ? (
@@ -749,7 +775,9 @@ export default function EssensplanClient({
             })()}
 
           </div>
-        ))}
+          </details>
+          );
+        })}
       </div>
 
       {istEltern && plan.tage.some((t) => t.eintrag && !t.eintrag.gelockt) && (

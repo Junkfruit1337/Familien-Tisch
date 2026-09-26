@@ -262,8 +262,15 @@ export default function DashboardClient({ daten, istEltern }: { daten: Daten; is
             Thema): Fach steht jetzt als Überschrift, Kind-Name prominent mit Farb-Chip;
             Thema (und ggf. Lerntipp) stehen erst nach dem Antippen, für mehr Fokus wie beim
             entsprechenden Bereich auf der Schule-Seite (Fix-Batch 117). */}
-        {daten.schulEintraege.map((s) => (
-          <details key={s.id} style={{ marginTop: 8, borderTop: "1px solid var(--border)", paddingTop: 8 }}>
+        {/* Fix-Batch 144 (Florians Ticket "Schulaufgaben nicht in Heute-Ansicht angezeigt"):
+            ein heute anstehender Eintrag stand zwar schon vorher hier drin (die Liste ist nach
+            Datum sortiert, "heute" also ohnehin zuoberst), aber nur unauffällig eingeklappt wie
+            jeder andere — jetzt automatisch aufgeklappt, in Rot/Fett mit einer "Achtung heute"-
+            Warnung, damit es nicht übersehen wird. */}
+        {daten.schulEintraege.map((s) => {
+          const istHeute = s.tageBis <= 0;
+          return (
+          <details key={s.id} open={istHeute || undefined} style={{ marginTop: 8, borderTop: "1px solid var(--border)", paddingTop: 8 }}>
             <summary style={{ cursor: "pointer" }}>
               <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
                 {istEltern && (
@@ -272,7 +279,14 @@ export default function DashboardClient({ daten, istEltern }: { daten: Daten; is
                     <span style={{ fontWeight: 700, fontSize: 13, color: s.personFarbe }}>{s.personName}</span>
                   </div>
                 )}
-                <div style={{ fontWeight: 700, fontSize: "var(--font-md)" }}>{s.fachName ?? s.titel}</div>
+                {istHeute && (
+                  <span className="pill pill-abgelehnt" style={{ display: "inline-flex", alignItems: "center", gap: 4, alignSelf: "flex-start" }}>
+                    <Icon id="warning" size={11} /> Achtung, heute!
+                  </span>
+                )}
+                <div style={{ fontWeight: 700, fontSize: istHeute ? "var(--font-lg)" : "var(--font-md)", color: istHeute ? "var(--danger)" : undefined }}>
+                  {s.fachName ?? s.titel}
+                </div>
                 <div style={{ fontSize: "var(--font-sm)", color: "var(--text-muted)" }}>
                   {new Date(s.datum).toLocaleDateString("de-DE", { weekday: "long", day: "2-digit", month: "2-digit" })} · noch {s.tageBis} Tag(e)
                 </div>
@@ -287,7 +301,8 @@ export default function DashboardClient({ daten, istEltern }: { daten: Daten; is
               )}
             </div>
           </details>
-        ))}
+          );
+        })}
       </div>
 
     </div>
