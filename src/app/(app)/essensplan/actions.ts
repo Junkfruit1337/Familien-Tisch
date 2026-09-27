@@ -397,18 +397,27 @@ export async function getWochenplan(offsetWochen = 0) {
   return { wocheStart: wocheStart.toISOString(), wocheEnde: wocheEnde.toISOString(), tage };
 }
 
-export async function setTag(wocheStartIso: string, tagIso: string, rezeptId: string) {
+export async function setTag(wocheStartIso: string, tagIso: string, rezeptId: string): Promise<{ ok: true } | { ok: false; fehler: string }> {
   await requireParent();
   const wocheStart = new Date(wocheStartIso);
   const tag = new Date(tagIso);
   const bestehend = await prisma.essensplanEintrag.findFirst({ where: { wocheStart, tag } });
+  // Fix-Batch 149 (Audit-Fund): rohes throw statt {ok,fehler} — Next.js verschluckt geworfene
+  // Fehler aus Server Actions in Produktion, der Nutzer sah nur ein wirkungsloses Dropdown.
+  if (bestehend?.gelockt) return { ok: false, fehler: "Diese Woche ist gesperrt. Erst entsperren." };
+  const neuesRezept = await prisma.rezept.findUnique({ where: { id: rezeptId } });
+  if (!neuesRezept) return { ok: false, fehler: "Rezept nicht gefunden." };
   if (bestehend) {
-    if (bestehend.gelockt) throw new Error("Diese Woche ist gesperrt. Erst entsperren.");
-    await prisma.essensplanEintrag.update({ where: { id: bestehend.id }, data: { rezeptId } });
+    // Fix-Batch 149 (Audit-Fund): beim Wechsel des Gerichts an einem bereits offenen Tag blieb
+    // der alte esserFaktor unverändert stehen — er war aber gegen die Portionsbasis des VORHER
+    // gewählten Rezepts berechnet, nicht die des neuen. Jetzt neu berechnet.
+    const faktor = await berechneFaktor(bestehend.esserIds, bestehend.extraPortionen, neuesRezept.portionenBasis);
+    await prisma.essensplanEintrag.update({ where: { id: bestehend.id }, data: { rezeptId, esserFaktor: faktor } });
   } else {
     await prisma.essensplanEintrag.create({ data: { wocheStart, tag, rezeptId } });
   }
   revalidatePath("/essensplan");
+  return { ok: true };
 }
 
 // Fix-Batch 74 (Florians Bug-Meldung): "– kein Gericht –" im Dropdown tat bisher nichts (der
@@ -417,16 +426,17 @@ export async function setTag(wocheStartIso: string, tagIso: string, rezeptId: st
 // (das Dropdown ist bei gesperrtem Tag ohnehin deaktiviert); es können zu diesem Zeitpunkt
 // keine essensplanHerkuenfte mehr an diesem Eintrag hängen (die werden beim Entsperren bereits
 // vollständig aufgelöst), ein einfaches Löschen des Eintrags reicht daher aus.
-export async function entferneTag(wocheStartIso: string, tagIso: string) {
+export async function entferneTag(wocheStartIso: string, tagIso: string): Promise<{ ok: true } | { ok: false; fehler: string }> {
   await requireParent();
   const wocheStart = new Date(wocheStartIso);
   const tag = new Date(tagIso);
   const bestehend = await prisma.essensplanEintrag.findFirst({ where: { wocheStart, tag } });
-  if (!bestehend) return;
-  if (bestehend.gelockt) throw new Error("Diese Woche ist gesperrt. Erst entsperren.");
+  if (!bestehend) return { ok: true };
+  if (bestehend.gelockt) return { ok: false, fehler: "Diese Woche ist gesperrt. Erst entsperren." };
   await prisma.essensplanHerkunft.deleteMany({ where: { eintragId: bestehend.id } });
   await prisma.essensplanEintrag.delete({ where: { id: bestehend.id } });
   revalidatePath("/essensplan");
+  return { ok: true };
 }
 
 // Sperrt einen Tag manuell — folgenlos, da noch keine Zutaten übernommen wurden
@@ -449,25 +459,34 @@ async function berechneFaktor(personIds: string[], extraPortionen: number, porti
   return gewichtSumme / portionenBasis;
 }
 
-export async function setEsser(eintragId: string, personIds: string[]) {
+export async function setEsser(eintragId: string, personIds: string[]): Promise<{ ok: true } | { ok: false; fehler: string }> {
   await requireParent();
   const eintrag = await prisma.essensplanEintrag.findUnique({ where: { id: eintragId }, include: { rezept: true } });
-  if (!eintrag) return;
+  if (!eintrag) return { ok: false, fehler: "Eintrag nicht gefunden." };
+  // Fix-Batch 149 (Audit-Fund): fehlte hier bisher — nur die UI deaktivierte die Chips bei
+  // gesperrtem Tag, serverseitig ließ sich die Esser-Auswahl trotzdem ändern, obwohl die
+  // Menge auf der Einkaufsliste schon anhand der ALTEN Auswahl übernommen wurde (Anzeige und
+  // tatsächlich eingekaufte Menge liefen danach dauerhaft auseinander).
+  if (eintrag.gelockt) return { ok: false, fehler: "Dieser Tag ist gesperrt. Erst entsperren." };
   const faktor = await berechneFaktor(personIds, eintrag.extraPortionen, eintrag.rezept.portionenBasis);
   await prisma.essensplanEintrag.update({ where: { id: eintragId }, data: { esserIds: personIds, esserFaktor: faktor } });
   revalidatePath("/essensplan");
+  return { ok: true };
 }
 
 // Extra-Portionen für spontane Gäste an einem Tag (Fix-Batch 33 Nachtrag, Florians Wunsch)
 // — addiert sich zum gewichteten Esser-Total, bevor durch die Rezept-Portionsbasis geteilt wird.
-export async function setExtraPortionen(eintragId: string, extraPortionen: number) {
+export async function setExtraPortionen(eintragId: string, extraPortionen: number): Promise<{ ok: true } | { ok: false; fehler: string }> {
   await requireParent();
   const eintrag = await prisma.essensplanEintrag.findUnique({ where: { id: eintragId }, include: { rezept: true } });
-  if (!eintrag) return;
+  if (!eintrag) return { ok: false, fehler: "Eintrag nicht gefunden." };
+  // Fix-Batch 149 (Audit-Fund): dieselbe fehlende gelockt-Sperre wie bei setEsser.
+  if (eintrag.gelockt) return { ok: false, fehler: "Dieser Tag ist gesperrt. Erst entsperren." };
   const wert = Number.isFinite(extraPortionen) && extraPortionen >= 0 ? extraPortionen : 0;
   const faktor = await berechneFaktor(eintrag.esserIds, wert, eintrag.rezept.portionenBasis);
   await prisma.essensplanEintrag.update({ where: { id: eintragId }, data: { extraPortionen: wert, esserFaktor: faktor } });
   revalidatePath("/essensplan");
+  return { ok: true };
 }
 
 // Zutaten eines Tages auf die Einkaufsliste übertragen (Fix-Batch 24) — landen als
@@ -626,13 +645,15 @@ export async function fuegeExtraMahlzeitHinzu(wocheStartIso: string, tagIso: str
 // entsperrter Zusatzmahlzeit möglich — sonst blieben bereits übernommene Einkaufslisten-
 // Mengen als Karteileiche stehen. Erst "entsperreExtraMahlzeit" (mit Entfernen/Behalten-
 // Abfrage) auflösen, danach löschen.
-export async function entferneExtraMahlzeit(id: string) {
+export async function entferneExtraMahlzeit(id: string): Promise<{ ok: true } | { ok: false; fehler: string }> {
   await requireParent();
   const eintrag = await prisma.extraMahlzeit.findUnique({ where: { id } });
-  if (!eintrag) return;
-  if (eintrag.gelockt) throw new Error("Diese Zusatzmahlzeit ist gesperrt. Erst entsperren.");
+  if (!eintrag) return { ok: true };
+  // Fix-Batch 149 (Audit-Fund): rohes throw statt {ok,fehler}.
+  if (eintrag.gelockt) return { ok: false, fehler: "Diese Zusatzmahlzeit ist gesperrt. Erst entsperren." };
   await prisma.extraMahlzeit.delete({ where: { id } }).catch(() => {});
   revalidatePath("/essensplan");
+  return { ok: true };
 }
 
 // Ein Klick reicht (keine Zeilen-Auswahl wie bei der allgemeinen Extra-Rezept-Ergänzung in

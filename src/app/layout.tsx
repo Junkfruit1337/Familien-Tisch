@@ -51,6 +51,13 @@ const VORAB_SKRIPT = `
     if (design) document.documentElement.setAttribute("data-design", design);
     var iconStil = localStorage.getItem("familientisch-icon-stil");
     if (iconStil) document.documentElement.setAttribute("data-icon-stil", iconStil);
+    // Fix-Batch 149 (Audit-Fund): fehlte hier bisher, obwohl dasselbe "vor dem ersten Render
+    // setzen"-Muster wie Theme/Design/Icon-Stil (Fix-Batch 124) genutzt wird — dadurch blitzte
+    // der "Abmelden"-Button auf einem Kiosk-Tablet bei jedem vollen Seiten-Reload kurz auf,
+    // bevor AppShells eigener useEffect das Attribut nachträglich setzte.
+    if (localStorage.getItem("familientisch-kiosk-modus") === "1") {
+      document.documentElement.setAttribute("data-kiosk-modus", "1");
+    }
   } catch (e) {}
 })();
 `;

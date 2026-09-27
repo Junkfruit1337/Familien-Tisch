@@ -621,8 +621,13 @@ export async function setzeVorschlaegeZurueck() {
 
 export async function addKategorie(name: string) {
   await requireAdmin();
+  // Fix-Batch 149 (Audit-Fund): ohne `.trim()` kam ein reiner Leerzeichen-String durch (Client
+  // prüft nur `!neueKategorie`, was bei " " nicht greift) und legte eine leer wirkende
+  // Kategorie an.
+  const bereinigt = name.trim();
+  if (!bereinigt) return;
   const anzahl = await prisma.einkaufsKategorie.count();
-  await prisma.einkaufsKategorie.create({ data: { name, reihenfolge: anzahl } });
+  await prisma.einkaufsKategorie.create({ data: { name: bereinigt, reihenfolge: anzahl } });
   revalidatePath("/einkaufsliste");
   revalidatePath("/einstellungen");
 }

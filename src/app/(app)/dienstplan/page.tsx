@@ -9,7 +9,9 @@ export default async function DienstplanPage() {
   const [tausche, badplan, kinder, tagesroutinen, koerperpflegeplan, historie] = await Promise.all([
     listAktiveTausche(wocheStart),
     getBadplan(wocheStart),
-    prisma.person.findMany({ where: { rolle: "KIND" }, orderBy: { reihenfolge: "asc" } }),
+    // Fix-Batch 149 (Audit-Fund): ohne `aktiv: true` blieb ein deaktiviertes Kind als
+    // Tausch-/Übernahme-Partner in den Dropdowns wählbar.
+    prisma.person.findMany({ where: { rolle: "KIND", aktiv: true }, orderBy: { reihenfolge: "asc" } }),
     listTagesroutinen(),
     listKoerperpflegeplan(),
     listDienstHistorie(),

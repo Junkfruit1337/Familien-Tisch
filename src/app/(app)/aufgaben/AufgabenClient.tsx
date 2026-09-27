@@ -17,6 +17,7 @@ type Aufgabe = {
   personId: string | null;
   personName: string;
   seriesId: string | null;
+  erstelltVonId: string;
 };
 type Person = { id: string; name: string; farbe: string };
 
@@ -100,11 +101,28 @@ export default function AufgabenClient({
     });
   }
 
+  // Fix-Batch 149 (Audit-Fund): toggleAufgabe/deleteAufgabe geben jetzt {ok,fehler} zurück
+  // statt zu werfen — diese beiden Helfer zeigen einen echten Fehler jetzt sichtbar an, statt
+  // dass ein abgelehnter Server-Aufruf spurlos verschwindet.
+  function toggle(id: string) {
+    startTransition(async () => {
+      const ergebnis = await toggleAufgabe(id);
+      if (!ergebnis.ok) alert(ergebnis.fehler);
+    });
+  }
+
+  function loeschen(id: string, scope: "eins" | "serie") {
+    startTransition(async () => {
+      const ergebnis = await deleteAufgabe(id, scope);
+      if (!ergebnis.ok) alert(ergebnis.fehler);
+    });
+  }
+
   function loeschKlick(a: Aufgabe) {
     if (a.seriesId) {
       setLoeschAuswahl(a.id);
     } else {
-      startTransition(() => deleteAufgabe(a.id, "eins"));
+      loeschen(a.id, "eins");
     }
   }
 
@@ -216,7 +234,7 @@ export default function AufgabenClient({
             <input
               type="checkbox"
               checked={false}
-              onChange={() => startTransition(() => toggleAufgabe(a.id))}
+              onChange={() => toggle(a.id)}
               style={{ width: 20, height: 20, marginTop: 2 }}
             />
             <div style={{ flex: 1 }}>
@@ -234,7 +252,7 @@ export default function AufgabenClient({
                     className="btn-secondary"
                     style={{ fontSize: 12, padding: "2px 8px" }}
                     onClick={() => {
-                      startTransition(() => deleteAufgabe(a.id, "eins"));
+                      loeschen(a.id, "eins");
                       setLoeschAuswahl(null);
                     }}
                   >
@@ -244,7 +262,7 @@ export default function AufgabenClient({
                     className="btn-danger"
                     style={{ fontSize: 12, padding: "2px 8px" }}
                     onClick={() => {
-                      startTransition(() => deleteAufgabe(a.id, "serie"));
+                      loeschen(a.id, "serie");
                       setLoeschAuswahl(null);
                     }}
                   >
@@ -258,7 +276,12 @@ export default function AufgabenClient({
                 istEltern && <HistorieVerlauf entityTyp="AUFGABE" entityId={a.id} />
               )}
             </div>
-            {(istEltern || a.personId === eigeneId) && loeschAuswahl !== a.id && (
+            {/* Fix-Batch 149 (Audit-Fund): prüfte bisher a.personId (wem zugewiesen) statt
+                a.erstelltVonId (wer angelegt hat) — der Server erlaubt Kindern aber nur das
+                Löschen SELBST angelegter Aufgaben. Ein Kind sah den Button also auch bei
+                Eltern-angelegten, ihm nur zugewiesenen Aufgaben, klickte ihn, und der Server
+                lehnte still ab. */}
+            {(istEltern || a.erstelltVonId === eigeneId) && loeschAuswahl !== a.id && (
               <button
                 className="btn-icon btn-icon-danger"
                 title="Aufgabe löschen"
@@ -289,7 +312,7 @@ export default function AufgabenClient({
           <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
             {erledigt.map((a) => (
               <div key={a.id} className="card" style={{ display: "flex", alignItems: "center", gap: 10, opacity: 0.6 }}>
-                <input type="checkbox" checked onChange={() => startTransition(() => toggleAufgabe(a.id))} style={{ width: 20, height: 20 }} />
+                <input type="checkbox" checked onChange={() => toggle(a.id)} style={{ width: 20, height: 20 }} />
                 <div style={{ flex: 1, textDecoration: "line-through" }}>{a.titel}</div>
               </div>
             ))}

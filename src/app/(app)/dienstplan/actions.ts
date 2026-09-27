@@ -98,13 +98,15 @@ export async function erstelleDauerhaftenTausch(data: {
   vonKindId: string;
   mitKindId: string;
   modus: "ABGEBEN" | "TAUSCH";
-}) {
+}): Promise<{ ok: true } | { ok: false; fehler: string }> {
   const person = await requireParent();
   const wocheStart = new Date(data.wocheStartIso);
   const effektiv = await getEffectiveWeek(wocheStart);
   const vonSchicht = effektiv.find((s) => s.kind?.id === data.vonKindId)?.schichtNummer;
   const mitSchicht = effektiv.find((s) => s.kind?.id === data.mitKindId)?.schichtNummer;
-  if (!vonSchicht) throw new Error("Diese Person hat aktuell keinen Dienst.");
+  // Fix-Batch 149 (Audit-Fund): rohes throw statt {ok,fehler} — Next.js verschluckt geworfene
+  // Fehler aus Server Actions in Produktion, der Nutzer sah bisher nur ein stilles Nichts-Tun.
+  if (!vonSchicht) return { ok: false, fehler: "Diese Person hat aktuell keinen Dienst." };
 
   await setzeDauerhafteZuordnungIntern("DIENST", vonSchicht, data.mitKindId, wocheStart);
   if (data.modus === "TAUSCH" && mitSchicht) {
@@ -119,6 +121,7 @@ export async function erstelleDauerhaftenTausch(data: {
     geaendertVonId: person.id,
   });
   revalidatePath("/dienstplan");
+  return { ok: true };
 }
 
 // Bad-Reihenfolge-Position dauerhaft neu besetzen.
@@ -171,9 +174,12 @@ export async function erstelleTausch(data: {
   vonKindId: string;
   mitKindId: string;
   modus: "ABGEBEN" | "TAUSCH";
-}) {
+}): Promise<{ ok: true } | { ok: false; fehler: string }> {
   const person = await requireParent();
-  if (data.vonKindId === data.mitKindId) throw new Error("Man kann nicht mit sich selbst tauschen.");
+  // Fix-Batch 149 (Audit-Fund): rohes throw statt {ok,fehler} — die UI verhindert zwar per
+  // disabled-Dropdown normalerweise dieselbe Person doppelt zu wählen, aber der Serverpfad
+  // muss trotzdem der Konvention folgen, sonst verschluckt Next.js die Meldung in Produktion.
+  if (data.vonKindId === data.mitKindId) return { ok: false, fehler: "Man kann nicht mit sich selbst tauschen." };
 
   const tausch = await prisma.dienstTausch.create({
     data: {
@@ -196,6 +202,7 @@ export async function erstelleTausch(data: {
 
   revalidatePath("/dienstplan");
   revalidatePath("/dashboard");
+  return { ok: true };
 }
 
 export async function hebeTauschAuf(id: string) {
@@ -269,10 +276,23 @@ export async function listDienstkatalog() {
   return prisma.dienstDefinition.findMany({ orderBy: [{ schichtNummer: "asc" }, { reihenfolge: "asc" }] });
 }
 
+// Fix-Batch 149 (Audit-Fund): `count()+1` statt `max(reihenfolge)+1` — nach einem Löschen in
+// der Mitte einer Schicht sinkt der Count, wodurch ein neuer/verschobener Dienst dieselbe
+// reihenfolge wie ein bereits vorhandener Dienst bekommen konnte (keine DB-Unique-Constraint
+// verhindert das). Ergebnis: uneinheitliche Anzeige-Reihenfolge, "hoch"/"runter"-Buttons ohne
+// sichtbare Wirkung bei kollidierenden Werten.
+async function naechsteReihenfolge(schichtNummer: number): Promise<number> {
+  const hoechster = await prisma.dienstDefinition.findFirst({
+    where: { schichtNummer },
+    orderBy: { reihenfolge: "desc" },
+  });
+  return (hoechster?.reihenfolge ?? 0) + 1;
+}
+
 export async function addDienst(schichtNummer: number, bezeichnung: string, beschreibung?: string) {
   await requireAdmin();
-  const anzahl = await prisma.dienstDefinition.count({ where: { schichtNummer } });
-  await prisma.dienstDefinition.create({ data: { schichtNummer, reihenfolge: anzahl + 1, bezeichnung, beschreibung } });
+  const reihenfolge = await naechsteReihenfolge(schichtNummer);
+  await prisma.dienstDefinition.create({ data: { schichtNummer, reihenfolge, bezeichnung, beschreibung } });
   revalidatePath("/dienstplan");
   revalidatePath("/einstellungen");
 }
@@ -287,8 +307,8 @@ export async function updateDienst(id: string, data: { bezeichnung?: string; bes
 // Verschiebt einen Dienst dauerhaft in eine andere Schicht (ans Ende der Ziel-Schicht).
 export async function verschiebeDienstSchicht(id: string, neueSchichtNummer: number) {
   await requireAdmin();
-  const anzahl = await prisma.dienstDefinition.count({ where: { schichtNummer: neueSchichtNummer } });
-  await prisma.dienstDefinition.update({ where: { id }, data: { schichtNummer: neueSchichtNummer, reihenfolge: anzahl + 1 } });
+  const reihenfolge = await naechsteReihenfolge(neueSchichtNummer);
+  await prisma.dienstDefinition.update({ where: { id }, data: { schichtNummer: neueSchichtNummer, reihenfolge } });
   revalidatePath("/dienstplan");
   revalidatePath("/einstellungen");
 }

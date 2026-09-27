@@ -54,7 +54,7 @@ export default async function EinstellungenPage() {
         rolle: p.rolle,
         farbe: p.farbe,
         aktiv: p.aktiv,
-        hatPin: !!p.pinHash,
+        hatPin: p.hatPin,
         portionsGewicht: p.portionsGewicht,
         geburtsdatum: p.geburtsdatum ? p.geburtsdatum.toISOString() : null,
       }))}

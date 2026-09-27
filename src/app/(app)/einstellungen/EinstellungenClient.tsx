@@ -820,12 +820,16 @@ export default function EinstellungenClient({
             disabled={pending || !neuesHausproblemTitel.trim() || !neuesHausproblemBeschreibung.trim()}
             onClick={() =>
               startTransition(async () => {
-                await erstelleHausproblem({
+                const ergebnis = await erstelleHausproblem({
                   titel: neuesHausproblemTitel,
                   beschreibung: neuesHausproblemBeschreibung,
                   zustaendigkeit: neuesHausproblemZustaendigkeit,
                   fotos: neuesHausproblemFotos,
                 });
+                if (!ergebnis.ok) {
+                  alert(ergebnis.fehler);
+                  return;
+                }
                 setNeuesHausproblemTitel("");
                 setNeuesHausproblemBeschreibung("");
                 setNeuesHausproblemFotos([]);
@@ -953,7 +957,10 @@ export default function EinstellungenClient({
                         style={{ fontSize: 12, padding: "4px 10px" }}
                         disabled={!hausproblemAufgabePersonId[h.id]}
                         onClick={() =>
-                          startTransition(() => wandleHausproblemInAufgabeUm(h.id, hausproblemAufgabePersonId[h.id]))
+                          startTransition(async () => {
+                            const ergebnis = await wandleHausproblemInAufgabeUm(h.id, hausproblemAufgabePersonId[h.id]);
+                            if (!ergebnis.ok) alert(ergebnis.fehler);
+                          })
                         }
                       >
                         Anlegen
@@ -1213,7 +1220,11 @@ export default function EinstellungenClient({
                     style={{ fontSize: 12 }}
                     onClick={() => {
                       const v = pins[p.id];
-                      if (v?.length === 4) startTransition(() => setPin(p.id, v));
+                      if (v?.length === 4)
+                        startTransition(async () => {
+                          const ergebnis = await setPin(p.id, v);
+                          if (!ergebnis.ok) alert(ergebnis.fehler);
+                        });
                     }}
                   >
                     PIN setzen
@@ -1242,9 +1253,23 @@ export default function EinstellungenClient({
                   }}
                 />
               </label>
-              {istAdmin && (
+              {/* Fix-Batch 149 (Audit-Fund): eigene Zeile ausgeblendet, damit sich der einzige
+                  Admin nicht versehentlich selbst deaktiviert — serverseitig zusätzlich
+                  gesperrt (setAktiv), das hier ist nur die sichtbare Vermeidung des Klicks. */}
+              {istAdmin && p.id !== eigeneId && (
                 <label style={{ fontSize: 12, marginLeft: "auto" }}>
-                  <input type="checkbox" checked={p.aktiv} onChange={(e) => startTransition(() => setAktiv(p.id, e.target.checked))} style={{ width: "auto" }} /> aktiv
+                  <input
+                    type="checkbox"
+                    checked={p.aktiv}
+                    onChange={(e) =>
+                      startTransition(async () => {
+                        const ergebnis = await setAktiv(p.id, e.target.checked);
+                        if (!ergebnis.ok) alert(ergebnis.fehler);
+                      })
+                    }
+                    style={{ width: "auto" }}
+                  />{" "}
+                  aktiv
                 </label>
               )}
             </div>
@@ -1259,7 +1284,16 @@ export default function EinstellungenClient({
               <summary style={{ cursor: "pointer", color: "var(--text-muted)" }}>Neue Person anlegen</summary>
               <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
                 <input placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} />
-                <select value={rolle} onChange={(e) => setRolle(e.target.value)}>
+                <select
+                  value={rolle}
+                  onChange={(e) => {
+                    setRolle(e.target.value);
+                    // Fix-Batch 149 (Audit-Fund): eine schon getippte PIN blieb beim Umschalten
+                    // auf "Kind ohne eigenen Zugang" im State stehen und wurde trotzdem
+                    // mitgesendet — inkonsistent mit der Absicht dieser Rolle.
+                    if (e.target.value === "KIND_OHNE_ZUGANG") setPinInput("");
+                  }}
+                >
                   {ROLLEN.map((r) => (
                     <option key={r.value} value={r.value}>
                       {r.label}
@@ -1274,7 +1308,11 @@ export default function EinstellungenClient({
                   onClick={() =>
                     startTransition(async () => {
                       if (!name) return;
-                      await createPerson({ name, rolle, pin: pin || undefined, farbe });
+                      const ergebnis = await createPerson({ name, rolle, pin: pin || undefined, farbe });
+                      if (!ergebnis.ok) {
+                        alert(ergebnis.fehler);
+                        return;
+                      }
                       setName("");
                       setPinInput("");
                     })
@@ -1331,9 +1369,10 @@ export default function EinstellungenClient({
             <input placeholder="Neue Kategorie" value={neueKategorie} onChange={(e) => setNeueKategorie(e.target.value)} />
             <button
               className="btn"
+              disabled={pending}
               onClick={() =>
                 startTransition(async () => {
-                  if (!neueKategorie) return;
+                  if (!neueKategorie.trim()) return;
                   await addKategorie(neueKategorie);
                   setNeueKategorie("");
                 })

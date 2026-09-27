@@ -46,6 +46,11 @@ export async function getCurrentPerson(): Promise<Person | null> {
     include: { person: true },
   });
   if (!session || session.expiresAt < new Date()) return null;
+  // Fix-Batch 149 (Audit-Fund): `aktiv` wurde bisher nur beim Login geprüft — eine
+  // zwischenzeitlich deaktivierte Person (z. B. verlorenes Gerät, Kontosperre) behielt mit
+  // gültigem Session-Cookie bis zu 30 Tage vollen Zugriff, weil die Sitzungs-Prüfung selbst nie
+  // erneut nachschaute.
+  if (!session.person.aktiv) return null;
   return session.person;
 }
 

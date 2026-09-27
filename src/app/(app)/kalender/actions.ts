@@ -15,7 +15,18 @@ import { randomUUID } from "crypto";
 const MAX_SERIEN_TERMINE = 200;
 const UNBEGRENZT_HORIZONT_TAGE = 365 * 2;
 
-function naechsterTermin(datum: Date, wiederholung: string): Date {
+function letzterTagDesMonats(jahr: number, monatNullBasiert: number): number {
+  return new Date(jahr, monatNullBasiert + 1, 0).getDate();
+}
+
+// Fix-Batch 149 (Audit-Fund, identischer Bug wie in aufgaben/actions.ts): `setMonth`/
+// `setFullYear` auf einen Tag, den der Zielmonat nicht hat, ließ JS automatisch in den
+// übernächsten Monat überlaufen (z. B. "31. Jan" + 1 Monat → nicht Ende Februar, sondern
+// automatisch der 2./3. März) — und weil jede Iteration nur den zuletzt berechneten (ggf.
+// schon verschobenen) Tag kannte, verschob sich danach die GANZE restliche Serie dauerhaft.
+// `ankerTag` ist deshalb immer der Tag des ALLERERSTEN Serien-Termins, geklemmt auf den
+// letzten Tag des jeweiligen Zielmonats.
+function naechsterTermin(datum: Date, wiederholung: string, ankerTag: number): Date {
   const d = new Date(datum);
   if (wiederholung === "TAEGLICH") d.setDate(d.getDate() + 1);
   else if (wiederholung === "WERKTAEGLICH") {
@@ -25,9 +36,12 @@ function naechsterTermin(datum: Date, wiederholung: string): Date {
     } while (d.getDay() === 0 || d.getDay() === 6);
   } else if (wiederholung === "WOECHENTLICH") d.setDate(d.getDate() + 7);
   else if (wiederholung === "ZWEIWOECHENTLICH") d.setDate(d.getDate() + 14);
-  else if (wiederholung === "MONATLICH") d.setMonth(d.getMonth() + 1);
-  else if (wiederholung === "ALLE_3_MONATE") d.setMonth(d.getMonth() + 3);
-  else if (wiederholung === "JAEHRLICH") d.setFullYear(d.getFullYear() + 1);
+  else if (wiederholung === "MONATLICH" || wiederholung === "ALLE_3_MONATE" || wiederholung === "JAEHRLICH") {
+    const schritt = wiederholung === "JAEHRLICH" ? 12 : wiederholung === "ALLE_3_MONATE" ? 3 : 1;
+    d.setDate(1);
+    d.setMonth(d.getMonth() + schritt);
+    d.setDate(Math.min(ankerTag, letzterTagDesMonats(d.getFullYear(), d.getMonth())));
+  }
   return d;
 }
 
@@ -242,14 +256,20 @@ export async function createTermin(data: {
   const horizont = new Date();
   horizont.setDate(horizont.getDate() + UNBEGRENZT_HORIZONT_TAGE);
   const wiederholungBis = wiederholung !== "KEINE" ? (data.wiederholungBis ? new Date(data.wiederholungBis) : null) : null;
-  const grenze = wiederholung !== "KEINE" ? (data.wiederholungBis ? new Date(data.wiederholungBis) : horizont) : null;
+  // Fix-Batch 149 (Audit-Fund): "Wiederholen bis" als reines Datum ("2026-12-31") parst bisher
+  // auf Mitternacht — bei einem zeitbasierten (nicht ganztägigen) Termin liegt der Bis-Tag
+  // selbst (z. B. "15:00 Uhr") danach de facto immer NACH dieser Mitternachts-Grenze, wodurch
+  // die letzte, eigentlich gewünschte Instanz genau am Bis-Tag nie erzeugt wurde. Die Grenze
+  // gilt deshalb jetzt bis zum Ende des Bis-Tages (23:59:59).
+  const grenze = wiederholung !== "KEINE" ? (data.wiederholungBis ? new Date(`${data.wiederholungBis}T23:59:59`) : horizont) : null;
 
   const startDaten: Date[] = [new Date(data.start)];
   if (wiederholung !== "KEINE" && grenze) {
-    let naechster = naechsterTermin(startDaten[0], wiederholung);
+    const ankerTag = startDaten[0].getDate();
+    let naechster = naechsterTermin(startDaten[0], wiederholung, ankerTag);
     while (naechster <= grenze && startDaten.length < MAX_SERIEN_TERMINE) {
       startDaten.push(naechster);
-      naechster = naechsterTermin(naechster, wiederholung);
+      naechster = naechsterTermin(naechster, wiederholung, ankerTag);
     }
   }
 
@@ -297,12 +317,17 @@ export async function createTermin(data: {
 // löschen und neu anlegen; das vereinfacht das Bearbeiten von Mehrfach-Personen-Terminen
 // (jede Zeile der Gruppe wird beim Bearbeiten einzeln mit denselben Titel-/Zeit-Werten
 // aktualisiert, ohne ihre individuelle Personen-Zuordnung anzufassen).
-export async function updateTermin(id: string, data: { titel: string; start: string; ende?: string; anhaenge?: string[]; notiz?: string }) {
+export async function updateTermin(
+  id: string,
+  data: { titel: string; start: string; ende?: string; ganztaegig: boolean; anhaenge?: string[]; notiz?: string }
+): Promise<{ ok: true } | { ok: false; fehler: string }> {
   const person = await requirePerson();
   const termin = await prisma.termin.findUnique({ where: { id } });
-  if (!termin) return;
+  if (!termin) return { ok: false, fehler: "Termin nicht gefunden." };
+  // Fix-Batch 149 (Audit-Fund): rohes throw statt {ok,fehler} — Next.js verschluckt geworfene
+  // Fehler aus Server Actions in Produktion.
   if (person.rolle !== "ELTERN" && termin.personId !== person.id) {
-    throw new Error("Das darfst du nicht bearbeiten.");
+    return { ok: false, fehler: "Das darfst du nicht bearbeiten." };
   }
   const kategorie = erkenneTerminKategorie(data.titel);
   await prisma.termin.update({
@@ -311,6 +336,9 @@ export async function updateTermin(id: string, data: { titel: string; start: str
       titel: data.titel,
       start: new Date(data.start),
       ende: data.ende ? new Date(data.ende) : null,
+      // Fix-Batch 149 (Audit-Fund): fehlte hier bisher komplett — die "Ganztägig"-Checkbox war
+      // beim Bearbeiten voll editierbar, ihr neuer Wert wurde aber nie gespeichert.
+      ganztaegig: data.ganztaegig,
       kategorie,
       anhaenge: data.anhaenge,
       notiz: data.notiz || null,
@@ -326,6 +354,7 @@ export async function updateTermin(id: string, data: { titel: string; start: str
   });
   revalidatePath("/kalender");
   revalidatePath("/dashboard");
+  return { ok: true };
 }
 
 // Fix-Batch 95 (Florians Wunsch): Titel für eine ganze Serie/Personen-Gruppe auf einmal ändern
@@ -333,12 +362,12 @@ export async function updateTermin(id: string, data: { titel: string; start: str
 // — Datum/Uhrzeit/Anhänge bleiben je Termin unterschiedlich und werden hier nicht angefasst.
 // Derselbe Gruppierungs-Vorrang wie beim Serien-Löschen (gruppeId vor seriesId), damit "ganze
 // Serie" konsistent dasselbe meint wie beim Löschen.
-export async function updateTerminSerie(id: string, titel: string) {
+export async function updateTerminSerie(id: string, titel: string): Promise<{ ok: true } | { ok: false; fehler: string }> {
   const person = await requirePerson();
   const termin = await prisma.termin.findUnique({ where: { id } });
-  if (!termin) return;
+  if (!termin) return { ok: false, fehler: "Termin nicht gefunden." };
   if (person.rolle !== "ELTERN" && termin.erstelltVonId !== person.id) {
-    throw new Error("Das darfst du nicht bearbeiten.");
+    return { ok: false, fehler: "Das darfst du nicht bearbeiten." };
   }
   const kategorie = erkenneTerminKategorie(titel);
   const where = termin.gruppeId ? { gruppeId: termin.gruppeId } : termin.seriesId ? { seriesId: termin.seriesId } : { id };
@@ -353,6 +382,7 @@ export async function updateTerminSerie(id: string, titel: string) {
   });
   revalidatePath("/kalender");
   revalidatePath("/dashboard");
+  return { ok: true };
 }
 
 // scope "serie" löscht alle Termine derselben Serie (Outlook-Stil-Rückfrage, Fragenkatalog Frage 2).
@@ -360,12 +390,12 @@ export async function updateTerminSerie(id: string, titel: string) {
 // es, dass der Termin ihnen zugewiesen war — auch von Eltern gesetzte Termine ließen sich so
 // löschen). (2) Ein Mehrfach-Personen-Termin (gruppeId) wird als Gruppe gelöscht: "eins"
 // entfernt alle Personen-Zeilen dieses Zeitpunkts, "serie" alle Zeilen/Zeitpunkte der Gruppe.
-export async function deleteTermin(id: string, scope: "eins" | "serie" = "eins") {
+export async function deleteTermin(id: string, scope: "eins" | "serie" = "eins"): Promise<{ ok: true } | { ok: false; fehler: string }> {
   const person = await requirePerson();
   const termin = await prisma.termin.findUnique({ where: { id } });
-  if (!termin) return;
+  if (!termin) return { ok: false, fehler: "Termin nicht gefunden." };
   if (person.rolle !== "ELTERN" && termin.erstelltVonId !== person.id) {
-    throw new Error("Das darfst du nicht löschen — nur selbst angelegte Termine.");
+    return { ok: false, fehler: "Das darfst du nicht löschen — nur selbst angelegte Termine." };
   }
   if (scope === "serie") {
     const where = termin.gruppeId ? { gruppeId: termin.gruppeId } : termin.seriesId ? { seriesId: termin.seriesId } : { id };
@@ -386,6 +416,7 @@ export async function deleteTermin(id: string, scope: "eins" | "serie" = "eins")
   }
   revalidatePath("/kalender");
   revalidatePath("/dashboard");
+  return { ok: true };
 }
 
 // Schul-Einträge (Klassenarbeiten/HÜ-Kontrollen) erscheinen automatisch im Kalender (read-only).

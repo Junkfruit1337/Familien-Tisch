@@ -472,10 +472,13 @@ export default function DienstplanClient({
               disabled={pending || !vonKindId || !mitKindId || (scope === "tag" && !tag)}
               onClick={() =>
                 startTransition(async () => {
-                  if (scope === "dauerhaft") {
-                    await erstelleDauerhaftenTausch({ wocheStartIso: wocheStart, vonKindId, mitKindId, modus });
-                  } else {
-                    await erstelleTausch({ wocheStartIso: wocheStart, tag: scope === "woche" ? undefined : tag, vonKindId, mitKindId, modus });
+                  const ergebnis =
+                    scope === "dauerhaft"
+                      ? await erstelleDauerhaftenTausch({ wocheStartIso: wocheStart, vonKindId, mitKindId, modus })
+                      : await erstelleTausch({ wocheStartIso: wocheStart, tag: scope === "woche" ? undefined : tag, vonKindId, mitKindId, modus });
+                  if (!ergebnis.ok) {
+                    alert(ergebnis.fehler);
+                    return;
                   }
                   setVonKindId("");
                   setMitKindId("");

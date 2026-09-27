@@ -98,6 +98,7 @@ export async function erkenneNoteAusText(
 }
 
 export async function listFaecher(kindId: string) {
+  await requirePerson();
   return prisma.fach.findMany({ where: { kindId }, orderBy: { name: "asc" } });
 }
 
@@ -321,13 +322,21 @@ export async function erneutEinreichen(
   revalidatePath("/schule");
 }
 
-export async function entscheideNote(id: string, genehmigt: boolean) {
+export async function entscheideNote(id: string, genehmigt: boolean): Promise<{ ok: true } | { ok: false; fehler: string }> {
   const person = await requireParent();
-  const note = await prisma.note.update({
-    where: { id },
+  // Fix-Batch 149 (Audit-Fund): ohne diese Sperre konnte dieselbe Note zweimal genehmigt werden
+  // (Doppelklick, oder zwei Eltern-Geräte gleichzeitig offen) — jedes Mal wurde eine NEUE
+  // TaschengeldTransaktion angelegt, das Kind bekam den Betrag doppelt gutgeschrieben, ohne
+  // dass es in der UI auffiel. `updateMany` mit Status-Bedingung macht die Prüfung+Änderung
+  // atomar: nur die erste von zwei gleichzeitigen Anfragen gewinnt.
+  const aktualisiert = await prisma.note.updateMany({
+    where: { id, status: "OFFEN" },
     data: { status: genehmigt ? "GENEHMIGT" : "ABGELEHNT" },
-    include: { fach: true },
   });
+  if (aktualisiert.count === 0) {
+    return { ok: false, fehler: "Diese Note wurde bereits entschieden." };
+  }
+  const note = await prisma.note.findUniqueOrThrow({ where: { id }, include: { fach: true } });
 
   await logAenderung({
     entityTyp: "NOTE",
@@ -359,6 +368,7 @@ export async function entscheideNote(id: string, genehmigt: boolean) {
   });
 
   revalidatePath("/schule");
+  return { ok: true };
 }
 
 // Fix-Batch 30: ein Kind darf seine eigene Note selbst löschen, solange sie noch OFFEN ist
@@ -377,17 +387,35 @@ export async function loescheNote(id: string) {
   revalidatePath("/schule");
 }
 
+// Fix-Batch 149 (Audit-Fund, Ticket "Sparziel-Berechtigungen und Sichtbarkeit" nur teilweise
+// umgesetzt): der Schreibzugriff war schon korrekt geschützt (`setSparziel` prüft
+// `person.id !== kindId`), aber diese drei Lese-Funktionen hatten GAR KEINE Berechtigungs-
+// prüfung — jedes Kind konnte per direktem Server-Action-Aufruf mit einer fremden kindId den
+// Kontostand, die komplette Taschengeld-Historie (inkl. Notiztexte wie "Note 1 · Mathe") oder
+// das Sparziel eines Geschwisters abrufen, unabhängig davon, was die Seite selbst anzeigt.
+async function pruefeKindZugriff(kindId: string) {
+  const person = await requirePerson();
+  if (person.rolle !== "ELTERN" && person.id !== kindId) throw new Error("Nicht erlaubt.");
+}
+
 export async function kontostand(kindId: string) {
+  await pruefeKindZugriff(kindId);
   const transaktionen = await prisma.taschengeldTransaktion.findMany({ where: { kindId } });
   return transaktionen.reduce((sum, t) => sum + (t.typ === "GUTSCHRIFT" ? t.betrag : -t.betrag), 0);
 }
 
 export async function listTaschengeld(kindId: string) {
+  await pruefeKindZugriff(kindId);
   return prisma.taschengeldTransaktion.findMany({ where: { kindId }, orderBy: { createdAt: "desc" } });
 }
 
 export async function auszahlen(kindId: string, betrag: number, grund?: string) {
   const person = await requireParent();
+  // Fix-Batch 149 (Audit-Fund): anders als bei `manuelleGutschrift` fehlte hier die
+  // Betrags-Validierung — ein negativer Betrag unterschreitet den (immer positiven) Kontostand
+  // nie, wurde also nie abgelehnt. `kontostand()` rechnet AUSZAHLUNG immer als `-betrag`, ein
+  // negativer Betrag wurde so zu einer als "Auszahlung" getarnten, versteckten Gutschrift.
+  if (!(betrag > 0)) throw new Error("Bitte einen Betrag größer als 0 eingeben.");
   const stand = await kontostand(kindId);
   if (betrag > stand) {
     throw new Error(`Auszahlung (${betrag} €) übersteigt den Kontostand (${stand} €).`);
@@ -432,6 +460,7 @@ export async function setSparziel(kindId: string, bezeichnung: string, zielbetra
 }
 
 export async function getSparziel(kindId: string) {
+  await pruefeKindZugriff(kindId);
   return prisma.sparziel.findUnique({ where: { kindId } });
 }
 
@@ -465,6 +494,11 @@ async function wendeGewichtungRueckwirkendAn(kindId: string, fachId: string, art
 
 export async function setNotenGewichtung(kindId: string, fachId: string, art: string, gewichtung: number) {
   await requireAdmin();
+  // Fix-Batch 149 (Audit-Fund): `min="0"` im Formular ist nur ein HTML-Hinweis, keine echte
+  // Sperre — ohne serverseitige Prüfung könnte ein negativer Wert den Notenschnitt (der sich
+  // rückwirkend über `wendeGewichtungRueckwirkendAn` sofort auf alle Noten des laufenden
+  // Schuljahres auswirkt) auf einen unsinnigen Wert außerhalb 1–6 verfälschen.
+  if (!(gewichtung >= 0)) throw new Error("Die Gewichtung darf nicht negativ sein.");
   await prisma.notenGewichtung.upsert({
     where: { kindId_fachId_art: { kindId, fachId, art: art as any } },
     update: { gewichtung },
@@ -479,8 +513,15 @@ export async function setNotenGewichtung(kindId: string, fachId: string, art: st
 
 export async function listAnstehendeSchulEintraege() {
   const person = await requirePerson();
-  const where =
-    person.rolle === "ELTERN" ? { datum: { gte: new Date() } } : { personId: person.id, datum: { gte: new Date() } };
+  // Fix-Batch 149 (Audit-Fund): `datum: { gte: new Date() }` verglich gegen die exakte aktuelle
+  // Uhrzeit statt Tagesanfang — ein heute fälliger Eintrag (gespeichert als Mitternacht des
+  // Tages) galt dadurch fast den GANZEN Tag über schon als "vergangen" und verschwand aus
+  // dieser Liste, außer in einem winzigen Fenster kurz nach Mitternacht. Die extra dafür gebaute
+  // "Achtung, heute!"-Warnung im Dashboard (Fix-Batch 144) wurde dadurch praktisch nie
+  // ausgelöst. Vergleich jetzt gegen Tagesanfang, analog zur bereits korrekten Lerntipp-Abfrage.
+  const heute = new Date();
+  heute.setHours(0, 0, 0, 0);
+  const where = person.rolle === "ELTERN" ? { datum: { gte: heute } } : { personId: person.id, datum: { gte: heute } };
   return prisma.schulEintrag.findMany({ where, include: { person: true, fach: true }, orderBy: { datum: "asc" }, take: 5 });
 }
 

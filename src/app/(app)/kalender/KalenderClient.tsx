@@ -293,7 +293,12 @@ export default function KalenderClient({
     setNotizEntwurf(t.notiz ?? "");
     setWiederholung("KEINE");
     setWiederholungBis("");
-    setBearbeitenSerieMoeglich(!!(t.seriesId || t.gruppeId));
+    // Fix-Batch 149 (Audit-Fund): prüfte bisher nur, ob der Termin Teil einer Serie/Gruppe ist
+    // — nicht, ob die aktuelle Person ihn selbst angelegt hat. Der Server (updateTerminSerie)
+    // verlangt aber erstelltVonId === eigene Person (außer Eltern). Ein Kind sah die Checkbox
+    // "für ganze Serie übernehmen" also auch bei einem von den Eltern angelegten, ihm nur
+    // zugewiesenen Serientermin — der Server lehnte danach still ab.
+    setBearbeitenSerieMoeglich(!!(t.seriesId || t.gruppeId) && (istEltern || t.erstelltVonId === eigeneId));
     setFuerGanzeSerie(false);
     setZeigeFormular(true);
     // Fix-Batch 122 (Florians Bug-Meldung: "es passiert nichts, wenn ich auf Bearbeiten
@@ -342,10 +347,12 @@ export default function KalenderClient({
     }
     startTransition(async () => {
       if (bearbeitenId) {
-        if (fuerGanzeSerie) {
-          await updateTerminSerie(bearbeitenId, titel);
-        } else {
-          await updateTermin(bearbeitenId, { titel, start: startWert, ende: endeWert, anhaenge: anhaengeEntwurf, notiz: notizEntwurf || undefined });
+        const ergebnis = fuerGanzeSerie
+          ? await updateTerminSerie(bearbeitenId, titel)
+          : await updateTermin(bearbeitenId, { titel, start: startWert, ende: endeWert, ganztaegig, anhaenge: anhaengeEntwurf, notiz: notizEntwurf || undefined });
+        if (!ergebnis.ok) {
+          alert(ergebnis.fehler);
+          return;
         }
       } else {
         // Fix-Batch 63 (Terminkonflikt-Check): vor dem Anlegen prüfen, ob am selben Tag für
@@ -375,12 +382,22 @@ export default function KalenderClient({
 
   // Fix-Batch 94 (Audit-Ergebnis, Florians Wunsch "einheitliche Lösch-Bestätigung überall wo
   // sinnvoll"): ein einzelner Termin ließ sich bisher ohne jede Rückfrage löschen.
+  // Fix-Batch 149 (Audit-Fund): deleteTermin/updateTermin/updateTerminSerie geben jetzt
+  // {ok,fehler} zurück statt zu werfen — ein serverseitig abgelehnter Löschvorgang zeigt jetzt
+  // eine echte Meldung statt spurlos zu verschwinden.
+  function loeschen(id: string, scope: "eins" | "serie") {
+    startTransition(async () => {
+      const ergebnis = await deleteTermin(id, scope);
+      if (!ergebnis.ok) alert(ergebnis.fehler);
+    });
+  }
+
   function loeschKlick(t: Termin) {
     if (t.seriesId || t.gruppeId) {
       setLoeschAuswahl({ id: t.id, titel: t.titel });
     } else {
       if (!confirm(`„${t.titel}" wirklich löschen?`)) return;
-      startTransition(() => deleteTermin(t.id, "eins"));
+      loeschen(t.id, "eins");
     }
   }
 
@@ -485,7 +502,7 @@ export default function KalenderClient({
                 className="btn-secondary"
                 style={{ fontSize: 12, padding: "2px 8px" }}
                 onClick={() => {
-                  startTransition(() => deleteTermin(t.id, "eins"));
+                  loeschen(t.id, "eins");
                   setLoeschAuswahl(null);
                 }}
               >
@@ -499,7 +516,7 @@ export default function KalenderClient({
                   // verdient eine explizite Rückfrage, mehr als "Nur diesen".
                   const beschreibung = t.gruppeId && !t.seriesId ? "für alle Personen" : "die ganze Serie";
                   if (!confirm(`„${t.titel}" wirklich ${beschreibung} löschen? Das betrifft möglicherweise mehrere Termine.`)) return;
-                  startTransition(() => deleteTermin(t.id, "serie"));
+                  loeschen(t.id, "serie");
                   setLoeschAuswahl(null);
                 }}
               >

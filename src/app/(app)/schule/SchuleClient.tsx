@@ -1079,10 +1079,30 @@ export default function SchuleClient({
                       >
                         <Icon id="edit" size={12} />
                       </button>
-                      <button className="btn" style={{ padding: "6px 10px" }} onClick={() => startTransition(() => entscheideNote(n.id, true))}>
+                      <button
+                        className="btn"
+                        style={{ padding: "6px 10px" }}
+                        disabled={pending}
+                        onClick={() =>
+                          startTransition(async () => {
+                            const ergebnis = await entscheideNote(n.id, true);
+                            if (!ergebnis.ok) alert(ergebnis.fehler);
+                          })
+                        }
+                      >
                         ✓
                       </button>
-                      <button className="btn-danger" style={{ padding: "6px 10px", borderRadius: 10, border: "none" }} onClick={() => startTransition(() => entscheideNote(n.id, false))}>
+                      <button
+                        className="btn-danger"
+                        style={{ padding: "6px 10px", borderRadius: 10, border: "none" }}
+                        disabled={pending}
+                        onClick={() =>
+                          startTransition(async () => {
+                            const ergebnis = await entscheideNote(n.id, false);
+                            if (!ergebnis.ok) alert(ergebnis.fehler);
+                          })
+                        }
+                      >
                         <Icon id="close" />
                       </button>
                     </div>

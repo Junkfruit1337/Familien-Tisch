@@ -14,7 +14,18 @@ import { randomUUID } from "crypto";
 const MAX_SERIEN_AUFGABEN = 200;
 const UNBEGRENZT_HORIZONT_TAGE = 365 * 2;
 
-function naechsteAufgabe(datum: Date, wiederholung: string): Date {
+function letzterTagDesMonats(jahr: number, monatNullBasiert: number): number {
+  return new Date(jahr, monatNullBasiert + 1, 0).getDate();
+}
+
+// Fix-Batch 149 (Audit-Fund): `setMonth`/`setFullYear` auf einen Tag, den der Zielmonat nicht
+// hat, ließ JS automatisch in den übernächsten Monat überlaufen (z. B. "31. Jan" + 1 Monat →
+// nicht Ende Februar, sondern automatisch der 2./3. März, weil Februar keinen 31. Tag hat) —
+// und weil jede Iteration nur den zuletzt berechneten (ggf. schon verschobenen) Tag kannte,
+// verschob sich danach die GANZE restliche Serie dauerhaft. `ankerTag` ist deshalb immer der
+// Tag des ALLERERSTEN Serien-Termins, nicht der zuletzt berechnete — jeder Sprung geht vom
+// Ankertag aus, geklemmt auf den letzten Tag des jeweiligen Zielmonats.
+function naechsteAufgabe(datum: Date, wiederholung: string, ankerTag: number): Date {
   const d = new Date(datum);
   if (wiederholung === "TAEGLICH") d.setDate(d.getDate() + 1);
   else if (wiederholung === "WERKTAEGLICH") {
@@ -24,9 +35,12 @@ function naechsteAufgabe(datum: Date, wiederholung: string): Date {
     } while (d.getDay() === 0 || d.getDay() === 6);
   } else if (wiederholung === "WOECHENTLICH") d.setDate(d.getDate() + 7);
   else if (wiederholung === "ZWEIWOECHENTLICH") d.setDate(d.getDate() + 14);
-  else if (wiederholung === "MONATLICH") d.setMonth(d.getMonth() + 1);
-  else if (wiederholung === "ALLE_3_MONATE") d.setMonth(d.getMonth() + 3);
-  else if (wiederholung === "JAEHRLICH") d.setFullYear(d.getFullYear() + 1);
+  else if (wiederholung === "MONATLICH" || wiederholung === "ALLE_3_MONATE" || wiederholung === "JAEHRLICH") {
+    const schritt = wiederholung === "JAEHRLICH" ? 12 : wiederholung === "ALLE_3_MONATE" ? 3 : 1;
+    d.setDate(1); // verhindert Monatsüberlauf während der Verschiebung
+    d.setMonth(d.getMonth() + schritt);
+    d.setDate(Math.min(ankerTag, letzterTagDesMonats(d.getFullYear(), d.getMonth())));
+  }
   return d;
 }
 
@@ -85,10 +99,11 @@ export async function createAufgabe(data: {
   const ersteFaelligkeit = data.faelligkeit ? new Date(data.faelligkeit) : null;
   const faelligkeitsDaten: (Date | null)[] = [ersteFaelligkeit];
   if (wiederholung !== "KEINE" && grenze && ersteFaelligkeit) {
-    let naechste = naechsteAufgabe(ersteFaelligkeit, wiederholung);
+    const ankerTag = ersteFaelligkeit.getDate();
+    let naechste = naechsteAufgabe(ersteFaelligkeit, wiederholung, ankerTag);
     while (naechste <= grenze && faelligkeitsDaten.length < MAX_SERIEN_AUFGABEN) {
       faelligkeitsDaten.push(naechste);
-      naechste = naechsteAufgabe(naechste, wiederholung);
+      naechste = naechsteAufgabe(naechste, wiederholung, ankerTag);
     }
   }
 
@@ -122,12 +137,14 @@ export async function createAufgabe(data: {
   revalidatePath("/dashboard");
 }
 
-export async function toggleAufgabe(id: string) {
+export async function toggleAufgabe(id: string): Promise<{ ok: true } | { ok: false; fehler: string }> {
   const person = await requirePerson();
   const aufgabe = await prisma.aufgabe.findUnique({ where: { id } });
-  if (!aufgabe) return;
+  if (!aufgabe) return { ok: false, fehler: "Aufgabe nicht gefunden." };
+  // Fix-Batch 149 (Audit-Fund): rohes throw statt {ok,fehler} — betrifft z. B. den Fall, dass
+  // eine familienweite Aufgabe zwischenzeitlich einer bestimmten Person zugewiesen wurde.
   if (person.rolle !== "ELTERN" && aufgabe.personId !== null && aufgabe.personId !== person.id) {
-    throw new Error("Das ist nicht deine Aufgabe.");
+    return { ok: false, fehler: "Das ist nicht deine Aufgabe." };
   }
   const updated = await prisma.aufgabe.update({ where: { id }, data: { erledigt: !aufgabe.erledigt } });
   await logAenderung({
@@ -138,18 +155,22 @@ export async function toggleAufgabe(id: string) {
   });
   revalidatePath("/aufgaben");
   revalidatePath("/dashboard");
+  return { ok: true };
 }
 
 // scope "serie" löscht alle Aufgaben derselben Serie (Outlook-Stil-Rückfrage wie beim Kalender).
 // Fix-Batch 30: Kinder dürfen nur noch selbst angelegte Aufgaben löschen (vorher reichte es,
 // dass die Aufgabe ihnen zugewiesen war — auch von Eltern gesetzte Aufgaben ließen sich so
 // löschen), analog derselben Korrektur bei Terminen.
-export async function deleteAufgabe(id: string, scope: "eins" | "serie" = "eins") {
+export async function deleteAufgabe(id: string, scope: "eins" | "serie" = "eins"): Promise<{ ok: true } | { ok: false; fehler: string }> {
   const person = await requirePerson();
   const aufgabe = await prisma.aufgabe.findUnique({ where: { id } });
-  if (!aufgabe) return;
+  if (!aufgabe) return { ok: false, fehler: "Aufgabe nicht gefunden." };
+  // Fix-Batch 149 (Audit-Fund): rohes throw statt {ok,fehler} — genau dieser Fall trat live
+  // auf, weil der Löschen-Button clientseitig auf `personId` statt `erstelltVonId` prüfte
+  // (siehe Fix in AufgabenClient.tsx) und dadurch sichtbar war, wo der Server ablehnt.
   if (person.rolle !== "ELTERN" && aufgabe.erstelltVonId !== person.id) {
-    throw new Error("Das darfst du nicht löschen — nur selbst angelegte Aufgaben.");
+    return { ok: false, fehler: "Das darfst du nicht löschen — nur selbst angelegte Aufgaben." };
   }
   if (scope === "serie" && aufgabe.seriesId) {
     await prisma.aufgabe.deleteMany({ where: { seriesId: aufgabe.seriesId } });
@@ -160,4 +181,5 @@ export async function deleteAufgabe(id: string, scope: "eins" | "serie" = "eins"
   }
   revalidatePath("/aufgaben");
   revalidatePath("/dashboard");
+  return { ok: true };
 }

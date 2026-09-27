@@ -6,13 +6,54 @@ import { revalidatePath } from "next/cache";
 import { erkenneTicketAusSprache, verbessereFormulierung, type ErkanntesTicket } from "@/lib/spracheErkennung";
 import { sendePushAnPerson } from "@/lib/push";
 
+// Fix-Batch 149 (Audit-Fund): `findMany` ohne `select` gab bisher das komplette Person-Objekt
+// zurück, inklusive `pinHash` (bcrypt-Hash der 4-stelligen PIN) und der Lockout-Felder
+// `pinFehlversuche`/`pinGesperrtBis` — nur mit `requirePerson()` geschützt, also für JEDE
+// eingeloggte Person (auch ein Kind) abrufbar. Eine nur 4-stellige, rein numerische PIN
+// (10.000 Kombinationen) lässt sich mit dem Hash offline in Sekunden brute-forcen, was den
+// eigens dafür gebauten Lockout-Schutz (Fix-Batch 131) komplett aushebeln würde. `page.tsx`
+// filterte diese Felder zwar schon vor der Weitergabe an die Client-Komponente heraus, aber
+// die Server Action selbst ist unabhängig davon direkt aufrufbar.
 export async function listPersonen() {
   await requirePerson();
-  return prisma.person.findMany({ orderBy: { reihenfolge: "asc" } });
+  const personen = await prisma.person.findMany({
+    orderBy: { reihenfolge: "asc" },
+    select: {
+      id: true,
+      name: true,
+      rolle: true,
+      farbe: true,
+      aktiv: true,
+      istAdmin: true,
+      reihenfolge: true,
+      portionsGewicht: true,
+      geburtsdatum: true,
+      bundesland: true,
+      klassenstufe: true,
+      klasse: true,
+      pinHash: true,
+    },
+  });
+  // `pinHash` selbst verlässt diese Funktion nie — nur das abgeleitete Boolean, das
+  // `page.tsx` für die Anzeige braucht (siehe Kommentar oben).
+  return personen.map(({ pinHash, ...p }) => ({ ...p, hatPin: !!pinHash }));
 }
 
-export async function createPerson(data: { name: string; rolle: string; pin?: string; farbe: string }) {
+// Fix-Batch 149 (Audit-Fund): ohne diese Prüfung konnte eine PIN mit falscher Länge/Zeichen
+// gespeichert werden — der Login (reines Ziffern-Pad, sendet erst bei genau 4 Tastendrücken
+// automatisch ab) lässt eine solche Person danach NIE mehr einloggen, ohne erkennbaren Grund,
+// bis ein Admin die PIN manuell zurücksetzt.
+function pruefePinFormat(pin: string): string | null {
+  if (!/^\d{4}$/.test(pin)) return "Die PIN muss aus genau 4 Ziffern bestehen.";
+  return null;
+}
+
+export async function createPerson(data: { name: string; rolle: string; pin?: string; farbe: string }): Promise<{ ok: true } | { ok: false; fehler: string }> {
   await requireAdmin();
+  if (data.pin) {
+    const fehler = pruefePinFormat(data.pin);
+    if (fehler) return { ok: false, fehler };
+  }
   const anzahl = await prisma.person.count();
   await prisma.person.create({
     data: {
@@ -24,12 +65,16 @@ export async function createPerson(data: { name: string; rolle: string; pin?: st
     },
   });
   revalidatePath("/einstellungen");
+  return { ok: true };
 }
 
-export async function setPin(personId: string, pin: string) {
+export async function setPin(personId: string, pin: string): Promise<{ ok: true } | { ok: false; fehler: string }> {
   await requireAdmin();
+  const fehler = pruefePinFormat(pin);
+  if (fehler) return { ok: false, fehler };
   await prisma.person.update({ where: { id: personId }, data: { pinHash: await hashPin(pin) } });
   revalidatePath("/einstellungen");
+  return { ok: true };
 }
 
 export async function setFarbe(personId: string, farbe: string) {
@@ -38,10 +83,22 @@ export async function setFarbe(personId: string, farbe: string) {
   revalidatePath("/einstellungen");
 }
 
-export async function setAktiv(personId: string, aktiv: boolean) {
-  await requireAdmin();
+export async function setAktiv(personId: string, aktiv: boolean): Promise<{ ok: true } | { ok: false; fehler: string }> {
+  const admin = await requireAdmin();
+  // Fix-Batch 149 (Audit-Fund): ohne diese Sperre konnte sich der einzige Admin selbst
+  // deaktivieren (z. B. versehentlicher Klick auf die eigene Zeile) — danach kann sich
+  // niemand mehr einloggen, der `setAktiv`/PIN-Reset ausführen dürfte, um das rückgängig zu
+  // machen (nur der Admin darf das laut Fix-Batch 140), ohne direkten Datenbankzugriff.
+  if (personId === admin.id && !aktiv) {
+    return { ok: false, fehler: "Du kannst dich nicht selbst deaktivieren." };
+  }
   await prisma.person.update({ where: { id: personId }, data: { aktiv } });
+  // Session sofort beenden statt erst beim nächsten Ablauf (bis zu 30 Tage) — ergänzt den
+  // Fix in getCurrentPerson(), der eine deaktivierte Person ab jetzt zusätzlich serverseitig
+  // bei jeder Anfrage abweist.
+  if (!aktiv) await prisma.session.deleteMany({ where: { personId } });
   revalidatePath("/einstellungen");
+  return { ok: true };
 }
 
 // Portionsgröße für den Essensplan-Skalierungsrechner (Fix-Batch 23) — vorher fest im Code
@@ -253,9 +310,13 @@ export async function erstelleHausproblem(data: {
   beschreibung: string;
   zustaendigkeit: "VERMIETER" | "FAMILIE";
   fotos?: string[];
-}) {
+}): Promise<{ ok: true } | { ok: false; fehler: string }> {
   const person = await requireParent();
-  if (!data.titel.trim() || !data.beschreibung.trim()) throw new Error("Titel und Beschreibung dürfen nicht leer sein.");
+  // Fix-Batch 149 (Audit-Fund): rohes throw statt {ok,fehler} — dieselbe Konvention, die
+  // bereits bei den Ticket-Nachrichten (Fix-Batch 143) als echter Bug erkannt wurde.
+  if (!data.titel.trim() || !data.beschreibung.trim()) {
+    return { ok: false, fehler: "Titel und Beschreibung dürfen nicht leer sein." };
+  }
   await prisma.hausproblem.create({
     data: {
       titel: data.titel.trim(),
@@ -266,6 +327,7 @@ export async function erstelleHausproblem(data: {
     },
   });
   revalidatePath("/einstellungen");
+  return { ok: true };
 }
 
 // Spracheingabe fürs Hausreparatur-Formular — nutzt bewusst dieselbe Erkennungsfunktion wie
@@ -307,14 +369,17 @@ export async function loescheHausproblem(id: string) {
 // Wandelt ein selbst zu erledigendes Hausproblem in eine normale Aufgabe für ein
 // Familienmitglied um — landet danach in der regulären Aufgabenliste, das Hausproblem
 // merkt sich per aufgabeId, dass/wofür schon eine Aufgabe angelegt wurde.
-export async function wandleHausproblemInAufgabeUm(id: string, personId: string) {
+export async function wandleHausproblemInAufgabeUm(id: string, personId: string): Promise<{ ok: true } | { ok: false; fehler: string }> {
   const person = await requireParent();
   const problem = await prisma.hausproblem.findUnique({ where: { id } });
-  if (!problem) throw new Error("Hausproblem nicht gefunden.");
+  // Fix-Batch 149 (Audit-Fund): rohes throw statt {ok,fehler} — z. B. erreichbar, wenn ein
+  // zweites Eltern-Gerät das Problem zwischenzeitlich schon gelöscht hat.
+  if (!problem) return { ok: false, fehler: "Hausproblem nicht gefunden." };
   const aufgabe = await prisma.aufgabe.create({
     data: { titel: problem.titel, personId, erstelltVonId: person.id },
   });
   await prisma.hausproblem.update({ where: { id }, data: { aufgabeId: aufgabe.id } });
   revalidatePath("/einstellungen");
   revalidatePath("/aufgaben");
+  return { ok: true };
 }

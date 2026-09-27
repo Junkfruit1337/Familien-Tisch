@@ -376,10 +376,39 @@ export default function EssensplanClient({
     startTransition(() => fuegeZutatenDerWocheHinzu(plan.wocheStart).then(() => ladeWoche(offset)));
   }
 
+  // Fix-Batch 149 (Audit-Fund): aus dem "Rezept speichern"-Button-Handler herausgezogen, damit
+  // sowohl der konsistente Fall (Mengen-Abgleich ohne Widerspruch) als auch "Trotzdem so
+  // speichern" direkt speichern können, statt einen weiteren Klick auf denselben Button zu
+  // verlangen.
+  async function speichereNeuesRezept() {
+    const portionenBasis = parseInt(neuPortionenBasis, 10) || 6;
+    await addRezept(neuName, neuZutaten, neuZubereitung || undefined, portionenBasis, neuKategorie);
+    setNeuName("");
+    setNeuZutaten("");
+    setNeuZubereitung("");
+    setNeuPortionenBasis("6");
+    setNeuKategorie("Hauptgang");
+    setRezeptFinderText("");
+    setNeuQuelle(null);
+    setZeigeZutatenWarnungNeu(false);
+    setNeuAbgleichGeprueft(null);
+    setNeuAbgleichWarnung(null);
+  }
+
   // Gericht ändern geht nur bei entsperrtem Tag (Dropdown ist sonst deaktiviert, siehe unten) —
   // kein Lock-Check hier mehr nötig, das vereinfacht den vorherigen Doppelweg (Fix-Batch 29).
+  // Fix-Batch 149 (Audit-Fund): setTag/entferneTag geben jetzt {ok,fehler} zurück statt zu
+  // werfen — ein bei gesperrter Woche abgelehnter Änderungsversuch zeigt jetzt eine echte
+  // Meldung, statt spurlos zu verschwinden (Next.js verschluckt geworfene Fehler in Produktion).
   function tagAendern(t: Tag, neuesRezeptId: string) {
-    startTransition(() => setTag(plan.wocheStart, t.tag, neuesRezeptId).then(() => ladeWoche(offset)));
+    startTransition(async () => {
+      const ergebnis = await setTag(plan.wocheStart, t.tag, neuesRezeptId);
+      if (!ergebnis.ok) {
+        alert(ergebnis.fehler);
+        return;
+      }
+      await ladeWoche(offset);
+    });
   }
 
   // Fix-Batch 74 (Florians Bug-Meldung): "– kein Gericht –" auswählen setzte bisher gar nichts
@@ -387,7 +416,14 @@ export default function EssensplanClient({
   // zurück ("bleibt durchgehend geöffnet"). Nur relevant, wenn überhaupt ein Eintrag da ist.
   function tagEntfernen(t: Tag) {
     if (!t.eintrag) return;
-    startTransition(() => entferneTag(plan.wocheStart, t.tag).then(() => ladeWoche(offset)));
+    startTransition(async () => {
+      const ergebnis = await entferneTag(plan.wocheStart, t.tag);
+      if (!ergebnis.ok) {
+        alert(ergebnis.fehler);
+        return;
+      }
+      await ladeWoche(offset);
+    });
   }
 
   async function klickSchloss(t: Tag) {
@@ -563,7 +599,14 @@ export default function EssensplanClient({
                         onClick={() => {
                           const aktuelle = t.eintrag!.esserIds.length === 0 ? familie.map((x) => x.id) : t.eintrag!.esserIds;
                           const neu = aktuelle.includes(f.id) ? aktuelle.filter((id) => id !== f.id) : [...aktuelle, f.id];
-                          startTransition(() => setEsser(t.eintrag!.id, neu).then(() => ladeWoche(offset)));
+                          startTransition(async () => {
+                            const ergebnis = await setEsser(t.eintrag!.id, neu);
+                            if (!ergebnis.ok) {
+                              alert(ergebnis.fehler);
+                              return;
+                            }
+                            await ladeWoche(offset);
+                          });
                         }}
                       >
                         {!aktiv && <PersonChip name={f.name} farbe={f.farbe} size={16} />}
@@ -584,7 +627,14 @@ export default function EssensplanClient({
                     onChange={(e) => setExtraEntwuerfe((prev) => ({ ...prev, [t.eintrag!.id]: e.target.value }))}
                     onBlur={(e) => {
                       const wert = parseFloat(e.target.value) || 0;
-                      startTransition(() => setExtraPortionen(t.eintrag!.id, wert).then(() => ladeWoche(offset)));
+                      startTransition(async () => {
+                        const ergebnis = await setExtraPortionen(t.eintrag!.id, wert);
+                        if (!ergebnis.ok) {
+                          alert(ergebnis.fehler);
+                          return;
+                        }
+                        await ladeWoche(offset);
+                      });
                     }}
                   />
                 </div>
@@ -643,7 +693,14 @@ export default function EssensplanClient({
                             style={{ width: 24, height: 24, fontSize: 12 }}
                             onClick={() => {
                               if (!confirm(`„${e.bezeichnung}: ${e.rezeptName}" wirklich entfernen?`)) return;
-                              startTransition(() => entferneExtraMahlzeit(e.id).then(() => ladeWoche(offset)));
+                              startTransition(async () => {
+                                const ergebnis = await entferneExtraMahlzeit(e.id);
+                                if (!ergebnis.ok) {
+                                  alert(ergebnis.fehler);
+                                  return;
+                                }
+                                await ladeWoche(offset);
+                              });
                             }}
                           >
                             <Icon id="delete" size={12} />
@@ -1418,6 +1475,10 @@ export default function EssensplanClient({
                       onClick={() => {
                         setNeuAbgleichGeprueft(`${neuZutaten}||${neuZubereitung}`);
                         setNeuAbgleichWarnung(null);
+                        // Fix-Batch 149 (Audit-Fund): speicherte bisher nicht selbst, sondern
+                        // verlangte einen weiteren Klick auf "Rezept speichern" — jetzt speichert
+                        // die Bestätigung direkt, statt eine dritte Interaktion zu verlangen.
+                        startTransition(speichereNeuesRezept);
                       }}
                     >
                       Trotzdem so speichern
@@ -1454,32 +1515,23 @@ export default function EssensplanClient({
                         if (ergebnis.ok && !ergebnis.ergebnis.konsistent) {
                           setNeuAbgleichWarnung({ hinweis: ergebnis.ergebnis.hinweis, korrigierteZubereitung: ergebnis.ergebnis.korrigierteZubereitung });
                           if (ergebnis.ergebnis.korrigierteZubereitung) setNeuZubereitung(ergebnis.ergebnis.korrigierteZubereitung);
-                        } else {
-                          // Konsistent, oder der Abgleich selbst ist fehlgeschlagen — in beiden
-                          // Fällen nicht das Speichern blockieren (die KI kann sich irren, ein
-                          // API-Fehler soll das Anlegen des Rezepts nicht verhindern).
-                          setNeuAbgleichGeprueft(fingerprint);
+                          return;
                         }
+                        // Fix-Batch 149 (Audit-Fund, Florians eigener Kommentar hier widersprach
+                        // dem tatsächlichen Verhalten): konsistent (oder der Abgleich selbst ist
+                        // fehlgeschlagen) hieß bisher trotzdem NUR "Prüfung als erledigt merken,
+                        // NICHTS speichern" — erst ein zweiter Klick auf denselben Button
+                        // speicherte tatsächlich. Jetzt wird im konsistenten Fall sofort
+                        // gespeichert, wie der Kommentar es eigentlich beschreibt.
+                        setNeuAbgleichGeprueft(fingerprint);
+                        await speichereNeuesRezept();
                       } finally {
                         setNeuAbgleichLaeuft(false);
                       }
                     });
                     return;
                   }
-                  startTransition(async () => {
-                    const portionenBasis = parseInt(neuPortionenBasis, 10) || 6;
-                    await addRezept(neuName, neuZutaten, neuZubereitung || undefined, portionenBasis, neuKategorie);
-                    setNeuName("");
-                    setNeuZutaten("");
-                    setNeuZubereitung("");
-                    setNeuPortionenBasis("6");
-                    setNeuKategorie("Hauptgang");
-                    setRezeptFinderText("");
-                    setNeuQuelle(null);
-                    setZeigeZutatenWarnungNeu(false);
-                    setNeuAbgleichGeprueft(null);
-                    setNeuAbgleichWarnung(null);
-                  });
+                  startTransition(speichereNeuesRezept);
                 }}
               >
                 Rezept speichern
