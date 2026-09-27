@@ -132,14 +132,24 @@ export async function listAlleTickets() {
 // filterte die Statusliste RUECKFRAGE gar nicht erst mit, siehe dashboard/actions.ts). Ein
 // Kind musste von sich aus in die Einstellungen gehen und dort nachschauen, um überhaupt zu
 // bemerken, dass eine Antwort erwartet wird — das Ticket hing dadurch "ewig in der Luft".
-// Jetzt gibt es bei einer Rückfrage sofort eine Push-Benachrichtigung mit der Frage selbst.
+// Fix-Batch 147 (Florians Nachtrag: "Ja, ich hätte gerne, dass die Kinder eine Push-
+// Benachrichtigung bekommen, wenn ihre Tickets entschieden werden. Entweder wenn eine
+// Rückfrage gestellt wird, wenn ein Ticket genehmigt wird oder wenn ein Ticket abgelehnt
+// wird."): auf alle drei Entscheidungs-Status ausgeweitet, nicht mehr nur Rückfrage.
+const TICKET_ENTSCHEIDUNGS_PUSH: Record<string, { titel: string; ohneBegruendung: string }> = {
+  RUECKFRAGE: { titel: "Rückfrage zu deinem Ticket", ohneBegruendung: "bitte antworten." },
+  GENEHMIGT: { titel: "Dein Ticket wurde genehmigt", ohneBegruendung: "wird umgesetzt." },
+  ABGELEHNT: { titel: "Dein Ticket wurde abgelehnt", ohneBegruendung: "" },
+};
+
 export async function setzeTicketStatus(id: string, status: string, begruendung?: string) {
   await requireAdmin();
   const ticket = await prisma.ticket.update({ where: { id }, data: { status: status as any, begruendung: begruendung || undefined } });
-  if (status === "RUECKFRAGE") {
+  const push = TICKET_ENTSCHEIDUNGS_PUSH[status];
+  if (push) {
     await sendePushAnPerson(ticket.erstelltVonId, {
-      title: "Rückfrage zu deinem Ticket",
-      body: begruendung ? `Zu „${ticket.titel}": ${begruendung.slice(0, 100)}` : `Zu „${ticket.titel}" — bitte antworten.`,
+      title: push.titel,
+      body: begruendung ? `Zu „${ticket.titel}": ${begruendung.slice(0, 100)}` : `„${ticket.titel}" ${push.ohneBegruendung}`.trim(),
       url: "/einstellungen",
     });
   }
