@@ -1128,7 +1128,12 @@ export default function EinstellungenClient({
                   color: t.status === "RUECKFRAGE" ? "var(--accent-contrast)" : undefined,
                 }}
                 disabled={!ticketBegruendungen[t.id]?.trim()}
-                onClick={() => startTransition(() => setzeTicketStatus(t.id, "RUECKFRAGE", ticketBegruendungen[t.id]))}
+                onClick={() =>
+                  startTransition(async () => {
+                    const ergebnis = await setzeTicketStatus(t.id, "RUECKFRAGE", ticketBegruendungen[t.id]);
+                    if (!ergebnis.ok) alert(ergebnis.fehler);
+                  })
+                }
               >
                 {TICKET_STATUS_LABEL.RUECKFRAGE}
               </button>
@@ -1142,7 +1147,12 @@ export default function EinstellungenClient({
                     background: t.status === s ? "var(--accent)" : undefined,
                     color: t.status === s ? "var(--accent-contrast)" : undefined,
                   }}
-                  onClick={() => startTransition(() => setzeTicketStatus(t.id, s, ticketBegruendungen[t.id] || undefined))}
+                  onClick={() =>
+                    startTransition(async () => {
+                      const ergebnis = await setzeTicketStatus(t.id, s, ticketBegruendungen[t.id] || undefined);
+                      if (!ergebnis.ok) alert(ergebnis.fehler);
+                    })
+                  }
                 >
                   {TICKET_STATUS_LABEL[s]}
                 </button>

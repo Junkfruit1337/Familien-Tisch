@@ -49,24 +49,36 @@ function pruefePinFormat(pin: string): string | null {
   return null;
 }
 
+const GUELTIGE_ROLLEN = ["ELTERN", "KIND", "KIND_OHNE_ZUGANG"];
+
 export async function createPerson(data: { name: string; rolle: string; pin?: string; farbe: string }): Promise<{ ok: true } | { ok: false; fehler: string }> {
   await requireAdmin();
+  // Fix-Batch 152 (Audit-Fund): `rolle` wurde bisher ungeprüft `as any` gecastet, UND die
+  // Funktion hatte trotz {ok,fehler}-Signatur kein umschließendes try/catch — ein ungültiger
+  // Wert wäre roh durchgeschlagen statt sauber `{ok:false,fehler}` zu liefern.
+  if (!GUELTIGE_ROLLEN.includes(data.rolle)) return { ok: false, fehler: "Ungültige Rolle." };
   if (data.pin) {
     const fehler = pruefePinFormat(data.pin);
     if (fehler) return { ok: false, fehler };
   }
-  const anzahl = await prisma.person.count();
-  await prisma.person.create({
-    data: {
-      name: data.name,
-      rolle: data.rolle as any,
-      farbe: data.farbe,
-      pinHash: data.pin ? await hashPin(data.pin) : null,
-      reihenfolge: anzahl,
-    },
-  });
-  revalidatePath("/einstellungen");
-  return { ok: true };
+  try {
+    const anzahl = await prisma.person.count();
+    await prisma.person.create({
+      data: {
+        name: data.name,
+        rolle: data.rolle as any,
+        farbe: data.farbe,
+        pinHash: data.pin ? await hashPin(data.pin) : null,
+        reihenfolge: anzahl,
+      },
+    });
+    revalidatePath("/einstellungen");
+    return { ok: true };
+  } catch (err) {
+    console.error("createPerson fehlgeschlagen:", err);
+    const fehler = err instanceof Error ? err.message : "Unbekannter Fehler beim Anlegen der Person.";
+    return { ok: false, fehler };
+  }
 }
 
 export async function setPin(personId: string, pin: string): Promise<{ ok: true } | { ok: false; fehler: string }> {
@@ -213,8 +225,16 @@ const TICKET_ENTSCHEIDUNGS_PUSH: Record<string, { titel: string; ohneBegruendung
   ABGELEHNT: { titel: "Dein Ticket wurde abgelehnt", ohneBegruendung: "" },
 };
 
-export async function setzeTicketStatus(id: string, status: string, begruendung?: string) {
+// Fix-Batch 152 (Audit-Fund): `status` wurde bisher ungeprüft `as any` gecastet — der parallele
+// API-Endpunkt (api/tickets/route.ts) validiert Status-Änderungen dort bereits gegen eine
+// Whitelist (nachdem genau dort einmal ein neuer TicketStatus-Wert vergessen wurde, siehe
+// Fix-Batch 150), diese Server Action — die eigentlich von der UI benutzte — hatte dieselbe
+// Absicherung nie bekommen.
+const GUELTIGE_TICKET_STATUS = ["EINGEREICHT", "GENEHMIGT", "ABGELEHNT", "IN_UMSETZUNG", "UMGESETZT", "RUECKFRAGE"];
+
+export async function setzeTicketStatus(id: string, status: string, begruendung?: string): Promise<{ ok: true } | { ok: false; fehler: string }> {
   await requireAdmin();
+  if (!GUELTIGE_TICKET_STATUS.includes(status)) return { ok: false, fehler: "Ungültiger Status." };
   const ticket = await prisma.ticket.update({ where: { id }, data: { status: status as any, begruendung: begruendung || undefined } });
   const push = TICKET_ENTSCHEIDUNGS_PUSH[status];
   if (push) {
@@ -225,6 +245,7 @@ export async function setzeTicketStatus(id: string, status: string, begruendung?
     });
   }
   revalidatePath("/einstellungen");
+  return { ok: true };
 }
 
 // ---------- Ticket-Nachrichten (Fix-Batch 142/143, Florians Wunsch) ----------

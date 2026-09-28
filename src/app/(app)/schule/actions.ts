@@ -198,15 +198,22 @@ export async function einreichenNote(data: {
   datum: string;
   notiz?: string;
   fotoBase64?: string;
-}) {
+}): Promise<{ ok: true; istKindEinreichung: boolean; note: number } | { ok: false; fehler: string }> {
   const person = await requirePerson();
-  if (!data.notiz?.trim()) throw new Error("Bitte das Thema der Arbeit/Kontrolle angeben.");
-  if (!data.fotoBase64) throw new Error("Bitte ein Foto vom Notenzettel mit der Kamera aufnehmen.");
+  // Fix-Batch 152 (Audit-Fund): `data.art` wurde bisher ungeprüft `as any` auf das
+  // Prisma-Enum gecastet, UND die ganze Funktion warf roh statt `{ok,fehler}` zurückzugeben —
+  // die kritischste Nutzeraktion im Schule-Bereich (Foto + Thema + Note) konnte dadurch bei
+  // jedem Fehler unbehandelt bis zur generischen Next.js-Produktionsmeldung durchschlagen,
+  // ohne dass der Client (der bisher auch kein try/catch hatte) etwas anzeigen konnte.
+  if (!(NOTE_ARTEN as readonly string[]).includes(data.art)) return { ok: false, fehler: "Ungültige Notenart." };
+  if (!data.notiz?.trim()) return { ok: false, fehler: "Bitte das Thema der Arbeit/Kontrolle angeben." };
+  if (!data.fotoBase64) return { ok: false, fehler: "Bitte ein Foto vom Notenzettel mit der Kamera aufnehmen." };
+  try {
   const istEltern = person.rolle === "ELTERN";
   const fach = await prisma.fach.findUnique({ where: { id: data.fachId } });
-  if (!fach) throw new Error("Fach nicht gefunden.");
+  if (!fach) return { ok: false, fehler: "Fach nicht gefunden." };
   const kindId = istEltern ? fach.kindId : person.id;
-  if (!istEltern && fach.kindId !== person.id) throw new Error("Das ist nicht dein Fach.");
+  if (!istEltern && fach.kindId !== person.id) return { ok: false, fehler: "Das ist nicht dein Fach." };
 
   const gewSetting = await prisma.notenGewichtung.findUnique({
     where: { kindId_fachId_art: { kindId, fachId: data.fachId, art: data.art as any } },
@@ -258,7 +265,12 @@ export async function einreichenNote(data: {
   }
 
   revalidatePath("/schule");
-  return { istKindEinreichung: !istEltern, note: note.note };
+  return { ok: true, istKindEinreichung: !istEltern, note: note.note };
+  } catch (err) {
+    console.error("einreichenNote fehlgeschlagen:", err);
+    const fehler = err instanceof Error ? err.message : "Unbekannter Fehler beim Einreichen der Note.";
+    return { ok: false, fehler };
+  }
 }
 
 // Fix-Batch 30: Eltern dürfen jede offene Note korrigieren, ein Kind nur seine eigene —
@@ -582,11 +594,16 @@ export async function erkenneSchulEintragAusText(
 // entgegengenommen (nicht als ID) und pro Zielperson gegen deren eigene Fächerliste
 // aufgelöst — nötig, weil beim Anlegen für mehrere Kinder gleichzeitig jedes Kind sein
 // eigenes Fach mit eigener ID hat.
-export async function createSchulEintrag(data: { thema: string; fachName?: string; art: string; datum: string; personIds?: string[] }) {
+export async function createSchulEintrag(
+  data: { thema: string; fachName?: string; art: string; datum: string; personIds?: string[] }
+): Promise<{ ok: true } | { ok: false; fehler: string }> {
   const person = await requirePerson();
   // Fix-Batch 51 (Florians Korrektur): nur noch das Kind selbst darf Klassenarbeiten/HÜ-
   // Kontrollen ankündigen, und ausschließlich für sich selbst — nicht mehr Eltern für Kinder.
-  if (person.rolle !== "KIND") throw new Error("Nur Kinder können Klassenarbeiten/HÜ-Kontrollen für sich selbst eintragen.");
+  if (person.rolle !== "KIND") return { ok: false, fehler: "Nur Kinder können Klassenarbeiten/HÜ-Kontrollen für sich selbst eintragen." };
+  // Fix-Batch 152 (Audit-Fund): `art` wurde bisher ungeprüft `as any` gecastet, die Funktion
+  // warf zudem roh statt {ok,fehler} zurückzugeben.
+  if (!(NOTE_ARTEN as readonly string[]).includes(data.art)) return { ok: false, fehler: "Ungültige Art." };
   const zielIds = [person.id];
 
   const rows = await Promise.all(
@@ -611,13 +628,21 @@ export async function createSchulEintrag(data: { thema: string; fachName?: strin
   revalidatePath("/schule");
   revalidatePath("/dashboard");
   revalidatePath("/kalender");
+  return { ok: true };
 }
 
-export async function updateSchulEintrag(id: string, data: { thema?: string; fachName?: string; art?: string; datum?: string }) {
+export async function updateSchulEintrag(
+  id: string,
+  data: { thema?: string; fachName?: string; art?: string; datum?: string }
+): Promise<{ ok: true } | { ok: false; fehler: string }> {
   const person = await requirePerson();
   const bestehend = await prisma.schulEintrag.findUnique({ where: { id } });
-  if (!bestehend) throw new Error("Eintrag nicht gefunden.");
-  if (person.rolle !== "ELTERN" && bestehend.personId !== person.id) throw new Error("Nicht erlaubt.");
+  if (!bestehend) return { ok: false, fehler: "Eintrag nicht gefunden." };
+  if (person.rolle !== "ELTERN" && bestehend.personId !== person.id) return { ok: false, fehler: "Nicht erlaubt." };
+  // Fix-Batch 152 (Audit-Fund): `art` wurde bisher ungeprüft `as any` gecastet.
+  if (data.art !== undefined && !(NOTE_ARTEN as readonly string[]).includes(data.art)) {
+    return { ok: false, fehler: "Ungültige Art." };
+  }
   let fachId: string | null | undefined = undefined;
   if (data.fachName !== undefined) {
     const fach = data.fachName ? await prisma.fach.findFirst({ where: { kindId: bestehend.personId, name: { equals: data.fachName, mode: "insensitive" } } }) : null;
@@ -636,6 +661,7 @@ export async function updateSchulEintrag(id: string, data: { thema?: string; fac
   revalidatePath("/schule");
   revalidatePath("/dashboard");
   revalidatePath("/kalender");
+  return { ok: true };
 }
 
 export async function deleteSchulEintrag(id: string) {

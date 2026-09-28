@@ -20,9 +20,17 @@ import { istGueltigeKategorie } from "@/lib/rezeptKategorien";
 import { parseZutatZeile, skaliereZeile } from "@/lib/zutatenSkalierung";
 import { formatiereArtikelName } from "@/lib/artikelName";
 
+// Fix-Batch 152 (Audit-Fund, nach dem TZ-Fix aus Fix-Batch 149): las den Kalendertag bisher
+// über UTC-Getter aus `date` — inkonsistent mit dem Rest dieser Datei (z. B. `getWochenplan`s
+// `heute = new Date(); heute.setHours(0,0,0,0)`), der den Kalendertag über LOKALE (jetzt
+// Europe/Berlin-)Getter bestimmt. Seit der Container in Europe/Berlin statt UTC läuft, driftet
+// das in einem Fenster von 1–2 Stunden rund um Mitternacht auseinander (z. B. Freitag/Samstag-
+// Wochenwechsel: lokal schon Samstag, UTC noch Freitag) — die "diese Woche"-Ansicht zeigte
+// dann für dieses Fenster die alte statt der neuen Woche. Jetzt wird der Kalendertag lokal
+// gelesen, danach als stabiler UTC-Mitternacht-Schlüssel weitergeführt (wie bisher).
 function getSamstagWocheStart(date: Date): Date {
   // Essensplan-Woche läuft Samstag–Samstag.
-  const d = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
   const day = d.getUTCDay(); // 0=So,6=Sa
   const diff = (day - 6 + 7) % 7;
   d.setUTCDate(d.getUTCDate() - diff);

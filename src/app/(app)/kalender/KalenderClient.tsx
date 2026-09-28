@@ -364,7 +364,7 @@ export default function KalenderClient({
             return;
           }
         }
-        await createTermin({
+        const ergebnisNeu = await createTermin({
           titel,
           start: startWert,
           ende: endeWert,
@@ -375,6 +375,10 @@ export default function KalenderClient({
           anhaenge: anhaengeEntwurf,
           notiz: notizEntwurf || undefined,
         });
+        if (!ergebnisNeu.ok) {
+          alert(ergebnisNeu.fehler);
+          return;
+        }
       }
       formularZuruecksetzen();
     });

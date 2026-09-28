@@ -407,7 +407,11 @@ function SchulEintraegeSektion({
                   style={{ padding: "6px 10px" }}
                   onClick={() =>
                     startTransition(async () => {
-                      await updateSchulEintrag(e.id, { thema: bearbeitenThema, datum: bearbeitenDatum });
+                      const ergebnis = await updateSchulEintrag(e.id, { thema: bearbeitenThema, datum: bearbeitenDatum });
+                      if (!ergebnis.ok) {
+                        alert(ergebnis.fehler);
+                        return;
+                      }
                       setBearbeiteId(null);
                     })
                   }
@@ -491,12 +495,16 @@ function SchulEintraegeSektion({
             onClick={() =>
               startTransition(async () => {
                 if (!thema || !datum) return;
-                await createSchulEintrag({
+                const ergebnis = await createSchulEintrag({
                   thema,
                   fachName: fachName || undefined,
                   art,
                   datum,
                 });
+                if (!ergebnis.ok) {
+                  alert(ergebnis.fehler);
+                  return;
+                }
                 setThema("");
                 setFachName("");
                 setDatum("");
@@ -631,6 +639,10 @@ export default function SchuleClient({
       return;
     }
     const ergebnis = await einreichenNote({ fachId, art, note: noteWert, tendenz: noteTendenz ?? undefined, datum, notiz: notiz || undefined, fotoBase64: foto ?? undefined });
+    if (!ergebnis.ok) {
+      alert(ergebnis.fehler);
+      return;
+    }
     setNotiz("");
     setFoto(null);
     setNoteTendenz(null);

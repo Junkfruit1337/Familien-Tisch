@@ -15,6 +15,14 @@ import { randomUUID } from "crypto";
 const MAX_SERIEN_TERMINE = 200;
 const UNBEGRENZT_HORIZONT_TAGE = 365 * 2;
 
+// Fix-Batch 152 (Audit-Fund): `wiederholung` wurde bisher ungeprüft `as any` auf das
+// Prisma-Enum gecastet — ein ungültiger Wert (z. B. durch einen künftigen Tippfehler beim
+// Umbenennen, oder einen direkten Server-Action-Aufruf) hätte `prisma.termin.create` roh
+// crashen lassen, unbehandelt bis zur generischen Next.js-Produktionsmeldung.
+const WIEDERHOLUNG_WERTE = [
+  "KEINE", "TAEGLICH", "WERKTAEGLICH", "WOECHENTLICH", "ZWEIWOECHENTLICH", "MONATLICH", "ALLE_3_MONATE", "JAEHRLICH",
+];
+
 function letzterTagDesMonats(jahr: number, monatNullBasiert: number): number {
   return new Date(jahr, monatNullBasiert + 1, 0).getDate();
 }
@@ -242,8 +250,12 @@ export async function createTermin(data: {
   wiederholungBis?: string;
   anhaenge?: string[];
   notiz?: string;
-}) {
+}): Promise<{ ok: true } | { ok: false; fehler: string }> {
   const person = await requirePerson();
+  if (data.wiederholung && !WIEDERHOLUNG_WERTE.includes(data.wiederholung)) {
+    return { ok: false, fehler: "Ungültiger Wiederholungs-Wert." };
+  }
+  try {
   const zielIds: (string | null)[] =
     person.rolle === "ELTERN" ? (data.personIds.length > 0 ? data.personIds : [null]) : [person.id];
   const gruppeId = zielIds.length > 1 ? randomUUID() : null;
@@ -310,7 +322,12 @@ export async function createTermin(data: {
 
   revalidatePath("/kalender");
   revalidatePath("/dashboard");
-  return erstellte[0];
+  return { ok: true };
+  } catch (err) {
+    console.error("createTermin fehlgeschlagen:", err);
+    const fehler = err instanceof Error ? err.message : "Unbekannter Fehler beim Anlegen des Termins.";
+    return { ok: false, fehler };
+  }
 }
 
 // Personen-Zuweisung ist nach dem Anlegen nicht mehr änderbar (Fix-Batch 30) — dafür bitte
