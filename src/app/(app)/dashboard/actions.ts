@@ -47,8 +47,12 @@ async function pruefeUndSendeErinnerungen() {
       // Wert), erst bei Erfolg pushen — verhindert, dass zwei fast gleichzeitige Dashboard-
       // Aufrufe (zwei Familienmitglieder öffnen die Seite im selben Moment) dieselbe
       // Erinnerung doppelt verschicken, weil beide den alten Flag-Stand gelesen hatten.
+      // `geburtstagErinnerungJahr` ist nullable (beim ersten Mal für diese Person noch nie
+      // gesetzt) — explizit auch den NULL-Fall mit abdecken, statt uns auf Prismas
+      // NULL-Handling bei `not` zu verlassen (sonst würde die allererste Erinnerung für eine
+      // Person nie "beansprucht" und dadurch nie verschickt).
       const beansprucht = await prisma.person.updateMany({
-        where: { id: p.id, geburtstagErinnerungJahr: { not: zielJahr } },
+        where: { id: p.id, OR: [{ geburtstagErinnerungJahr: { not: zielJahr } }, { geburtstagErinnerungJahr: null }] },
         data: { geburtstagErinnerungJahr: zielJahr },
       });
       if (beansprucht.count > 0) {
