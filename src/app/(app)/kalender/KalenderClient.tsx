@@ -738,12 +738,13 @@ export default function KalenderClient({
                         onClick={() => setGrossesBild(a)}
                       />
                     )}
+                    {/* Fix-Batch 151 (Audit-Fund): 20×20px zu klein als Touch-Ziel, auf 28×28px vergrößert. */}
                     <button
                       className="btn-secondary"
-                      style={{ position: "absolute", top: -6, right: -6, width: 20, height: 20, padding: 0, fontSize: 11, borderRadius: 999, lineHeight: 1 }}
+                      style={{ position: "absolute", top: -8, right: -8, width: 28, height: 28, padding: 0, fontSize: 11, borderRadius: 999, lineHeight: 1 }}
                       onClick={() => setAnhaengeEntwurf((prev) => prev.filter((_, idx) => idx !== i))}
                     >
-                      <Icon id="close" size={11} />
+                      <Icon id="close" size={13} />
                     </button>
                   </div>
                 ))}

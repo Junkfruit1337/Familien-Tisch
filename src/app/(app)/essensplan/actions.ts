@@ -282,7 +282,7 @@ export async function schreibeRezeptUmVorschau(
 // oder zukünftige Planung (mit klarer Fehlermeldung, welcher Tag betroffen ist) — vergangene
 // Verwendungen werden beim Löschen automatisch mitentfernt (ihre Einkaufslisten-Herkunfts-
 // Verknüpfung kaskadiert ohnehin schon, siehe EssensplanHerkunft/ExtraMahlzeitHerkunft).
-export async function deleteRezept(id: string) {
+export async function deleteRezept(id: string): Promise<{ ok: true } | { ok: false; fehler: string }> {
   await requireParent();
   const heute = new Date(new Date().toDateString());
   const [naechsterEintrag, naechsteExtra] = await Promise.all([
@@ -293,16 +293,57 @@ export async function deleteRezept(id: string) {
     .filter((t): t is Date => !!t)
     .sort((a, b) => a.getTime() - b.getTime())[0];
   if (naechsterTag) {
-    throw new Error(
-      `Dieses Rezept ist noch für den ${naechsterTag.toLocaleDateString("de-DE", { weekday: "long", day: "2-digit", month: "2-digit" })} (oder später) im Essensplan eingeplant — bitte dort zuerst ändern, dann erneut löschen.`
-    );
+    return {
+      ok: false,
+      fehler: `Dieses Rezept ist noch für den ${naechsterTag.toLocaleDateString("de-DE", { weekday: "long", day: "2-digit", month: "2-digit" })} (oder später) im Essensplan eingeplant — bitte dort zuerst ändern, dann erneut löschen.`,
+    };
   }
+
+  // Fix-Batch 151 (Audit-Fund): vergangene (schon gesperrte) Einträge dieses Rezepts wurden
+  // bisher einfach mitgelöscht, ohne die davon abhängige Einkaufslisten-Menge neu zu
+  // berechnen — anders als beim regulären Entsperren (wendeEntscheidungenAn/
+  // entsperreExtraMahlzeit, Fix-Batch 105). Ein Artikel behielt seine alte Menge, obwohl
+  // seine einzige Quelle gerade verschwindet. Dieselbe "verbleibende Menge neu berechnen,
+  // ggf. Artikel ganz löschen wenn nichts mehr übrig bleibt"-Logik wie dort, nur pauschal für
+  // ALLE noch verknüpften Herkünfte statt einer Nutzer-Auswahl (das Rezept verschwindet ja
+  // komplett, es gibt hier keine Einzelentscheidung pro Artikel zu treffen).
+  const [vergangeneEintraege, vergangeneExtras] = await Promise.all([
+    prisma.essensplanEintrag.findMany({ where: { rezeptId: id }, include: { herkuenfte: true } }),
+    prisma.extraMahlzeit.findMany({ where: { rezeptId: id }, include: { herkuenfte: true } }),
+  ]);
+  for (const eintrag of vergangeneEintraege) {
+    for (const h of eintrag.herkuenfte) {
+      const neueMenge = await berechneVerbleibendeMenge(h.artikelId, { eintragId: eintrag.id });
+      const artikel = await prisma.einkaufsArtikel.findUnique({ where: { id: h.artikelId } });
+      if (!artikel) continue;
+      if (!neueMenge && artikel.quelle === "essensplan") {
+        await prisma.einkaufsArtikel.delete({ where: { id: h.artikelId } }).catch(() => {});
+      } else {
+        await prisma.einkaufsArtikel.update({ where: { id: h.artikelId }, data: { menge: neueMenge } }).catch(() => {});
+      }
+    }
+  }
+  for (const extra of vergangeneExtras) {
+    for (const h of extra.herkuenfte) {
+      const neueMenge = await berechneVerbleibendeMenge(h.artikelId, { extraMahlzeitId: extra.id });
+      const artikel = await prisma.einkaufsArtikel.findUnique({ where: { id: h.artikelId } });
+      if (!artikel) continue;
+      if (!neueMenge && artikel.quelle === "essensplan") {
+        await prisma.einkaufsArtikel.delete({ where: { id: h.artikelId } }).catch(() => {});
+      } else {
+        await prisma.einkaufsArtikel.update({ where: { id: h.artikelId }, data: { menge: neueMenge } }).catch(() => {});
+      }
+    }
+  }
+
   await prisma.$transaction([
     prisma.essensplanEintrag.deleteMany({ where: { rezeptId: id } }),
     prisma.extraMahlzeit.deleteMany({ where: { rezeptId: id } }),
     prisma.rezept.delete({ where: { id } }),
   ]);
   revalidatePath("/essensplan");
+  revalidatePath("/einkaufsliste");
+  return { ok: true };
 }
 
 // Vorschlagsliste für ein Tages-Auswahlformular: sortiert nach „zuletzt gekocht"

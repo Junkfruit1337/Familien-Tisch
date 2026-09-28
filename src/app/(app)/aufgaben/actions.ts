@@ -84,8 +84,9 @@ export async function createAufgabe(data: {
   personIds: string[];
   wiederholung?: string;
   wiederholungBis?: string; // leer/undefined bei "Unbegrenzt"
-}) {
+}): Promise<{ ok: true } | { ok: false; fehler: string }> {
   const person = await requirePerson();
+  try {
   const zielIds: (string | null)[] =
     person.rolle === "ELTERN" ? (data.personIds.length > 0 ? data.personIds : [null]) : [person.id];
 
@@ -135,6 +136,16 @@ export async function createAufgabe(data: {
   });
   revalidatePath("/aufgaben");
   revalidatePath("/dashboard");
+  return { ok: true };
+  } catch (err) {
+    // Fix-Batch 151 (Audit-Fund): kein try/catch um den gesamten Erstellungsvorgang — ein
+    // DB-Fehler mitten in der Schleife (z. B. bei einer großen Serie) hätte bisher unbehandelt
+    // durchgeschlagen und wäre in Produktion nur als generische, redaktierte Meldung
+    // angekommen.
+    console.error("createAufgabe fehlgeschlagen:", err);
+    const fehler = err instanceof Error ? err.message : "Unbekannter Fehler beim Anlegen der Aufgabe.";
+    return { ok: false, fehler };
+  }
 }
 
 export async function toggleAufgabe(id: string): Promise<{ ok: true } | { ok: false; fehler: string }> {

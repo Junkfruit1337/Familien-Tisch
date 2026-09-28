@@ -5,6 +5,7 @@ import { requireParent, requirePerson, requireAdmin, hashPin } from "@/lib/auth"
 import { revalidatePath } from "next/cache";
 import { erkenneTicketAusSprache, verbessereFormulierung, type ErkanntesTicket } from "@/lib/spracheErkennung";
 import { sendePushAnPerson } from "@/lib/push";
+import { getWeekStart } from "@/lib/dienstplan";
 
 // Fix-Batch 149 (Audit-Fund): `findMany` ohne `select` gab bisher das komplette Person-Objekt
 // zurück, inklusive `pinHash` (bcrypt-Hash der 4-stelligen PIN) und der Lockout-Felder
@@ -97,7 +98,20 @@ export async function setAktiv(personId: string, aktiv: boolean): Promise<{ ok: 
   // Fix in getCurrentPerson(), der eine deaktivierte Person ab jetzt zusätzlich serverseitig
   // bei jeder Anfrage abweist.
   if (!aktiv) await prisma.session.deleteMany({ where: { personId } });
+  // Fix-Batch 151 (Audit-Fund, Zweitprüfung): `ensureWeekAssignments`/`ensureBadZuweisungen`
+  // (Fix-Batch 150, "die anderen zwei rotieren allein weiter") berechnen die Rotation nur für
+  // Wochen NEU, die noch keine Zeilen in der Datenbank haben — eine schon einmal aufgerufene
+  // Woche (fast immer: die laufende, da jeder Blick in den Dienstplan sie anlegt) blieb von
+  // einer Aktivierungs-Änderung komplett unberührt, obwohl genau das der Zweck der Änderung
+  // war. Aktuelle+künftige Dienst-/Bad-Zuweisungen werden deshalb gelöscht und beim nächsten
+  // Aufruf lazy mit dem korrekten aktiven-Kinder-Stand neu erzeugt (Tausche/dauerhafte
+  // Zuordnungen bleiben unangetastet, sie hängen nicht an diesen Zeilen). Vergangene Wochen
+  // (historischer Rückblick, wer tatsächlich was gemacht hat) bleiben bewusst unverändert.
+  const dieseWoche = getWeekStart(new Date());
+  await prisma.dienstZuweisung.deleteMany({ where: { wocheStart: { gte: dieseWoche } } });
+  await prisma.badZuweisung.deleteMany({ where: { wocheStart: { gte: dieseWoche } } });
   revalidatePath("/einstellungen");
+  revalidatePath("/dienstplan");
   return { ok: true };
 }
 

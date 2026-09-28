@@ -527,14 +527,17 @@ export default function EinstellungenClient({
                   style={{ width: 60, height: 60, objectFit: "cover", borderRadius: 8, cursor: "pointer" }}
                   onClick={() => setGrossesTicketBild(foto)}
                 />
+                {/* Fix-Batch 151 (Audit-Fund): 20×20px war deutlich unter der App-eigenen
+                    Touch-Ziel-Mindestgröße — leicht danebengetippt (öffnet dann versehentlich
+                    die Großansicht). Auf 28×28px vergrößert. */}
                 <button
                   className="btn-secondary"
                   style={{
                     position: "absolute",
-                    top: -6,
-                    right: -6,
-                    width: 20,
-                    height: 20,
+                    top: -8,
+                    right: -8,
+                    width: 28,
+                    height: 28,
                     padding: 0,
                     fontSize: 11,
                     borderRadius: 999,
@@ -542,7 +545,7 @@ export default function EinstellungenClient({
                   }}
                   onClick={() => setTicketFotos((prev) => prev.filter((_, idx) => idx !== i))}
                 >
-                  <Icon id="close" size={11} />
+                  <Icon id="close" size={13} />
                 </button>
               </div>
             ))}
@@ -786,12 +789,13 @@ export default function EinstellungenClient({
                     style={{ width: 60, height: 60, objectFit: "cover", borderRadius: 8, cursor: "pointer" }}
                     onClick={() => setGrossesTicketBild(foto)}
                   />
+                  {/* Fix-Batch 151 (Audit-Fund): 20×20px zu klein als Touch-Ziel, auf 28×28px vergrößert. */}
                   <button
                     className="btn-secondary"
-                    style={{ position: "absolute", top: -6, right: -6, width: 20, height: 20, padding: 0, fontSize: 11, borderRadius: 999, lineHeight: 1 }}
+                    style={{ position: "absolute", top: -8, right: -8, width: 28, height: 28, padding: 0, fontSize: 11, borderRadius: 999, lineHeight: 1 }}
                     onClick={() => setNeuesHausproblemFotos((prev) => prev.filter((_, idx) => idx !== i))}
                   >
-                    <Icon id="close" size={11} />
+                    <Icon id="close" size={13} />
                   </button>
                 </div>
               ))}

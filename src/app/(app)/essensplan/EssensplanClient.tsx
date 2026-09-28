@@ -845,7 +845,12 @@ export default function EssensplanClient({
 
       {sperrDialog && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 500, padding: 16 }}>
-          <div className="card" style={{ maxWidth: 420, width: "100%", display: "flex", flexDirection: "column", gap: 10 }}>
+          {/* Fix-Batch 151 (Audit-Fund): fehlendes maxHeight/overflowY — bei einem
+              zutatenreichen Rezept sprengte die Liste auf einem kleinen Handydisplay die
+              Kartenhöhe, "Speichern"/"Abbrechen" waren dann außerhalb des Viewports und ohne
+              Scroll-Möglichkeit unerreichbar. Dieselbe Behandlung wie im strukturell
+              identischen Modal in DashboardClient.tsx. */}
+          <div className="card" style={{ maxWidth: 420, width: "100%", maxHeight: "80vh", overflowY: "auto", display: "flex", flexDirection: "column", gap: 10 }}>
             <strong>{sperrDialog.typ === "tag" ? "Tag entsperren" : "Zusatzmahlzeit entsperren"}</strong>
             <p style={{ fontSize: 13, color: "var(--text-muted)", margin: 0 }}>
               Für dieses Gericht wurden schon Zutaten auf die Einkaufsliste übernommen. Die folgenden Artikel werden entfernt
@@ -1275,11 +1280,8 @@ export default function EssensplanClient({
                     onClick={() => {
                       if (!confirm(`Rezept „${r.name}" wirklich löschen?`)) return;
                       startTransition(async () => {
-                        try {
-                          await deleteRezept(r.id);
-                        } catch (e: any) {
-                          alert(e.message);
-                        }
+                        const ergebnis = await deleteRezept(r.id);
+                        if (!ergebnis.ok) alert(ergebnis.fehler);
                       });
                     }}
                   >

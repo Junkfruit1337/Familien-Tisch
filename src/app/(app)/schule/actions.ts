@@ -454,15 +454,25 @@ export async function manuelleGutschrift(kindId: string, betrag: number, grund: 
 
 // Fix-Batch 55 (Florians Korrektur): das Sparziel darf nur noch das Kind selbst setzen,
 // nicht mehr die Eltern — Eltern sehen es weiterhin, aber nur lesend.
-export async function setSparziel(kindId: string, bezeichnung: string, zielbetrag: number) {
+export async function setSparziel(
+  kindId: string,
+  bezeichnung: string,
+  zielbetrag: number
+): Promise<{ ok: true } | { ok: false; fehler: string }> {
   const person = await requirePerson();
-  if (person.id !== kindId) throw new Error("Nur das Kind selbst darf sein Sparziel bearbeiten.");
+  if (person.id !== kindId) return { ok: false, fehler: "Nur das Kind selbst darf sein Sparziel bearbeiten." };
+  // Fix-Batch 151 (Audit-Fund): ohne diese Prüfung konnte ein Zielbetrag von 0 oder negativ
+  // gespeichert werden — die Fortschrittsbalken-Breite (kontostand / zielbetrag * 100) ergibt
+  // bei 0 ein NaN (kaputtes CSS) und bei einem positiven Kontostand ein Infinity, das
+  // fälschlich als "Ziel erreicht" (100%) angezeigt wurde.
+  if (!(zielbetrag > 0)) return { ok: false, fehler: "Bitte einen Zielbetrag größer als 0 eingeben." };
   await prisma.sparziel.upsert({
     where: { kindId },
     update: { bezeichnung, zielbetrag },
     create: { kindId, bezeichnung, zielbetrag },
   });
   revalidatePath("/schule");
+  return { ok: true };
 }
 
 export async function getSparziel(kindId: string) {

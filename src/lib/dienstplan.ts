@@ -192,18 +192,25 @@ export async function ensureBadZuweisungen(wocheStart: Date) {
   const abendsReihenfolge = [...morgensReihenfolge].reverse();
   const dauerhaftMorgens = await holeDauerhafteZuordnungen("BAD_MORGENS");
   const dauerhaftAbends = await holeDauerhafteZuordnungen("BAD_ABENDS");
+  // Fix-Batch 151 (Audit-Fund, Zweitprüfung): derselbe Bug wie bei DIENST (Fix-Batch 150) —
+  // eine dauerhafte Bad-Positions-Zuordnung auf ein inzwischen deaktiviertes Kind gewann bisher
+  // weiter gegen die aktive Rotation. Dieselbe aktiv-Prüfung wie in ensureWeekAssignments.
+  const aktiveKinderFuerBad = await prisma.person.findMany({ where: { name: { in: ROTATIONS_KINDER_NAMEN }, aktiv: true } });
+  const aktiveIdsFuerBad = new Set(aktiveKinderFuerBad.map((k) => k.id));
 
   const rows = [];
   for (let i = 0; i < 3; i++) {
+    const dauerhaftMorgensKindId = dauerhaftMorgens[i + 1] && aktiveIdsFuerBad.has(dauerhaftMorgens[i + 1]) ? dauerhaftMorgens[i + 1] : undefined;
+    const dauerhaftAbendsKindId = dauerhaftAbends[i + 1] && aktiveIdsFuerBad.has(dauerhaftAbends[i + 1]) ? dauerhaftAbends[i + 1] : undefined;
     const m = await prisma.badZuweisung.upsert({
       where: { wocheStart_zeitpunkt_position: { wocheStart, zeitpunkt: "morgens", position: i + 1 } },
       update: {},
-      create: { wocheStart, zeitpunkt: "morgens", position: i + 1, kindId: dauerhaftMorgens[i + 1] ?? morgensReihenfolge[i] },
+      create: { wocheStart, zeitpunkt: "morgens", position: i + 1, kindId: dauerhaftMorgensKindId ?? morgensReihenfolge[i] },
     });
     const a = await prisma.badZuweisung.upsert({
       where: { wocheStart_zeitpunkt_position: { wocheStart, zeitpunkt: "abends", position: i + 1 } },
       update: {},
-      create: { wocheStart, zeitpunkt: "abends", position: i + 1, kindId: dauerhaftAbends[i + 1] ?? abendsReihenfolge[i] },
+      create: { wocheStart, zeitpunkt: "abends", position: i + 1, kindId: dauerhaftAbendsKindId ?? abendsReihenfolge[i] },
     });
     rows.push(m, a);
   }

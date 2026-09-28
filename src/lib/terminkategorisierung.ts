@@ -19,9 +19,12 @@ const AUSFLUG_STICHWORTE = [
 // (z. B. "Arzttermin (telefonisch vereinbart)" wurde fälschlich als Hobby erkannt), "probe"
 // traf auch "Blutprobe" (Arzttermin statt Hobby). Dieselbe Ausnahme-Technik wie in
 // kategorisierung.ts für die Einkaufsliste.
+// Fix-Batch 151 (Audit-Fund, Zweitprüfung): "abstrich" stand hier ursprünglich mit in der
+// probe-Ausnahmeliste, enthält aber selbst gar nicht den Substring "probe" — die Ausnahme
+// hätte also nie gegriffen (toter Eintrag), entfernt.
 const AUSNAHMEN: Record<string, string[]> = {
   verein: ["vereinbart", "vereinbarung"],
-  probe: ["blutprobe", "urinprobe", "abstrich"],
+  probe: ["blutprobe", "urinprobe"],
 };
 
 function stichwortTrifftZu(t: string, stichwort: string): boolean {

@@ -1167,7 +1167,11 @@ export default function EinkaufslisteClient({
           if (!a) return null;
           return (
             <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 500, padding: 16 }}>
-              <div className="card" style={{ maxWidth: 380, width: "100%", display: "flex", flexDirection: "column", gap: 10 }}>
+              {/* Fix-Batch 151 (Audit-Fund): fehlendes maxHeight/overflowY — bei geöffneter
+                  Bildschirmtastatur plus aufgeklappter "Herkunft"-Liste konnte der untere
+                  Rand mit Speichern/Abbrechen/Löschen aus dem Viewport rutschen, ohne
+                  Scroll-Möglichkeit innerhalb der Karte. */}
+              <div className="card" style={{ maxWidth: 380, width: "100%", maxHeight: "80vh", overflowY: "auto", display: "flex", flexDirection: "column", gap: 10 }}>
                 <strong>Artikel bearbeiten</strong>
                 <input value={bearbeiteName} onChange={(e) => setBearbeiteName(e.target.value)} placeholder="Name" />
                 <input value={bearbeiteMenge} onChange={(e) => setBearbeiteMenge(e.target.value)} placeholder="Menge" />

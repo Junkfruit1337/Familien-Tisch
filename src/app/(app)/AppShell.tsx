@@ -301,7 +301,11 @@ export default function AppShell({ person, children }: { person: Person; childre
               >
                 <BereichIcon bereich={item.bereich} size={20} />
               </span>
-              <span style={{ whiteSpace: "nowrap" }}>{item.label}</span>
+              {/* Fix-Batch 151 (Audit-Fund): auf sehr schmalen Handys (< 380px) mit vielen
+                  Reitern blieb pro Label wenig Platz — ohne textOverflow konnte ein längeres
+                  Label (z. B. "Kalender") hart mitten im Wort abgeschnitten werden, ohne
+                  "…"-Andeutung, dass Text fehlt. */}
+              <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%" }}>{item.label}</span>
             </Link>
           );
         })}

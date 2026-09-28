@@ -85,13 +85,17 @@ export default function AufgabenClient({
   function submit() {
     if (!titel) return;
     startTransition(async () => {
-      await createAufgabe({
+      const ergebnis = await createAufgabe({
         titel,
         faelligkeit: faelligkeit || undefined,
         personIds,
         wiederholung,
         wiederholungBis: wiederholung !== "KEINE" && !wiederholungUnbegrenzt ? wiederholungBis : undefined,
       });
+      if (!ergebnis.ok) {
+        alert(ergebnis.fehler);
+        return;
+      }
       setTitel("");
       setFaelligkeit("");
       setWiederholung("KEINE");
@@ -231,22 +235,33 @@ export default function AufgabenClient({
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {offen.map((a) => (
           <div key={a.id} className="card" style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
-            <input
-              type="checkbox"
-              checked={false}
-              onChange={() => toggle(a.id)}
-              style={{ width: 20, height: 20, marginTop: 2 }}
-            />
             <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 600, display: "flex", alignItems: "center", gap: 4 }}>
-                {a.titel}
-                {a.seriesId && <Icon id="repeat" size={13} />}
-              </div>
-              <div style={{ fontSize: 13, color: "var(--text-muted)" }}>
-                {a.faelligkeit ? new Date(a.faelligkeit).toLocaleDateString("de-DE") : "ohne Fälligkeit"} · {a.personName}
-              </div>
+              {/* Fix-Batch 151 (Audit-Fund): Checkbox war bisher eine nackte 20×20px-Fläche
+                  ohne <label> — man musste exakt die winzige Box treffen, um die
+                  vermutlich häufigste Interaktion dieses Bereichs auszulösen. Jetzt in ein
+                  <label> mit Titel/Fälligkeit gepackt (wie überall sonst in der App), damit
+                  auch der Text als Tippfläche zählt. Bewusst NICHT auch die
+                  Serien-Rückfrage/Historie mit hineingepackt, sonst würde deren Buttons
+                  ebenfalls die Checkbox mit auslösen. */}
+              <label style={{ display: "flex", alignItems: "flex-start", gap: 10, cursor: "pointer" }}>
+                <input
+                  type="checkbox"
+                  checked={false}
+                  onChange={() => toggle(a.id)}
+                  style={{ width: 20, height: 20, marginTop: 2, flexShrink: 0 }}
+                />
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 600, display: "flex", alignItems: "center", gap: 4 }}>
+                    {a.titel}
+                    {a.seriesId && <Icon id="repeat" size={13} />}
+                  </div>
+                  <div style={{ fontSize: 13, color: "var(--text-muted)" }}>
+                    {a.faelligkeit ? new Date(a.faelligkeit).toLocaleDateString("de-DE") : "ohne Fälligkeit"} · {a.personName}
+                  </div>
+                </div>
+              </label>
               {loeschAuswahl === a.id ? (
-                <div style={{ display: "flex", gap: 6, marginTop: 8, alignItems: "center", fontSize: 12 }}>
+                <div style={{ display: "flex", gap: 6, marginTop: 8, marginLeft: 30, alignItems: "center", fontSize: 12 }}>
                   <span>Nur diese oder die ganze Serie löschen?</span>
                   <button
                     className="btn-secondary"
@@ -316,12 +331,16 @@ export default function AufgabenClient({
                 umständlich. Dieselbe Berechtigungsprüfung und Serien-Rückfrage wie im
                 "Offen"-Abschnitt oben, nur mit durchgestrichenem Titel. */}
             {erledigt.map((a) => (
-              <div key={a.id} className="card" style={{ display: "flex", alignItems: "center", gap: 10, opacity: 0.6 }}>
-                <input type="checkbox" checked onChange={() => toggle(a.id)} style={{ width: 20, height: 20 }} />
+              <div key={a.id} className="card" style={{ display: "flex", alignItems: "flex-start", gap: 10, opacity: 0.6 }}>
                 <div style={{ flex: 1 }}>
-                  <div style={{ textDecoration: "line-through" }}>{a.titel}</div>
+                  {/* Fix-Batch 151 (Audit-Fund): dieselbe Label-Umschließung wie oben im
+                      "Offen"-Abschnitt, damit auch hier der Titel als Tippfläche zählt. */}
+                  <label style={{ display: "flex", alignItems: "flex-start", gap: 10, cursor: "pointer" }}>
+                    <input type="checkbox" checked onChange={() => toggle(a.id)} style={{ width: 20, height: 20, marginTop: 2, flexShrink: 0 }} />
+                    <div style={{ textDecoration: "line-through" }}>{a.titel}</div>
+                  </label>
                   {loeschAuswahl === a.id && (
-                    <div style={{ display: "flex", gap: 6, marginTop: 8, alignItems: "center", fontSize: 12 }}>
+                    <div style={{ display: "flex", gap: 6, marginTop: 8, marginLeft: 30, alignItems: "center", fontSize: 12 }}>
                       <span>Nur diese oder die ganze Serie löschen?</span>
                       <button
                         className="btn-secondary"

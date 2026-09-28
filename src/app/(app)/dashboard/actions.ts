@@ -21,6 +21,15 @@ function lerntipp(tageBis: number): string {
 // Reicht in der Praxis, da die Startseite ohnehin mehrmals täglich von irgendjemandem
 // geöffnet wird.
 async function pruefeUndSendeErinnerungen() {
+  // Fix-Batch 151 (Audit-Fund): alle fünf Erinnerungs-Flags wurden bisher unbedingt als
+  // "gesendet" markiert, auch wenn Push (noch) gar nicht konfiguriert ist (fehlende
+  // VAPID-Umgebungsvariablen) — die Erinnerung wäre dann für diesen Anlass (z. B. diesen einen
+  // Geburtstag dieses Jahr) für immer verloren gewesen, auch nachdem Push später eingerichtet
+  // wird. Ohne konfigurierten Push macht das Prüfen ohnehin nichts (sendePushAnPerson/-Eltern
+  // brechen selbst schon früh ab), also gleich die ganze Funktion überspringen, statt die
+  // Flags trotzdem "verbrennen".
+  if (!process.env.VAPID_PUBLIC_KEY) return;
+
   const heute = new Date();
   heute.setHours(0, 0, 0, 0);
 

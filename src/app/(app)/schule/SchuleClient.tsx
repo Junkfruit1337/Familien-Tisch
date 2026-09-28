@@ -1187,13 +1187,17 @@ export default function SchuleClient({
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "var(--text-muted)" }}>
                 <span>{kind.sparziel.bezeichnung}</span>
                 <span>
-                  {kind.kontostand.toFixed(2)} / {kind.sparziel.zielbetrag} €
+                  {kind.kontostand.toFixed(2)} / {kind.sparziel.zielbetrag.toFixed(2)} €
                 </span>
               </div>
               <div style={{ background: "var(--border)", borderRadius: 8, height: 10, marginTop: 4 }}>
                 <div
                   style={{
-                    width: `${Math.min(100, (kind.kontostand / kind.sparziel.zielbetrag) * 100)}%`,
+                    // Fix-Batch 151 (Audit-Fund): Division durch 0/negativ ergäbe NaN/Infinity
+                    // (kaputtes CSS bzw. fälschlich "Ziel erreicht") — serverseitig verhindert
+                    // setSparziel das jetzt zwar, dieser Klammer-Schutz bleibt trotzdem als
+                    // Absicherung für eventuell schon vor dem Fix gespeicherte Altdaten.
+                    width: `${kind.sparziel.zielbetrag > 0 ? Math.max(0, Math.min(100, (kind.kontostand / kind.sparziel.zielbetrag) * 100)) : 0}%`,
                     background: "var(--accent)",
                     height: "100%",
                     borderRadius: 8,
@@ -1239,7 +1243,10 @@ export default function SchuleClient({
                 className="btn"
                 style={{ alignSelf: "flex-start" }}
                 onClick={() =>
-                  startTransition(() => setSparziel(kind.id, zielBezeichnung, parseFloat(zielBetrag) || 0))
+                  startTransition(async () => {
+                    const ergebnis = await setSparziel(kind.id, zielBezeichnung, parseFloat(zielBetrag) || 0);
+                    if (!ergebnis.ok) alert(ergebnis.fehler);
+                  })
                 }
               >
                 Speichern
