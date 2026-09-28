@@ -8,12 +8,17 @@ import { DIENSTE_VORLAGE, TAGESROUTINEN_VORLAGE, KOERPERPFLEGE_VORLAGE } from "@
 import { revalidatePath } from "next/cache";
 
 export async function getWoche(datum?: string) {
+  // Fix-Batch 152 (Audit-Fund): Server Actions sind unabhängig vom Seiten-Login direkt
+  // aufrufbar (das Layout prüft die Anmeldung nur beim Rendern der Seite, nicht pro Action) —
+  // ohne eigene Prüfung war der komplette Dienstplan inkl. Kindernamen ohne Anmeldung abrufbar.
+  await requirePerson();
   const wocheStart = getWeekStart(datum ? new Date(datum) : new Date());
   const woche = await getEffectiveWeek(wocheStart);
   return { wocheStart: wocheStart.toISOString(), woche };
 }
 
 export async function getBadplan(wocheStartIso: string) {
+  await requirePerson();
   const wocheStart = new Date(wocheStartIso);
   return getBadReihenfolge(wocheStart);
 }
@@ -87,6 +92,7 @@ async function setzeDauerhafteZuordnungIntern(
 }
 
 export async function listDauerhafteZuordnungen() {
+  await requirePerson();
   return prisma.dauerhafteZuordnung.findMany({ include: { kind: true } });
 }
 
@@ -169,6 +175,7 @@ export async function listDienstHistorie() {
 }
 
 export async function listAktiveTausche(wocheStartIso: string) {
+  await requirePerson();
   const wocheStart = new Date(wocheStartIso);
   return prisma.dienstTausch.findMany({
     where: { wocheStart, aufgehoben: false },

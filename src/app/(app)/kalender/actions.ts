@@ -134,7 +134,15 @@ export async function listTermine() {
 }
 
 export async function listPersonenFuerFilter() {
-  return prisma.person.findMany({ where: { aktiv: true }, orderBy: { reihenfolge: "asc" } });
+  // Fix-Batch 152 (Audit-Fund): weder eigene Auth-Prüfung noch `select` — gab bei direktem
+  // Aufruf (Server Actions sind unabhängig vom Seiten-Login aufrufbar) das komplette
+  // Person-Objekt inkl. pinHash preis, obwohl page.tsx ohnehin nur id/name/farbe nutzt.
+  await requirePerson();
+  return prisma.person.findMany({
+    where: { aktiv: true },
+    orderBy: { reihenfolge: "asc" },
+    select: { id: true, name: true, farbe: true },
+  });
 }
 
 // Aufgaben mit Fälligkeitsdatum sollen automatisch im Kalender erscheinen.

@@ -52,8 +52,14 @@ export async function login(personId: string, pin: string) {
 }
 
 export async function getLoginPersonen() {
+  // Fix-Batch 152 (Audit-Fund, kritisch): ohne `select` gab diese von der Login-Seite VOR jeder
+  // Anmeldung aufrufbare Server Action bei direktem Aufruf das komplette Person-Objekt zurück,
+  // inkl. pinHash (bcrypt) und pinFehlversuche/pinGesperrtBis für jede aktive Person — das hätte
+  // den Online-Lockout-Schutz (MAX_FEHLVERSUCHE) komplett ausgehebelt, da ein Offline-Brute-Force
+  // auf eine 4-stellige PIN diesen Pfad nie durchläuft. `page.tsx` nutzt ohnehin nur id/name/farbe.
   return prisma.person.findMany({
     where: { aktiv: true, rolle: { in: ["ELTERN", "KIND"] } },
     orderBy: { reihenfolge: "asc" },
+    select: { id: true, name: true, farbe: true },
   });
 }

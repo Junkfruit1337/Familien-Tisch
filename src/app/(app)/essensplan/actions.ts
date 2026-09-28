@@ -1,7 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { requireParent } from "@/lib/auth";
+import { requireParent, requirePerson } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import { autoKategorieId, findeOffenenArtikel, findeOffenenUnbestaetigtenArtikel, mergeMenge } from "../einkaufsliste/actions";
 import {
@@ -38,12 +38,14 @@ function getSamstagWocheStart(date: Date): Date {
 }
 
 export async function listRezepte() {
+  await requirePerson();
   return prisma.rezept.findMany({ orderBy: { name: "asc" } });
 }
 
 // Rezeptdatenbank: vollständige Übersicht mit Detailfeldern, unabhängig vom
 // Essensplan-Auswahlformular (Fahrplan §3, Batch 5).
 export async function listRezepteDetail() {
+  await requirePerson();
   return prisma.rezept.findMany({ orderBy: { name: "asc" } });
 }
 
@@ -358,6 +360,7 @@ export async function deleteRezept(id: string): Promise<{ ok: true } | { ok: fal
 // (nie/am längsten her zuerst, Fragenkatalog Bereich G) und ohne die für diese
 // Woche ausgeblendeten Rezepte (Fahrplan §3, Batch 5).
 export async function listRezepteFuerWoche(wocheStartIso: string) {
+  await requirePerson();
   const wocheStart = new Date(wocheStartIso);
   const [rezepte, ausblendungen] = await Promise.all([
     prisma.rezept.findMany({
@@ -398,11 +401,19 @@ export async function zeigeRezeptWiederAn(rezeptId: string, wocheStartIso: strin
 }
 
 export async function listAlleFamilienmitglieder() {
-  return prisma.person.findMany({ where: { aktiv: true }, orderBy: { reihenfolge: "asc" } });
+  // Fix-Batch 152 (Audit-Fund): weder eigene Auth-Prüfung noch `select` — page.tsx nutzt nur
+  // id/name/farbe/portionsGewicht, das komplette Person-Objekt (inkl. pinHash) war unnötig.
+  await requirePerson();
+  return prisma.person.findMany({
+    where: { aktiv: true },
+    orderBy: { reihenfolge: "asc" },
+    select: { id: true, name: true, farbe: true, portionsGewicht: true },
+  });
 }
 
 // 3-Wochen-Vorschau: diese/nächste/übernächste Woche (offsetWochen 0-2, Fahrplan §3).
 export async function getWochenplan(offsetWochen = 0) {
+  await requirePerson();
   const basis = getSamstagWocheStart(new Date());
   const wocheStart = new Date(basis);
   wocheStart.setUTCDate(wocheStart.getUTCDate() + offsetWochen * 7);
@@ -669,6 +680,7 @@ export async function uebernehmeZusaetzlicheZutaten(rezeptId: string, zeilen: { 
 // Hauptgericht (z.B. Frühstück, ein zusätzliches warmes Essen, ein Mittags-Snack) — bewusst
 // beliebig viele pro Tag, ganz ohne die Sperr-/Herkunfts-Logik des Hauptgerichts zu berühren.
 export async function listExtraMahlzeitenFuerWoche(wocheStartIso: string) {
+  await requirePerson();
   const wocheStart = new Date(wocheStartIso);
   const eintraege = await prisma.extraMahlzeit.findMany({
     where: { wocheStart },

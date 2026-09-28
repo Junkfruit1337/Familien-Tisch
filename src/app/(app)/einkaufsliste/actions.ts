@@ -47,6 +47,7 @@ export async function erkenneEinkaufslisteAusFoto(
 // Stichwort-Erkennung, egal ob der Artikel gerade manuell, per Sprache, Foto oder aus einem
 // Rezept angelegt wird. Erst wenn nichts gelernt ist, greift die Stichwort-Erkennung.
 export async function autoKategorieId(name: string): Promise<string | null> {
+  await requirePerson();
   const normalisiert = name.trim().toLowerCase();
   const gelernt = normalisiert ? await prisma.gelernteArtikelKategorie.findUnique({ where: { name: normalisiert } }) : null;
   if (gelernt) {
@@ -81,6 +82,7 @@ function normalisiereNotiz(notiz: string | null | undefined): string {
 // versehentlich in einen noch unbestätigten Essensplan-Posten hineingemischt werden und
 // dadurch selbst als "noch nicht zugesagt" erscheinen.
 export async function findeOffenenArtikel(name: string, notiz?: string | null) {
+  await requirePerson();
   const kandidaten = await prisma.einkaufsArtikel.findMany({
     where: { erledigt: false, bestaetigt: true, name: { equals: name.trim(), mode: "insensitive" } },
   });
@@ -92,6 +94,7 @@ export async function findeOffenenArtikel(name: string, notiz?: string | null) {
 // statt für jeden Tag eine eigene Zeile zu erzeugen (aber ebenfalls nur bei gleicher Notiz,
 // siehe findeOffenenArtikel oben).
 export async function findeOffenenUnbestaetigtenArtikel(name: string, notiz?: string | null) {
+  await requirePerson();
   const kandidaten = await prisma.einkaufsArtikel.findMany({
     where: { erledigt: false, bestaetigt: false, name: { equals: name.trim(), mode: "insensitive" } },
   });
@@ -211,6 +214,7 @@ export async function mergeMenge(bestehend: string | null, neu?: string | null):
 // Einkaufsmodus-Antippen nur noch ab, statt zu löschen) beliebig groß werden und wird
 // deshalb separat, gedeckelt und mit "mehr anzeigen" nachgeladen (siehe listErledigteArtikel).
 export async function listArtikel() {
+  await requirePerson();
   return prisma.einkaufsArtikel.findMany({
     where: { bestaetigt: true, erledigt: false },
     include: { kategorie: true },
@@ -223,6 +227,7 @@ export async function listArtikel() {
 // gelöscht (siehe Fix-Batch 67), die komplette Historie bleibt für spätere Statistiken
 // vollständig in der Datenbank erhalten, es wird nur nicht mehr alles auf einmal geladen.
 export async function listErledigteArtikel(limit = 50) {
+  await requirePerson();
   const [rohArtikel, gesamtAnzahl] = await Promise.all([
     prisma.einkaufsArtikel.findMany({
       where: { bestaetigt: true, erledigt: true },
@@ -327,14 +332,22 @@ export async function listWuensche() {
 }
 
 export async function listKategorien() {
+  await requirePerson();
   return prisma.einkaufsKategorie.findMany({ orderBy: { reihenfolge: "asc" } });
 }
 
 // Eltern: Artikel direkt hinzufügen
-export async function addArtikel(data: { name: string; menge?: string; notiz?: string; kategorieId?: string }) {
+export async function addArtikel(
+  data: { name: string; menge?: string; notiz?: string; kategorieId?: string }
+): Promise<{ ok: true } | { ok: false; fehler: string }> {
   await requireParent();
 
   const name = formatiereArtikelName(data.name);
+  // Fix-Batch 152 (Audit-Fund): formatiereArtikelName liefert bei reinem Leerzeichen-Input
+  // bewusst einen leeren String — ohne diese Prüfung landete eine namenlose Kachel dauerhaft
+  // auf der Liste (ein Leerzeichen allein ist truthy, die bisherige Client-Prüfung `if (!name)`
+  // ließ es also durch).
+  if (!name) return { ok: false, fehler: "Bitte einen Artikelnamen eingeben." };
   const bestehender = await findeOffenenArtikel(name, data.notiz);
   let artikelId: string;
   let artikel;
@@ -353,14 +366,23 @@ export async function addArtikel(data: { name: string; menge?: string; notiz?: s
   }
   await prisma.artikelQuelle.create({ data: { artikelId, beschreibung: "Manuell hinzugefügt", menge: data.menge } });
   revalidatePath("/einkaufsliste");
-  return artikel;
+  return { ok: true };
 }
 
 // Eltern: Namen/Menge/Notiz eines bestehenden Artikels nachträglich korrigieren.
 // iconOverride: manuell gewähltes Icon statt der Automatik (Fix-Batch 35 Nachtrag, Ticket
 // "Icon-Größe und Regeneration") — leerer String setzt zurück auf automatische Erkennung.
-export async function updateArtikel(id: string, data: { name?: string; menge?: string; notiz?: string; iconOverride?: string }) {
+export async function updateArtikel(
+  id: string,
+  data: { name?: string; menge?: string; notiz?: string; iconOverride?: string }
+): Promise<{ ok: true } | { ok: false; fehler: string }> {
   await requireParent();
+  // Fix-Batch 152 (Audit-Fund): keine Prüfung auf einen versehentlich komplett geleerten Namen
+  // (formatiereArtikelName liefert dann "") — der Artikel wäre stillschweigend auf "" gesetzt
+  // worden.
+  if (data.name !== undefined && !formatiereArtikelName(data.name)) {
+    return { ok: false, fehler: "Der Artikelname darf nicht leer sein." };
+  }
   const artikel = await prisma.einkaufsArtikel.update({
     where: { id },
     data: {
@@ -382,6 +404,7 @@ export async function updateArtikel(id: string, data: { name?: string; menge?: s
     });
   }
   revalidatePath("/einkaufsliste");
+  return { ok: true };
 }
 
 // Fix-Batch 63: globale Icon-Lerndatenbank fürs Frontend — wird einmal geladen und deckt die
@@ -447,9 +470,12 @@ export async function deleteArtikel(id: string) {
 // Fix-Batch 92 (Florians Wunsch): Eltern bekamen bisher keine aktive Benachrichtigung für neue
 // Einkaufswünsche (nur fürs Dashboard sichtbar) — analog zur bereits bestehenden Push-
 // Benachrichtigung bei neu eingereichten Noten (siehe schule/actions.ts, einreichenNote).
-export async function submitWunsch(data: { artikelName: string; menge?: string; notiz?: string }) {
+export async function submitWunsch(
+  data: { artikelName: string; menge?: string; notiz?: string }
+): Promise<{ ok: true } | { ok: false; fehler: string }> {
   const person = await requirePerson();
   const artikelName = formatiereArtikelName(data.artikelName);
+  if (!artikelName) return { ok: false, fehler: "Bitte einen Artikelnamen eingeben." };
   const wunsch = await prisma.einkaufsWunsch.create({
     data: { artikelName, menge: data.menge, notiz: data.notiz || null, kindId: person.id },
   });
@@ -460,41 +486,63 @@ export async function submitWunsch(data: { artikelName: string; menge?: string; 
     url: "/einkaufsliste",
   });
   revalidatePath("/einkaufsliste");
+  return { ok: true };
 }
 
 // Fix-Batch 30: ein Kind darf seinen eigenen Wunsch bearbeiten/zurückziehen, solange er noch
 // OFFEN ist (noch nicht genehmigt/abgelehnt) — danach nicht mehr, da schon in die Liste
 // übernommen bzw. entschieden.
-export async function updateWunsch(id: string, data: { artikelName?: string; menge?: string; notiz?: string }) {
+export async function updateWunsch(
+  id: string,
+  data: { artikelName?: string; menge?: string; notiz?: string }
+): Promise<{ ok: true } | { ok: false; fehler: string }> {
   const person = await requirePerson();
   const bestehend = await prisma.einkaufsWunsch.findUnique({ where: { id } });
-  if (!bestehend) throw new Error("Wunsch nicht gefunden.");
-  if (person.rolle !== "ELTERN" && bestehend.kindId !== person.id) throw new Error("Nicht erlaubt.");
-  if (bestehend.status !== "OFFEN") throw new Error("Nur ein noch nicht entschiedener Wunsch kann bearbeitet werden.");
+  if (!bestehend) return { ok: false, fehler: "Wunsch nicht gefunden." };
+  if (person.rolle !== "ELTERN" && bestehend.kindId !== person.id) return { ok: false, fehler: "Nicht erlaubt." };
+  if (bestehend.status !== "OFFEN") return { ok: false, fehler: "Nur ein noch nicht entschiedener Wunsch kann bearbeitet werden." };
+  if (data.artikelName !== undefined && !formatiereArtikelName(data.artikelName)) {
+    return { ok: false, fehler: "Der Artikelname darf nicht leer sein." };
+  }
   await prisma.einkaufsWunsch.update({
     where: { id },
     data: { ...data, artikelName: data.artikelName !== undefined ? formatiereArtikelName(data.artikelName) : undefined },
   });
   revalidatePath("/einkaufsliste");
+  return { ok: true };
 }
 
-export async function deleteWunsch(id: string) {
+export async function deleteWunsch(id: string): Promise<{ ok: true } | { ok: false; fehler: string }> {
   const person = await requirePerson();
   const bestehend = await prisma.einkaufsWunsch.findUnique({ where: { id } });
-  if (!bestehend) throw new Error("Wunsch nicht gefunden.");
-  if (person.rolle !== "ELTERN" && bestehend.kindId !== person.id) throw new Error("Nicht erlaubt.");
-  if (person.rolle !== "ELTERN" && bestehend.status !== "OFFEN") throw new Error("Nur ein noch nicht entschiedener Wunsch kann zurückgezogen werden.");
+  if (!bestehend) return { ok: false, fehler: "Wunsch nicht gefunden." };
+  if (person.rolle !== "ELTERN" && bestehend.kindId !== person.id) return { ok: false, fehler: "Nicht erlaubt." };
+  if (person.rolle !== "ELTERN" && bestehend.status !== "OFFEN") {
+    return { ok: false, fehler: "Nur ein noch nicht entschiedener Wunsch kann zurückgezogen werden." };
+  }
   await prisma.einkaufsWunsch.delete({ where: { id } });
   revalidatePath("/einkaufsliste");
+  return { ok: true };
 }
 
-export async function entscheideWunsch(id: string, genehmigt: boolean, kategorieId?: string) {
+export async function entscheideWunsch(
+  id: string,
+  genehmigt: boolean,
+  kategorieId?: string
+): Promise<{ ok: true } | { ok: false; fehler: string }> {
   const person = await requireParent();
-  const wunsch = await prisma.einkaufsWunsch.update({
-    where: { id },
+  // Fix-Batch 152 (Audit-Fund): bisher keine Prüfung, ob der Wunsch noch OFFEN ist — ein
+  // zweiter, versehentlicher Klick (kein disabled={pending} auf dem ✓-Button, ungeduldiges
+  // Antippen aufm Handy) führte die komplette Genehmigen-Logik nochmal aus und verdoppelte
+  // dadurch die Menge auf der Einkaufsliste. Status-Update jetzt atomar auf den ALTEN Zustand
+  // bedingt (analog zum bei entscheideNote schon etablierten Muster) — nur wer als Erster
+  // "OFFEN" antrifft, führt die Genehmigen/Ablehnen-Logik tatsächlich aus.
+  const beansprucht = await prisma.einkaufsWunsch.updateMany({
+    where: { id, status: "OFFEN" },
     data: { status: genehmigt ? "GENEHMIGT" : "ABGELEHNT", entschiedenAm: new Date() },
-    include: { kind: true },
   });
+  if (beansprucht.count === 0) return { ok: false, fehler: "Dieser Wunsch wurde bereits entschieden." };
+  const wunsch = await prisma.einkaufsWunsch.findUniqueOrThrow({ where: { id }, include: { kind: true } });
   if (genehmigt) {
     const bestehender = await findeOffenenArtikel(wunsch.artikelName, wunsch.notiz);
     let artikelId: string;
@@ -532,6 +580,7 @@ export async function entscheideWunsch(id: string, genehmigt: boolean, kategorie
     geaendertVonId: person.id,
   });
   revalidatePath("/einkaufsliste");
+  return { ok: true };
 }
 
 // ---------- Quellen-Aufschlüsselung je Artikel (Fahrplan §3, Batch 2) ----------

@@ -185,13 +185,18 @@ export async function verbessereEntwurf(
 }
 
 // fotos erlaubt mehrere Screenshots pro Ticket (Fix-Batch 35 Nachtrag, Florians Wunsch).
-export async function erstelleTicket(titel: string, beschreibung: string, fotos?: string[]) {
+export async function erstelleTicket(
+  titel: string,
+  beschreibung: string,
+  fotos?: string[]
+): Promise<{ ok: true } | { ok: false; fehler: string }> {
   const person = await requirePerson();
-  if (!titel.trim() || !beschreibung.trim()) throw new Error("Titel und Beschreibung dürfen nicht leer sein.");
+  if (!titel.trim() || !beschreibung.trim()) return { ok: false, fehler: "Titel und Beschreibung dürfen nicht leer sein." };
   await prisma.ticket.create({
     data: { titel: titel.trim(), beschreibung: beschreibung.trim(), fotos: fotos ?? [], erstelltVonId: person.id },
   });
   revalidatePath("/einstellungen");
+  return { ok: true };
 }
 
 // Jede Person sieht nur ihre eigenen eingereichten Tickets mit Status (Fragenkatalog-

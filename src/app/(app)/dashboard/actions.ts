@@ -43,12 +43,21 @@ async function pruefeUndSendeErinnerungen() {
     if (!p.geburtsdatum) continue;
     const passt = p.geburtsdatum.getMonth() === in7Tagen.getMonth() && p.geburtsdatum.getDate() === in7Tagen.getDate();
     if (passt && p.geburtstagErinnerungJahr !== zielJahr) {
-      await sendePushAnEltern({
-        title: "Geburtstag in einer Woche 🎂",
-        body: `${p.name} hat in 7 Tagen Geburtstag — noch Zeit, ein Geschenk zu besorgen.`,
-        url: "/kalender",
+      // Fix-Batch 152 (Audit-Fund): Flag zuerst atomar beanspruchen (Bedingung auf den ALTEN
+      // Wert), erst bei Erfolg pushen — verhindert, dass zwei fast gleichzeitige Dashboard-
+      // Aufrufe (zwei Familienmitglieder öffnen die Seite im selben Moment) dieselbe
+      // Erinnerung doppelt verschicken, weil beide den alten Flag-Stand gelesen hatten.
+      const beansprucht = await prisma.person.updateMany({
+        where: { id: p.id, geburtstagErinnerungJahr: { not: zielJahr } },
+        data: { geburtstagErinnerungJahr: zielJahr },
       });
-      await prisma.person.update({ where: { id: p.id }, data: { geburtstagErinnerungJahr: zielJahr } });
+      if (beansprucht.count > 0) {
+        await sendePushAnEltern({
+          title: "Geburtstag in einer Woche 🎂",
+          body: `${p.name} hat in 7 Tagen Geburtstag — noch Zeit, ein Geschenk zu besorgen.`,
+          url: "/kalender",
+        });
+      }
     }
   }
 
@@ -61,13 +70,17 @@ async function pruefeUndSendeErinnerungen() {
     where: { datum: { gte: heute, lt: in3Tagen }, lerntippGesendet: false },
   });
   for (const s of baldigeEintraege) {
+    const beansprucht = await prisma.schulEintrag.updateMany({
+      where: { id: s.id, lerntippGesendet: false },
+      data: { lerntippGesendet: true },
+    });
+    if (beansprucht.count === 0) continue;
     const tageBis = Math.ceil((s.datum.getTime() - heute.getTime()) / (24 * 60 * 60 * 1000));
     await sendePushAnPerson(s.personId, {
       title: "Lerntipp 💡",
       body: `${s.titel} (${tageBis <= 0 ? "heute" : tageBis === 1 ? "morgen" : `noch ${tageBis} Tage`}): ${lerntipp(tageBis)}`,
       url: "/dashboard",
     });
-    await prisma.schulEintrag.update({ where: { id: s.id }, data: { lerntippGesendet: true } });
   }
 
   // Fix-Batch 92 (Florians Wunsch): Push-Erinnerung an die Eltern, wenn für ein MORGEN
@@ -84,14 +97,17 @@ async function pruefeUndSendeErinnerungen() {
     include: { rezept: true, _count: { select: { herkuenfte: true } } },
   });
   if (morgigerEintrag) {
-    if (morgigerEintrag._count.herkuenfte === 0) {
+    const beansprucht = await prisma.essensplanEintrag.updateMany({
+      where: { id: morgigerEintrag.id, einkaufErinnerungGesendet: false },
+      data: { einkaufErinnerungGesendet: true },
+    });
+    if (beansprucht.count > 0 && morgigerEintrag._count.herkuenfte === 0) {
       await sendePushAnEltern({
         title: "Einkaufs-Erinnerung 🛒",
         body: `Für morgen ist "${morgigerEintrag.rezept.name}" geplant, aber die Zutaten sind noch nicht auf der Einkaufsliste.`,
         url: "/essensplan",
       });
     }
-    await prisma.essensplanEintrag.update({ where: { id: morgigerEintrag.id }, data: { einkaufErinnerungGesendet: true } });
   }
 
   const morgigeExtras = await prisma.extraMahlzeit.findMany({
@@ -99,14 +115,17 @@ async function pruefeUndSendeErinnerungen() {
     include: { rezept: true, _count: { select: { herkuenfte: true } } },
   });
   for (const extra of morgigeExtras) {
-    if (extra._count.herkuenfte === 0) {
+    const beansprucht = await prisma.extraMahlzeit.updateMany({
+      where: { id: extra.id, einkaufErinnerungGesendet: false },
+      data: { einkaufErinnerungGesendet: true },
+    });
+    if (beansprucht.count > 0 && extra._count.herkuenfte === 0) {
       await sendePushAnEltern({
         title: "Einkaufs-Erinnerung 🛒",
         body: `Für morgen ist "${extra.bezeichnung}: ${extra.rezept.name}" geplant, aber die Zutaten sind noch nicht auf der Einkaufsliste.`,
         url: "/essensplan",
       });
     }
-    await prisma.extraMahlzeit.update({ where: { id: extra.id }, data: { einkaufErinnerungGesendet: true } });
   }
 
   // Fix-Batch 92 (Florians Wunsch): Push 7 Tage vor Ferienbeginn, analog zur bereits
@@ -126,6 +145,11 @@ async function pruefeUndSendeErinnerungen() {
     where: { start: { gte: in7Tagen, lt: in8Tagen }, erinnerungGesendet: false },
   });
   for (const ferien of baldigeFerien) {
+    const beansprucht = await prisma.schulferien.updateMany({
+      where: { id: ferien.id, erinnerungGesendet: false },
+      data: { erinnerungGesendet: true },
+    });
+    if (beansprucht.count === 0) continue;
     const betroffeneKinder = await prisma.person.findMany({ where: { aktiv: true, bundesland: ferien.bundesland } });
     if (betroffeneKinder.length > 0) {
       await sendePushAnEltern({
@@ -134,7 +158,6 @@ async function pruefeUndSendeErinnerungen() {
         url: "/schule",
       });
     }
-    await prisma.schulferien.update({ where: { id: ferien.id }, data: { erinnerungGesendet: true } });
   }
 }
 
@@ -145,7 +168,15 @@ export async function getDashboardDaten() {
   const morgenFrueh = new Date(heute);
   morgenFrueh.setDate(morgenFrueh.getDate() + 1);
 
-  await pruefeUndSendeErinnerungen();
+  // Fix-Batch 152 (Audit-Fund): pruefeUndSendeErinnerungen() lief bisher ungefangen direkt im
+  // Dashboard-Seitenaufruf mit — ein transienter DB-Fehler bei irgendeiner der Erinnerungs-
+  // Abfragen hätte das komplette Dashboard für JEDE Person crashen lassen, statt dass nur die
+  // (optionale) Erinnerung ausfällt.
+  try {
+    await pruefeUndSendeErinnerungen();
+  } catch (err) {
+    console.error("pruefeUndSendeErinnerungen fehlgeschlagen:", err);
+  }
 
   const plan = await getWochenplan(0);
   const heutigesEssen = plan.tage.find((t) => new Date(t.tag).toDateString() === heute.toDateString());

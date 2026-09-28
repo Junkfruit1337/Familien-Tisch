@@ -453,12 +453,13 @@ export default function EinkaufslisteClient({
   function speichereBearbeiten() {
     if (!bearbeiteId) return;
     startTransition(async () => {
-      await updateArtikel(bearbeiteId, {
+      const ergebnis = await updateArtikel(bearbeiteId, {
         name: bearbeiteName,
         menge: bearbeiteMenge || undefined,
         notiz: bearbeiteNotiz || undefined,
         iconOverride: bearbeiteIcon,
       });
+      if (!ergebnis.ok) { alert(ergebnis.fehler); return; }
       setBearbeiteId(null);
     });
   }
@@ -743,19 +744,32 @@ export default function EinkaufslisteClient({
                     <button
                       className="btn"
                       style={{ padding: "6px 10px" }}
+                      disabled={pending}
                       onClick={() =>
                         startTransition(async () => {
                           const name = entwurf.name.trim();
                           if (name && (name !== w.artikelName || entwurf.menge !== (w.menge ?? ""))) {
-                            await updateWunsch(w.id, { artikelName: name, menge: entwurf.menge || undefined });
+                            const bearbeitungsErgebnis = await updateWunsch(w.id, { artikelName: name, menge: entwurf.menge || undefined });
+                            if (!bearbeitungsErgebnis.ok) { alert(bearbeitungsErgebnis.fehler); return; }
                           }
-                          await entscheideWunsch(w.id, true, gewaehlt || (erkannt ? kategorieNachName[erkannt] : undefined));
+                          const ergebnis = await entscheideWunsch(w.id, true, gewaehlt || (erkannt ? kategorieNachName[erkannt] : undefined));
+                          if (!ergebnis.ok) alert(ergebnis.fehler);
                         })
                       }
                     >
                       ✓
                     </button>
-                    <button className="btn-danger" style={{ padding: "6px 10px", borderRadius: 10, border: "none" }} onClick={() => startTransition(() => entscheideWunsch(w.id, false))}>
+                    <button
+                      className="btn-danger"
+                      style={{ padding: "6px 10px", borderRadius: 10, border: "none" }}
+                      disabled={pending}
+                      onClick={() =>
+                        startTransition(async () => {
+                          const ergebnis = await entscheideWunsch(w.id, false);
+                          if (!ergebnis.ok) alert(ergebnis.fehler);
+                        })
+                      }
+                    >
                       <Icon id="close" />
                     </button>
                   </div>
@@ -961,7 +975,8 @@ export default function EinkaufslisteClient({
             onClick={() =>
               startTransition(async () => {
                 if (!name) return;
-                await addArtikel({ name, menge: menge || undefined, notiz: notiz || undefined, kategorieId: kategorieId || undefined });
+                const ergebnis = await addArtikel({ name, menge: menge || undefined, notiz: notiz || undefined, kategorieId: kategorieId || undefined });
+                if (!ergebnis.ok) { alert(ergebnis.fehler); return; }
                 setName("");
                 setMenge("");
                 setNotiz("");
@@ -1013,16 +1028,13 @@ export default function EinkaufslisteClient({
                         onClick={() =>
                           startTransition(async () => {
                             if (!wunschBearbeitenName.trim()) return;
-                            try {
-                              await updateWunsch(w.id, {
-                                artikelName: wunschBearbeitenName.trim(),
-                                menge: wunschBearbeitenMenge || undefined,
-                                notiz: wunschBearbeitenNotiz || undefined,
-                              });
-                              setWunschBearbeitenId(null);
-                            } catch (e: any) {
-                              alert(e.message);
-                            }
+                            const ergebnis = await updateWunsch(w.id, {
+                              artikelName: wunschBearbeitenName.trim(),
+                              menge: wunschBearbeitenMenge || undefined,
+                              notiz: wunschBearbeitenNotiz || undefined,
+                            });
+                            if (!ergebnis.ok) { alert(ergebnis.fehler); return; }
+                            setWunschBearbeitenId(null);
                           })
                         }
                       >
@@ -1057,7 +1069,12 @@ export default function EinkaufslisteClient({
                         className="btn-secondary"
                         style={{ fontSize: 12, padding: "3px 8px" }}
                         onClick={() => {
-                          if (confirm(`Wunsch „${w.artikelName}" wirklich zurückziehen?`)) startTransition(() => deleteWunsch(w.id));
+                          if (confirm(`Wunsch „${w.artikelName}" wirklich zurückziehen?`)) {
+                            startTransition(async () => {
+                              const ergebnis = await deleteWunsch(w.id);
+                              if (!ergebnis.ok) alert(ergebnis.fehler);
+                            });
+                          }
                         }}
                       >
                         <Icon id="delete" size={13} />

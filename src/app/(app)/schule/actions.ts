@@ -23,6 +23,9 @@ const ART_KURZ: Record<string, string> = {
 };
 
 export async function listKinder() {
+  // Fix-Batch 152 (Audit-Fund): Server Actions sind unabhängig vom Seiten-Login direkt
+  // aufrufbar — ohne eigene Prüfung waren Namen/Rollen aller Kinder ohne Anmeldung abrufbar.
+  await requirePerson();
   return prisma.person.findMany({ where: { rolle: "KIND" }, orderBy: { reihenfolge: "asc" } });
 }
 
@@ -171,6 +174,7 @@ export async function listNoten(kindId?: string) {
 
 export async function pruefeNotenDuplikat(params: { fachId: string; art: string; datum: string; ausschlussId?: string }) {
   await requirePerson();
+  if (!(NOTE_ARTEN as readonly string[]).includes(params.art)) return false;
   const start = new Date(params.datum);
   start.setHours(0, 0, 0, 0);
   const ende = new Date(start);
@@ -537,6 +541,10 @@ export async function setNotenGewichtung(
   // hatte kein try/catch, ein negativer Wert wurde beim Verlassen des Feldes in Produktion
   // kommentarlos verworfen.
   if (!(gewichtung >= 0)) return { ok: false, fehler: "Die Gewichtung darf nicht negativ sein." };
+  // Fix-Batch 152 (Audit-Fund): `art` wurde ungeprüft `as any` auf das Prisma-Enum gecastet,
+  // obwohl genau diese Whitelist-Prüfung im selben Fix-Batch bei den drei Schwesterfunktionen
+  // (einreichenNote, createSchulEintrag, updateSchulEintrag) schon ergänzt wurde.
+  if (!(NOTE_ARTEN as readonly string[]).includes(art)) return { ok: false, fehler: "Ungültige Notenart." };
   await prisma.notenGewichtung.upsert({
     where: { kindId_fachId_art: { kindId, fachId, art: art as any } },
     update: { gewichtung },

@@ -556,7 +556,8 @@ export default function EinstellungenClient({
           disabled={pending || !ticketTitel.trim() || !ticketBeschreibung.trim()}
           onClick={() =>
             startTransition(async () => {
-              await erstelleTicket(ticketTitel, ticketBeschreibung, ticketFotos);
+              const ergebnis = await erstelleTicket(ticketTitel, ticketBeschreibung, ticketFotos);
+              if (!ergebnis.ok) { alert(ergebnis.fehler); return; }
               setTicketTitel("");
               setTicketBeschreibung("");
               setTicketFotos([]);
