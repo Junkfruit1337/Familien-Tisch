@@ -31,11 +31,39 @@ const SPEZIFIKATIONS_REGELN: { kategorie: string; keywords: string[] }[] = [
   // verbessern"): "Kokosmilch" enthält als Substring "milch" und landete dadurch fälschlich
   // bei Milchprodukten — tatsächlich ein lang haltbares Vorrats-Produkt (Curry/Asia-Küche),
   // kein Kühlregal-Artikel. Muss vor der generischen "milch"-Regel geprüft werden.
+  // Fix-Batch 150 (Audit-Fund): dieselbe Fehlerklasse betrifft auch pflanzliche Milch-
+  // Alternativen (Mandel-/Hafer-/Soja-/Reismilch) — ebenfalls Vorrats-/Trocken- statt
+  // Kühlregal-Produkte im üblichen Sinn dieser App.
   {
     kategorie: "Vorrat",
-    keywords: ["kokosmilch"],
+    keywords: ["kokosmilch", "mandelmilch", "hafermilch", "sojamilch", "reismilch"],
   },
+  // Fix-Batch 150 (Audit-Fund): weitere Substring-Kollisionen nach demselben Muster wie
+  // Kokosmilch — ein zusammengesetztes Wort enthält zufällig ein Kategorie-Stichwort als
+  // Teilstring, gehört aber offensichtlich in eine andere Kategorie.
+  { kategorie: "Vorrat", keywords: ["tortellini", "tortelloni"] }, // "torte" → Backwaren wäre falsch
+  { kategorie: "Getränke", keywords: ["kaffeebohnen", "bohnenkaffee"] }, // "bohnen" → Gemüse wäre falsch
+  { kategorie: "Vorrat", keywords: ["kartoffelchips"] }, // "kartoffel" → Gemüse wäre falsch
+  { kategorie: "Vorrat", keywords: ["biersenf"] }, // "bier" → Getränke wäre falsch
+  { kategorie: "Vorrat", keywords: ["rotweinessig", "weißweinessig", "weissweinessig"] }, // "wein" → Getränke wäre falsch
 ];
+
+// Fix-Batch 150 (Audit-Fund): "Ausnahmen" für Stichwörter, die als Teilstring in einem ganz
+// anders gemeinten zusammengesetzten Wort vorkommen, aber (anders als die Fälle oben) selbst
+// keine eigene Mini-Kategorie-Regel verdienen — hier wird der Treffer einfach unterdrückt,
+// die Erkennung fällt dann auf die nächste passende Regel zurück (oder auf "Sonstiges").
+const AUSNAHMEN: Record<string, string[]> = {
+  birne: ["glühbirne"],
+  kohl: ["kohlensäure", "kohlensaeure"],
+};
+
+// Exportiert, damit artikelIcon.ts dieselben Ausnahmen für die Icon-Erkennung nutzen kann
+// (identische Stichwort-Kollisionen würden sonst dort ein falsches Icon erzeugen).
+export function keywordTrifftZu(name: string, keyword: string): boolean {
+  if (!name.includes(keyword)) return false;
+  const ausnahmen = AUSNAHMEN[keyword];
+  return !ausnahmen?.some((a) => name.includes(a));
+}
 
 const REGELN: { kategorie: string; keywords: string[] }[] = [
   {
@@ -64,7 +92,7 @@ const REGELN: { kategorie: string; keywords: string[] }[] = [
     keywords: [
       "milch", "käse", "joghurt", "butter", "quark", "sahne", "frischkäse",
       "buttermilch", "mozzarella", "eier", "schmand", "parmesan", "gouda",
-      "feta", "hüttenkäse", "kefir", "skyr", "margarine", "crème fraîche",
+      "feta", "hüttenkäse", "kefir", "skyr", "margarine", "crème fraîche", "creme fraiche",
     ],
   },
   {
@@ -100,10 +128,15 @@ const REGELN: { kategorie: string; keywords: string[] }[] = [
     kategorie: "Drogerie",
     keywords: [
       "shampoo", "duschgel", "zahnpasta", "seife", "toilettenpapier",
-      "klopapier", "windel", "creme", "deo", "waschmittel", "spülmittel",
+      "klopapier", "windel", "deo", "waschmittel", "spülmittel",
       "binde", "tampon", "rasierer", "zahnbürste", "küchenrolle", "taschentuch",
-      "lotion", "sonnencreme", "wattestäbchen", "pflaster", "hautcreme",
+      "lotion", "wattestäbchen", "pflaster",
       "weichspüler", "reiniger", "putzmittel", "müllbeutel",
+      // Fix-Batch 150 (Audit-Fund): das generische Stichwort "creme" wurde entfernt — es traf
+      // als Teilstring auch Lebensmittel wie "Nuss-Nougat-Creme", "Kokoscreme", "Schokocreme"
+      // oder "Cremesuppe" und ordnete sie fälschlich der Drogerie statt Vorrat/Milchprodukten
+      // zu. Stattdessen jetzt gezielt die tatsächlichen Kosmetik-Cremes einzeln benannt.
+      "sonnencreme", "hautcreme", "handcreme", "gesichtscreme", "bodycreme", "rasiercreme", "nachtcreme", "tagescreme",
     ],
   },
   {
@@ -133,12 +166,12 @@ export function erkenneKategorie(artikelName: string): string | null {
   const name = artikelName.toLowerCase().trim();
   if (!name) return null;
   for (const regel of SPEZIFIKATIONS_REGELN) {
-    if (regel.keywords.some((kw) => name.includes(kw))) {
+    if (regel.keywords.some((kw) => keywordTrifftZu(name, kw))) {
       return regel.kategorie;
     }
   }
   for (const regel of REGELN) {
-    if (regel.keywords.some((kw) => name.includes(kw))) {
+    if (regel.keywords.some((kw) => keywordTrifftZu(name, kw))) {
       return regel.kategorie;
     }
   }

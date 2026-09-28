@@ -20,15 +20,25 @@ export async function login(personId: string, pin: string) {
   }
   const ok = await verifyPin(person, pin);
   if (!ok) {
-    const neueFehlversuche = person.pinFehlversuche + 1;
-    const gesperrt = neueFehlversuche >= MAX_FEHLVERSUCHE;
-    await prisma.person.update({
+    // Fix-Batch 150 (Audit-Fund): der Zähler wurde bisher per Lesen-dann-Schreiben erhöht
+    // (`person.pinFehlversuche + 1`, aus dem `person`-Objekt vom Anfang der Funktion) — mehrere
+    // gleichzeitige Login-Versuche (z. B. parallel statt nacheinander geschickt) lasen alle
+    // denselben alten Stand, bevor irgendeine Schreibung committed war, wodurch der Zähler
+    // effektiv nur um 1 stieg statt um die tatsächliche Anzahl paralleler Fehlversuche — die
+    // extra nach dem Account-Vorfall gebaute 5-Versuche-Sperre (Fix-Batch 131) ließ sich dadurch
+    // durch Parallelisieren umgehen. `increment` erhöht den Zähler atomar auf Datenbankebene,
+    // jeder parallele Fehlversuch wird jetzt korrekt einzeln gezählt.
+    const aktualisiert = await prisma.person.update({
       where: { id: person.id },
-      data: {
-        pinFehlversuche: gesperrt ? 0 : neueFehlversuche,
-        pinGesperrtBis: gesperrt ? new Date(Date.now() + SPERR_DAUER_MINUTEN * 60000) : null,
-      },
+      data: { pinFehlversuche: { increment: 1 } },
     });
+    const gesperrt = aktualisiert.pinFehlversuche >= MAX_FEHLVERSUCHE;
+    if (gesperrt) {
+      await prisma.person.update({
+        where: { id: person.id },
+        data: { pinFehlversuche: 0, pinGesperrtBis: new Date(Date.now() + SPERR_DAUER_MINUTEN * 60000) },
+      });
+    }
     return {
       error: gesperrt
         ? `Zu viele Fehlversuche. Bitte in ${SPERR_DAUER_MINUTEN} Minuten erneut versuchen.`

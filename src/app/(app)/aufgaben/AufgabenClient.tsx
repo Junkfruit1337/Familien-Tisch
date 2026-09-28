@@ -310,10 +310,60 @@ export default function AufgabenClient({
         <details>
           <summary style={{ cursor: "pointer", color: "var(--text-muted)" }}>Erledigt ({erledigt.length})</summary>
           <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
+            {/* Fix-Batch 150 (Florians Entscheidung nach Audit-Fund): erledigte Aufgaben hatten
+                bisher keinen Löschen-Button — man musste jede einzeln erst wieder auf "offen"
+                zurücksetzen, um sie löschen zu können, bei einer erledigten Serie sehr
+                umständlich. Dieselbe Berechtigungsprüfung und Serien-Rückfrage wie im
+                "Offen"-Abschnitt oben, nur mit durchgestrichenem Titel. */}
             {erledigt.map((a) => (
               <div key={a.id} className="card" style={{ display: "flex", alignItems: "center", gap: 10, opacity: 0.6 }}>
                 <input type="checkbox" checked onChange={() => toggle(a.id)} style={{ width: 20, height: 20 }} />
-                <div style={{ flex: 1, textDecoration: "line-through" }}>{a.titel}</div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ textDecoration: "line-through" }}>{a.titel}</div>
+                  {loeschAuswahl === a.id && (
+                    <div style={{ display: "flex", gap: 6, marginTop: 8, alignItems: "center", fontSize: 12 }}>
+                      <span>Nur diese oder die ganze Serie löschen?</span>
+                      <button
+                        className="btn-secondary"
+                        style={{ fontSize: 12, padding: "2px 8px" }}
+                        onClick={() => {
+                          loeschen(a.id, "eins");
+                          setLoeschAuswahl(null);
+                        }}
+                      >
+                        Nur diese
+                      </button>
+                      <button
+                        className="btn-danger"
+                        style={{ fontSize: 12, padding: "2px 8px" }}
+                        onClick={() => {
+                          loeschen(a.id, "serie");
+                          setLoeschAuswahl(null);
+                        }}
+                      >
+                        Ganze Serie
+                      </button>
+                      <button className="btn-secondary" style={{ fontSize: 12, padding: "2px 8px" }} onClick={() => setLoeschAuswahl(null)}>
+                        Abbrechen
+                      </button>
+                    </div>
+                  )}
+                </div>
+                {(istEltern || a.erstelltVonId === eigeneId) && loeschAuswahl !== a.id && (
+                  <button
+                    className="btn-icon btn-icon-danger"
+                    title="Aufgabe löschen"
+                    onClick={() => {
+                      if (a.seriesId) {
+                        loeschKlick(a);
+                        return;
+                      }
+                      if (confirm(`"${a.titel}" wirklich löschen?`)) loeschKlick(a);
+                    }}
+                  >
+                    <Icon id="delete" />
+                  </button>
+                )}
               </div>
             ))}
           </div>

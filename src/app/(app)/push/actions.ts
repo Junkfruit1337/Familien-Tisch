@@ -28,8 +28,13 @@ export async function registrierePushSubscription(subscription: SubscriptionJson
 }
 
 export async function entfernePushSubscription(endpoint: string) {
-  await requirePerson();
-  await prisma.pushSubscription.deleteMany({ where: { endpoint } });
+  const person = await requirePerson();
+  // Fix-Batch 150 (Audit-Fund): prüfte bisher nur, dass IRGENDWER eingeloggt ist, nicht ob der
+  // Endpoint überhaupt der aufrufenden Person gehört (im Gegensatz zu
+  // `hatAktivesPushAufDiesemGeraet`, das die Zugehörigkeit korrekt vergleicht) — jede
+  // eingeloggte Person konnte mit einem bekannten Endpoint-String die Push-Subscription einer
+  // ANDEREN Person löschen und damit deren Benachrichtigungen unbemerkt deaktivieren.
+  await prisma.pushSubscription.deleteMany({ where: { endpoint, personId: person.id } });
 }
 
 export async function hatAktivesPushAufDiesemGeraet(endpoint: string) {

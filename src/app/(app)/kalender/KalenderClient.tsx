@@ -514,8 +514,19 @@ export default function KalenderClient({
                 onClick={() => {
                   // Fix-Batch 94 (Audit-Ergebnis): löscht potenziell viele Termine auf einmal —
                   // verdient eine explizite Rückfrage, mehr als "Nur diesen".
-                  const beschreibung = t.gruppeId && !t.seriesId ? "für alle Personen" : "die ganze Serie";
-                  if (!confirm(`„${t.titel}" wirklich ${beschreibung} löschen? Das betrifft möglicherweise mehrere Termine.`)) return;
+                  // Fix-Batch 150 (Florians Entscheidung nach Audit-Fund): ein Termin, der
+                  // sowohl eine Serie (seriesId) ALS AUCH mehreren Personen zugewiesen ist
+                  // (gruppeId), löscht beim Löschen "der ganzen Serie" wirklich ALLE
+                  // Vorkommen für ALLE zugewiesenen Personen — nicht nur die eigene Zuweisung.
+                  // Das ist so gewollt (Florian: Text nur präzisieren, Verhalten bleibt), der
+                  // Dialog sagt das jetzt explizit statt nur "möglicherweise mehrere Termine".
+                  const beschreibung =
+                    t.gruppeId && t.seriesId
+                      ? "die ganze Serie für ALLE zugewiesenen Personen"
+                      : t.gruppeId
+                        ? "für alle Personen"
+                        : "die ganze Serie";
+                  if (!confirm(`„${t.titel}" wirklich ${beschreibung} löschen? Das betrifft alle Vorkommen dieses Termins.`)) return;
                   loeschen(t.id, "serie");
                   setLoeschAuswahl(null);
                 }}

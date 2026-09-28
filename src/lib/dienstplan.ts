@@ -35,11 +35,27 @@ export async function ensureWeekAssignments(wocheStart: Date) {
   const kinder = await prisma.person.findMany({
     where: { name: { in: ROTATIONS_KINDER_NAMEN } },
   });
-  if (kinder.length !== 3) return existing; // Personen noch nicht angelegt
+  // Fix-Batch 150 (Florians Entscheidung nach Audit-Fund: "Die anderen zwei rotieren allein
+  // weiter"): vorher brach die GESAMTE Rotation ab, sobald eins der drei Kinder deaktiviert war
+  // (`kinder.length !== 3`) — auch für die verbleibenden aktiven. Jetzt rotieren die aktiven
+  // Kinder (1, 2 oder 3) untereinander durch alle 3 Schichten; bei z. B. 2 aktiven Kindern
+  // übernimmt in einer Woche eins davon zwei Schichten, in der nächsten Woche dreht sich das
+  // (dieselbe Formel wie bisher, nur mit `n` statt fest `3` — für n=3 exakt identisch zum
+  // bisherigen, bereits als korrekt bestätigten Verhalten aus Fix-Batch 91).
+  const aktiveKinder = ROTATIONS_KINDER_NAMEN.map((name) => kinder.find((k) => k.name === name && k.aktiv)).filter(
+    (k): k is NonNullable<typeof k> => !!k
+  );
+  const n = aktiveKinder.length;
+  if (n === 0) return existing; // Personen noch nicht angelegt oder alle deaktiviert
 
-  const byName = Object.fromEntries(kinder.map((k) => [k.name, k]));
-  const offset = ((weeksSinceAnchor(wocheStart) % 3) + 3) % 3;
+  const offset = ((weeksSinceAnchor(wocheStart) % n) + n) % n;
   const dauerhaft = await holeDauerhafteZuordnungen("DIENST");
+  // Fix-Batch 150 (Audit-Fund, Zweitprüfung): `dauerhaft[schicht]` kam bisher ungefiltert zum
+  // Zug und gewann immer gegen die neu aktiv-gefilterte Rotation — ein VOR seiner Deaktivierung
+  // dauerhaft zugeordnetes Kind erschien trotz Deaktivierung weiter im Dienstplan. Eine
+  // dauerhafte Zuordnung auf ein inzwischen inaktives Kind wird jetzt ignoriert (fällt auf die
+  // normale Rotation unter den aktiven Kindern zurück).
+  const aktiveIds = new Set(aktiveKinder.map((k) => k.id));
 
   const created = [];
   for (let schicht = 1; schicht <= 3; schicht++) {
@@ -49,9 +65,10 @@ export async function ensureWeekAssignments(wocheStart: Date) {
     // die falsche Richtung; ((schicht - offset) % 3) ist an derselben Referenzwoche verankert,
     // dreht die Richtung aber um. Bereits erzeugte künftige Wochen werden dazu einmalig in
     // prisma/seed.ts korrigiert.
-    const kindIndex = (((schicht - offset) % 3) + 3) % 3;
-    const berechnetesKindId = byName[ROTATIONS_KINDER_NAMEN[kindIndex]]?.id;
-    const kindId = dauerhaft[schicht] ?? berechnetesKindId;
+    const kindIndex = (((schicht - offset) % n) + n) % n;
+    const berechnetesKindId = aktiveKinder[kindIndex]?.id;
+    const dauerhaftesKindId = dauerhaft[schicht] && aktiveIds.has(dauerhaft[schicht]) ? dauerhaft[schicht] : undefined;
+    const kindId = dauerhaftesKindId ?? berechnetesKindId;
     if (!kindId) continue;
     const row = await prisma.dienstZuweisung.upsert({
       where: { wocheStart_schichtNummer: { wocheStart, schichtNummer: schicht } },
@@ -90,19 +107,29 @@ export async function getEffectiveWeek(wocheStart: Date) {
     where: { wocheStart, aufgehoben: false, tag: { not: null } },
   });
 
+  // Fix-Batch 150 (Audit-Fund, Zweitprüfung): seit ein Kind bei aktiven Kindern < 3 mehrere
+  // Schichten gleichzeitig innehaben kann (siehe ensureWeekAssignments), reichte ein einzelnes
+  // `.find()` nicht mehr — es griff immer nur die ERSTE passende Schicht eines Kindes, eine
+  // zweite Schicht desselben Kindes blieb von Tausch/Abgabe unberührt. `alleSchichtenVon` findet
+  // jetzt ALLE Schichten, die aktuell bei diesem Kind liegen.
+  const alleSchichtenVon = (zuweisung: Record<number, string>, kindId: string): number[] =>
+    Object.entries(zuweisung)
+      .filter(([, kid]) => kid === kindId)
+      .map(([schicht]) => Number(schicht));
+
   // 1. Basis + wochenweite Tausche -> gilt für die ganze Woche.
   // ABGEBEN: nur vonKind -> mitKind (einseitig, mitKind macht zusätzlich zu seinem eigenen Dienst).
   // TAUSCH: vonKind und mitKind tauschen ihre Dienste gegenseitig.
   const effektivWoche: Record<number, string> = {};
   for (const b of basis) effektivWoche[b.schichtNummer] = b.kindId;
   for (const t of wochenweiteTausche) {
-    const vonSchicht = Object.entries(effektivWoche).find(([, kindId]) => kindId === t.vonKindId)?.[0];
+    const vonSchichten = alleSchichtenVon(effektivWoche, t.vonKindId);
     if (t.modus === "TAUSCH") {
-      const mitSchicht = Object.entries(effektivWoche).find(([, kindId]) => kindId === t.mitKindId)?.[0];
-      if (vonSchicht) effektivWoche[Number(vonSchicht)] = t.mitKindId;
-      if (mitSchicht) effektivWoche[Number(mitSchicht)] = t.vonKindId;
-    } else if (vonSchicht) {
-      effektivWoche[Number(vonSchicht)] = t.mitKindId;
+      const mitSchichten = alleSchichtenVon(effektivWoche, t.mitKindId);
+      for (const s of vonSchichten) effektivWoche[s] = t.mitKindId;
+      for (const s of mitSchichten) effektivWoche[s] = t.vonKindId;
+    } else {
+      for (const s of vonSchichten) effektivWoche[s] = t.mitKindId;
     }
   }
 
@@ -117,13 +144,13 @@ export async function getEffectiveWeek(wocheStart: Date) {
     const zuweisung: Record<number, string> = { ...effektivWoche };
     for (const t of tagesTausche) {
       if (!t.tag || tagKey(t.tag) !== key) continue;
-      const vonSchicht = Object.entries(zuweisung).find(([, kindId]) => kindId === t.vonKindId)?.[0];
+      const vonSchichten = alleSchichtenVon(zuweisung, t.vonKindId);
       if (t.modus === "TAUSCH") {
-        const mitSchicht = Object.entries(zuweisung).find(([, kindId]) => kindId === t.mitKindId)?.[0];
-        if (vonSchicht) zuweisung[Number(vonSchicht)] = t.mitKindId;
-        if (mitSchicht) zuweisung[Number(mitSchicht)] = t.vonKindId;
-      } else if (vonSchicht) {
-        zuweisung[Number(vonSchicht)] = t.mitKindId;
+        const mitSchichten = alleSchichtenVon(zuweisung, t.mitKindId);
+        for (const s of vonSchichten) zuweisung[s] = t.mitKindId;
+        for (const s of mitSchichten) zuweisung[s] = t.vonKindId;
+      } else {
+        for (const s of vonSchichten) zuweisung[s] = t.mitKindId;
       }
     }
     zuweisungProTag[key] = zuweisung;

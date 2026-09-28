@@ -58,7 +58,12 @@ export default function NotengewichtungSektion({
                       style={{ width: 70 }}
                       value={werte[key] ?? 1}
                       onChange={(e) => setWerte((prev) => ({ ...prev, [key]: parseFloat(e.target.value) || 0 }))}
-                      onBlur={() => startTransition(() => setNotenGewichtung(kindId, g.fachId, x.art, werte[key] ?? 1))}
+                      onBlur={() =>
+                        startTransition(async () => {
+                          const ergebnis = await setNotenGewichtung(kindId, g.fachId, x.art, werte[key] ?? 1);
+                          if (!ergebnis.ok) alert(ergebnis.fehler);
+                        })
+                      }
                     />
                   </div>
                 );

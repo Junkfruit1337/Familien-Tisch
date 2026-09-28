@@ -414,7 +414,15 @@ export async function setTag(wocheStartIso: string, tagIso: string, rezeptId: st
     const faktor = await berechneFaktor(bestehend.esserIds, bestehend.extraPortionen, neuesRezept.portionenBasis);
     await prisma.essensplanEintrag.update({ where: { id: bestehend.id }, data: { rezeptId, esserFaktor: faktor } });
   } else {
-    await prisma.essensplanEintrag.create({ data: { wocheStart, tag, rezeptId } });
+    // Fix-Batch 150 (Florians Entscheidung nach Audit-Fund): eine neu angelegte Tages-Zeile
+    // bekam bisher eine leere Esser-Liste UND blieb beim Prisma-Default-Faktor 1 (unskaliert),
+    // obwohl die Kacheln-Anzeige eine leere Liste optisch als "alle ausgewählt" darstellt — echte
+    // Diskrepanz zwischen Anzeige und tatsächlich eingekaufter Menge. "Leer" ist jetzt explizit
+    // "alle aktiven Familienmitglieder" von Anfang an, nicht mehr implizit.
+    const alleAktiven = await prisma.person.findMany({ where: { aktiv: true }, select: { id: true } });
+    const esserIds = alleAktiven.map((p) => p.id);
+    const faktor = await berechneFaktor(esserIds, 0, neuesRezept.portionenBasis);
+    await prisma.essensplanEintrag.create({ data: { wocheStart, tag, rezeptId, esserIds, esserFaktor: faktor } });
   }
   revalidatePath("/essensplan");
   return { ok: true };
@@ -468,6 +476,14 @@ export async function setEsser(eintragId: string, personIds: string[]): Promise<
   // Menge auf der Einkaufsliste schon anhand der ALTEN Auswahl übernommen wurde (Anzeige und
   // tatsächlich eingekaufte Menge liefen danach dauerhaft auseinander).
   if (eintrag.gelockt) return { ok: false, fehler: "Dieser Tag ist gesperrt. Erst entsperren." };
+  // Fix-Batch 150 (Florians Entscheidung nach Audit-Fund: "Das darf nicht möglich sein, keinen
+  // auszuwählen... dann muss man sagen, an dem Tag gibt es was anderes oder gar nichts, auf
+  // jeden Fall wird nichts gekocht"): niemand als Esser UND keine Gäste-Portionen darf nicht
+  // stillschweigend gespeichert werden können — wer wirklich nichts kochen will, soll
+  // stattdessen das Gericht für den Tag ganz entfernen (Dropdown "– kein Gericht –").
+  if (personIds.length === 0 && eintrag.extraPortionen === 0) {
+    return { ok: false, fehler: "Es muss mindestens eine Person (oder eine Gäste-Portion) ausgewählt sein — falls niemand isst, bitte stattdessen das Gericht für diesen Tag entfernen." };
+  }
   const faktor = await berechneFaktor(personIds, eintrag.extraPortionen, eintrag.rezept.portionenBasis);
   await prisma.essensplanEintrag.update({ where: { id: eintragId }, data: { esserIds: personIds, esserFaktor: faktor } });
   revalidatePath("/essensplan");

@@ -98,7 +98,11 @@ export async function erkenneNoteAusText(
 }
 
 export async function listFaecher(kindId: string) {
-  await requirePerson();
+  // Fix-Batch 150 (Audit-Fund, Zweitprüfung): hatte in Fix-Batch 149 nur ein generisches
+  // requirePerson() bekommen, nicht die volle Eigentümer-Prüfung wie kontostand/
+  // listTaschengeld/getSparziel im selben Batch — dieselbe Lückenklasse blieb hier offen
+  // (ein Kind konnte per direktem Aufruf die Fächerliste eines Geschwisters abrufen).
+  await pruefeKindZugriff(kindId);
   return prisma.fach.findMany({ where: { kindId }, orderBy: { name: "asc" } });
 }
 
@@ -119,7 +123,9 @@ export async function addFach(kindId: string, name: string) {
 // nicht abdeckt. Gibt bei einem KI-Fehler bewusst "kein Duplikat" zurück, damit das Anlegen
 // eines Fachs nie an einem Spracherkennungs-Ausfall scheitert.
 export async function pruefeFachDuplikat(kindId: string, name: string) {
-  await requirePerson();
+  // Fix-Batch 150 (Audit-Fund, Zweitprüfung): dieselbe fehlende Eigentümer-Prüfung wie oben
+  // bei listFaecher.
+  await pruefeKindZugriff(kindId);
   const bestehende = await prisma.fach.findMany({ where: { kindId } });
   const exakt = bestehende.find((f) => f.name.trim().toLowerCase() === name.trim().toLowerCase());
   if (exakt) return { istVermutlichDuplikat: true, aehnlichesFach: exakt.name };
@@ -492,13 +498,23 @@ async function wendeGewichtungRueckwirkendAn(kindId: string, fachId: string, art
   });
 }
 
-export async function setNotenGewichtung(kindId: string, fachId: string, art: string, gewichtung: number) {
+export async function setNotenGewichtung(
+  kindId: string,
+  fachId: string,
+  art: string,
+  gewichtung: number
+): Promise<{ ok: true } | { ok: false; fehler: string }> {
   await requireAdmin();
   // Fix-Batch 149 (Audit-Fund): `min="0"` im Formular ist nur ein HTML-Hinweis, keine echte
   // Sperre — ohne serverseitige Prüfung könnte ein negativer Wert den Notenschnitt (der sich
   // rückwirkend über `wendeGewichtungRueckwirkendAn` sofort auf alle Noten des laufenden
   // Schuljahres auswirkt) auf einen unsinnigen Wert außerhalb 1–6 verfälschen.
-  if (!(gewichtung >= 0)) throw new Error("Die Gewichtung darf nicht negativ sein.");
+  // Fix-Batch 150 (Audit-Fund, Zweitprüfung): dieser Fix selbst warf noch roh statt {ok,fehler}
+  // zurückzugeben — genau das Muster, das dieser ganze Batch eigentlich beseitigen sollte,
+  // hier direkt daneben neu eingeführt. Der einzige Aufrufer (NotengewichtungSektion.tsx)
+  // hatte kein try/catch, ein negativer Wert wurde beim Verlassen des Feldes in Produktion
+  // kommentarlos verworfen.
+  if (!(gewichtung >= 0)) return { ok: false, fehler: "Die Gewichtung darf nicht negativ sein." };
   await prisma.notenGewichtung.upsert({
     where: { kindId_fachId_art: { kindId, fachId, art: art as any } },
     update: { gewichtung },
@@ -507,6 +523,7 @@ export async function setNotenGewichtung(kindId: string, fachId: string, art: st
   await wendeGewichtungRueckwirkendAn(kindId, fachId, art, gewichtung);
   revalidatePath("/einstellungen");
   revalidatePath("/schule");
+  return { ok: true };
 }
 
 // ---------- Klassenarbeiten & Hausaufgaben-Kontrollen (SchulEintrag) ----------

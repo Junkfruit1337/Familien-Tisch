@@ -102,22 +102,31 @@ export async function erstelleDauerhaftenTausch(data: {
   const person = await requireParent();
   const wocheStart = new Date(data.wocheStartIso);
   const effektiv = await getEffectiveWeek(wocheStart);
-  const vonSchicht = effektiv.find((s) => s.kind?.id === data.vonKindId)?.schichtNummer;
-  const mitSchicht = effektiv.find((s) => s.kind?.id === data.mitKindId)?.schichtNummer;
+  // Fix-Batch 150 (Audit-Fund, Zweitprüfung): `.find()` griff bisher immer nur die ERSTE
+  // passende Schicht — seit ein Kind bei weniger als 3 aktiven Kindern mehrere Schichten
+  // gleichzeitig innehaben kann (siehe dienstplan.ts ensureWeekAssignments), musste das auf
+  // ALLE Schichten dieses Kindes ausgeweitet werden, sonst blieb eine zweite Schicht von
+  // "dauerhaft abgeben/tauschen" unberührt, ohne dass das irgendwo sichtbar gewesen wäre.
+  const vonSchichten = effektiv.filter((s) => s.kind?.id === data.vonKindId).map((s) => s.schichtNummer);
+  const mitSchichten = effektiv.filter((s) => s.kind?.id === data.mitKindId).map((s) => s.schichtNummer);
   // Fix-Batch 149 (Audit-Fund): rohes throw statt {ok,fehler} — Next.js verschluckt geworfene
   // Fehler aus Server Actions in Produktion, der Nutzer sah bisher nur ein stilles Nichts-Tun.
-  if (!vonSchicht) return { ok: false, fehler: "Diese Person hat aktuell keinen Dienst." };
+  if (vonSchichten.length === 0) return { ok: false, fehler: "Diese Person hat aktuell keinen Dienst." };
 
-  await setzeDauerhafteZuordnungIntern("DIENST", vonSchicht, data.mitKindId, wocheStart);
-  if (data.modus === "TAUSCH" && mitSchicht) {
-    await setzeDauerhafteZuordnungIntern("DIENST", mitSchicht, data.vonKindId, wocheStart);
+  for (const schicht of vonSchichten) {
+    await setzeDauerhafteZuordnungIntern("DIENST", schicht, data.mitKindId, wocheStart);
+  }
+  if (data.modus === "TAUSCH") {
+    for (const schicht of mitSchichten) {
+      await setzeDauerhafteZuordnungIntern("DIENST", schicht, data.vonKindId, wocheStart);
+    }
   }
 
   await logAenderung({
     entityTyp: "DIENST_TAUSCH",
-    entityId: `dauerhaft-dienst-${vonSchicht}`,
+    entityId: `dauerhaft-dienst-${vonSchichten[0]}`,
     aktion: "dauerhaft getauscht",
-    neuerWert: `Schicht ${vonSchicht}${mitSchicht && data.modus === "TAUSCH" ? ` ↔ Schicht ${mitSchicht}` : ""}`,
+    neuerWert: `Schicht ${vonSchichten.join("+")}${data.modus === "TAUSCH" && mitSchichten.length > 0 ? ` ↔ Schicht ${mitSchichten.join("+")}` : ""}`,
     geaendertVonId: person.id,
   });
   revalidatePath("/dienstplan");

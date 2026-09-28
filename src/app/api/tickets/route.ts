@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { timingSafeEqual } from "crypto";
 import { prisma } from "@/lib/prisma";
 
 // Automatisierter Ticket-Zugriff für Claude Code (Fix-Batch 34, Florians Wunsch) — diese
@@ -8,13 +9,25 @@ import { prisma } from "@/lib/prisma";
 // Auth über ein einzelnes geteiltes Token (TICKET_API_TOKEN, in Coolify als Umgebungsvariable
 // hinterlegt — analog den VAPID-Keys für Push), NICHT über Cookies/Login.
 
-const GUELTIGE_STATUS = ["EINGEREICHT", "GENEHMIGT", "ABGELEHNT", "IN_UMSETZUNG", "UMGESETZT"];
+// Fix-Batch 150 (Audit-Fund): RUECKFRAGE fehlte hier — derselbe Fehler wie schon mehrfach in
+// diesem Projekt gefunden, ein neuer TicketStatus-Wert (Fix-Batch 143) wurde an dieser
+// unabhängig hartkodierten Stelle vergessen. Ohne das hier hätte dieser API-Endpunkt ein
+// Ticket nie auf Rückfrage setzen können.
+const GUELTIGE_STATUS = ["EINGEREICHT", "GENEHMIGT", "ABGELEHNT", "IN_UMSETZUNG", "UMGESETZT", "RUECKFRAGE"];
 
 function autorisiert(req: NextRequest): boolean {
   const token = process.env.TICKET_API_TOKEN;
   if (!token) return false;
   const header = req.headers.get("authorization") ?? "";
-  return header === `Bearer ${token}`;
+  const erwartet = `Bearer ${token}`;
+  // Fix-Batch 150 (Audit-Fund): ein normaler `===`-Vergleich bricht beim ersten abweichenden
+  // Byte ab — ein klassisches Timing-Angriffsmuster gegen ein Secret mit direktem
+  // Datenbank-Schreibzugriff. `timingSafeEqual` braucht gleich lange Buffer, deshalb erst die
+  // Länge vergleichen (das verrät nur die Länge, nicht den Inhalt).
+  const headerBuf = Buffer.from(header);
+  const erwartetBuf = Buffer.from(erwartet);
+  if (headerBuf.length !== erwartetBuf.length) return false;
+  return timingSafeEqual(headerBuf, erwartetBuf);
 }
 
 // GET /api/tickets            -> nur offene Arbeit: GENEHMIGT (Standardfall zum Abholen)

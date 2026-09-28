@@ -47,12 +47,14 @@ export default function PinAendernClient({
     setLoading(true);
     setError(null);
     try {
-      await aendereEigenePin(value);
+      const ergebnis = await aendereEigenePin(value);
+      if (!ergebnis.ok) {
+        setError(ergebnis.fehler);
+        setErste(null);
+        setPin("");
+        return;
+      }
       router.push("/dashboard");
-    } catch (e: any) {
-      setError(e.message);
-      setErste(null);
-      setPin("");
     } finally {
       setLoading(false);
     }

@@ -1,4 +1,4 @@
-import { erkenneKategorie } from "./kategorisierung";
+import { erkenneKategorie, keywordTrifftZu } from "./kategorisierung";
 
 // Automatische Piktogramm-Erkennung für die Kachel-Einkaufsliste (Fix-Batch 25, Florians
 // Referenz-Screenshot). Echte, pro Artikel individuell erzeugte Bilder (KI-Bildgenerierung)
@@ -16,6 +16,17 @@ const REGELN: { icon: string; keywords: string[] }[] = [
   // Dosen-/Verpackungs-Icon zeigen statt der rohen Tomate — muss VOR der allgemeinen
   // "tomate"-Regel stehen, sonst würde diese zuerst greifen.
   { icon: "🥫", keywords: ["passierte tomate", "stückige tomate", "geschälte tomate", "tomatenmark"] },
+  // Fix-Batch 150 (Audit-Fund): muss vor der "torte"-Regel (🎂) stehen, sonst würde
+  // "Tortellini"/"Tortelloni" fälschlich als Kuchen erkannt (Substring-Kollision).
+  { icon: "🍝", keywords: ["tortellini", "tortelloni"] },
+  // Fix-Batch 150 (Audit-Fund): muss vor der "bier"-Regel (🍺) stehen ("Biersenf" ist ein Gewürz).
+  { icon: "🧴", keywords: ["biersenf"] },
+  // Fix-Batch 150 (Audit-Fund): muss vor der "wein"-Regel (🍷) stehen (Essig, kein Getränk).
+  { icon: "🫒", keywords: ["rotweinessig", "weißweinessig", "weissweinessig"] },
+  // Fix-Batch 150 (Audit-Fund): muss vor der "kartoffel"-Regel (🥔) stehen (Chips, kein Gemüse).
+  { icon: "🍬", keywords: ["kartoffelchips"] },
+  // Fix-Batch 150 (Audit-Fund): muss vor der "bohnen"-Regel (🫘) stehen (Kaffee, kein Gemüse).
+  { icon: "☕", keywords: ["kaffeebohnen", "bohnenkaffee"] },
   { icon: "🍅", keywords: ["tomate"] },
   { icon: "🥒", keywords: ["gurke", "zucchini"] },
   { icon: "🍎", keywords: ["apfel"] },
@@ -27,7 +38,7 @@ const REGELN: { icon: string; keywords: string[] }[] = [
   { icon: "🥕", keywords: ["karotte", "möhre"] },
   { icon: "🍋", keywords: ["zitrone", "limette"] },
   { icon: "🍊", keywords: ["orange", "mandarine", "clementine"] },
-  { icon: "🍐", keywords: ["birne"] },
+  { icon: "🍐", keywords: ["birne"] }, // Ausnahme "glühbirne" siehe keywordTrifftZu-Nutzung unten
   { icon: "🍇", keywords: ["traube"] },
   { icon: "🍓", keywords: ["erdbeere"] },
   { icon: "🫐", keywords: ["blaubeere", "heidelbeere", "johannisbeere", "stachelbeere"] },
@@ -58,9 +69,11 @@ const REGELN: { icon: string; keywords: string[] }[] = [
   // Fix-Batch 145 (Ticket #8): muss vor der generischen "milch"-Regel stehen, siehe
   // kategorisierung.ts für die Begründung (Kokosmilch ist kein Kühlregal-/Molkerei-Produkt).
   { icon: "🥥", keywords: ["kokosmilch", "kokosraspel", "kokosflocken", "kokosnuss"] },
+  // Fix-Batch 150 (Audit-Fund): dieselbe Begründung wie bei Kokosmilch, siehe kategorisierung.ts.
+  { icon: "🌱", keywords: ["mandelmilch", "hafermilch", "sojamilch", "reismilch"] },
   { icon: "🥛", keywords: ["milch", "buttermilch", "kefir"] },
   { icon: "🧀", keywords: ["käse", "mozzarella", "parmesan", "frischkäse", "gouda", "feta", "hüttenkäse"] },
-  { icon: "🥣", keywords: ["joghurt", "quark", "schmand", "skyr", "crème fraîche"] },
+  { icon: "🥣", keywords: ["joghurt", "quark", "schmand", "skyr", "crème fraîche", "creme fraiche"] },
   { icon: "🧈", keywords: ["butter", "margarine"] },
   { icon: "🍶", keywords: ["sahne"] },
   { icon: "🥚", keywords: ["eier", "ei "] },
@@ -99,7 +112,9 @@ const REGELN: { icon: string; keywords: string[] }[] = [
   { icon: "🍬", keywords: ["süßigkeit", "bonbon", "gummibär", "chips", "knabber"] },
   { icon: "🧴", keywords: ["senf", "ketchup", "mayonnaise", "sojasauce", "brühe"] },
   { icon: "🧻", keywords: ["toilettenpapier", "klopapier", "küchenrolle", "taschentuch"] },
-  { icon: "🧴", keywords: ["shampoo", "duschgel", "creme", "deo", "lotion", "sonnencreme", "hautcreme"] },
+  // Fix-Batch 150 (Audit-Fund): generisches "creme" entfernt (traf z. B. "Nuss-Nougat-Creme",
+  // "Kokoscreme", "Cremesuppe") — siehe kategorisierung.ts für dieselbe Begründung.
+  { icon: "🧴", keywords: ["shampoo", "duschgel", "deo", "lotion", "sonnencreme", "hautcreme", "handcreme", "gesichtscreme", "bodycreme", "rasiercreme", "nachtcreme", "tagescreme"] },
   { icon: "🧼", keywords: ["seife", "waschmittel", "spülmittel", "reiniger", "putzmittel", "weichspüler"] },
   { icon: "🪒", keywords: ["rasierer", "rasier"] },
   { icon: "🦷", keywords: ["zahnpasta", "zahnbürste"] },
@@ -115,7 +130,7 @@ export function erkenneArtikelIcon(artikelName: string): string {
   const name = artikelName.toLowerCase().trim();
   if (!name) return "🛒";
   for (const regel of REGELN) {
-    if (regel.keywords.some((kw) => name.includes(kw))) return regel.icon;
+    if (regel.keywords.some((kw) => keywordTrifftZu(name, kw))) return regel.icon;
   }
   // Kein spezifisches Stichwort getroffen — auf Basis der (gröberen) Kategorie-Erkennung
   // wenigstens ein thematisch passendes Icon statt des allgemeinen Einkaufswagens zeigen.

@@ -15,10 +15,25 @@ const AUSFLUG_STICHWORTE = [
   "freizeitpark", "besuch bei", "geburtstagsfeier", "feier", "fest", "event",
 ];
 
+// Fix-Batch 150 (Audit-Fund): "verein" traf als Teilstring auch "vereinbart"/"Vereinbarung"
+// (z. B. "Arzttermin (telefonisch vereinbart)" wurde fälschlich als Hobby erkannt), "probe"
+// traf auch "Blutprobe" (Arzttermin statt Hobby). Dieselbe Ausnahme-Technik wie in
+// kategorisierung.ts für die Einkaufsliste.
+const AUSNAHMEN: Record<string, string[]> = {
+  verein: ["vereinbart", "vereinbarung"],
+  probe: ["blutprobe", "urinprobe", "abstrich"],
+};
+
+function stichwortTrifftZu(t: string, stichwort: string): boolean {
+  if (!t.includes(stichwort)) return false;
+  const ausnahmen = AUSNAHMEN[stichwort];
+  return !ausnahmen?.some((a) => t.includes(a));
+}
+
 export function erkenneTerminKategorie(titel: string): "TERMIN" | "HOBBY" | "AUSFLUG" {
   const t = titel.toLowerCase();
-  if (HOBBY_STICHWORTE.some((s) => t.includes(s))) return "HOBBY";
-  if (AUSFLUG_STICHWORTE.some((s) => t.includes(s))) return "AUSFLUG";
+  if (HOBBY_STICHWORTE.some((s) => stichwortTrifftZu(t, s))) return "HOBBY";
+  if (AUSFLUG_STICHWORTE.some((s) => stichwortTrifftZu(t, s))) return "AUSFLUG";
   return "TERMIN";
 }
 

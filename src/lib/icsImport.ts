@@ -71,6 +71,14 @@ function baueEreignis(titel: string, start: Date, ende: Date | null, ganztaegig:
   return { titel, start: start.toISOString(), ende: ende ? ende.toISOString() : null, ganztaegig: false };
 }
 
+// Fix-Batch 150 (Audit-Fund): "CANCELLED" ist der ICS-Standardweg, wie Outlook/Exchange eine
+// einzelne, abgesagte Instanz einer Serie exportiert (statt eines EXDATE-Eintrags) — ohne
+// diesen Filter tauchte ein bewusst abgesagter Termin nach dem Import trotzdem im
+// Familienkalender auf.
+function istAbgesagt(status: unknown): boolean {
+  return typeof status === "string" && status.toUpperCase() === "CANCELLED";
+}
+
 function parseMitNodeIcal(text: string): IcsVorschauEreignis[] {
   const daten = ical.default.parseICS(text);
   const { von, bis } = horizont();
@@ -80,15 +88,29 @@ function parseMitNodeIcal(text: string): IcsVorschauEreignis[] {
     const eintrag = daten[key];
     if (!eintrag || eintrag.type !== "VEVENT") continue;
     const event = eintrag as ical.VEvent;
+    if (istAbgesagt((event as any).status)) continue;
     const titel = textWert(event.summary) || "Termin";
 
-    if (event.rrule) {
-      const instanzen = ical.default.expandRecurringEvent(event, { from: von, to: bis });
-      for (const inst of instanzen) {
-        ereignisse.push(baueEreignis(textWert(inst.summary) || titel, inst.start, inst.end ?? null, inst.isFullDay));
+    // Fix-Batch 150 (Audit-Fund): try/catch pro Einzel-Event statt pro ganzer Datei — ein
+    // einziges exotisches/kaputtes RRULE-Muster ließ vorher die KOMPLETTE Datei auf die
+    // unzuverlässigere KI-Rückfallebene zurückfallen, obwohl alle anderen Termine über
+    // node-ical einwandfrei lesbar gewesen wären (widerspricht dem eigenen Ziel oben:
+    // "nichts darf verloren gehen").
+    try {
+      if (event.rrule) {
+        const instanzen = ical.default.expandRecurringEvent(event, { from: von, to: bis });
+        for (const inst of instanzen) {
+          if (istAbgesagt((inst.event as any)?.status)) continue;
+          ereignisse.push(baueEreignis(textWert(inst.summary) || titel, inst.start, inst.end ?? null, inst.isFullDay));
+        }
+      } else if (event.start && event.start <= bis && (event.start >= von || (event.end && event.end >= von))) {
+        // Fix-Batch 150 (Audit-Fund): zusätzlich event.end prüfen — ein mehrtägiger Termin,
+        // der vor mehr als 30 Tagen begann aber noch andauert, wurde vorher komplett
+        // übersprungen, obwohl er "heute" noch relevant ist.
+        ereignisse.push(baueEreignis(titel, event.start, event.end ?? null, event.datetype === "date"));
       }
-    } else if (event.start && event.start >= von && event.start <= bis) {
-      ereignisse.push(baueEreignis(titel, event.start, event.end ?? null, event.datetype === "date"));
+    } catch (err) {
+      console.error(`ICS-Import: einzelnes Event ("${titel}") übersprungen, konnte nicht verarbeitet werden:`, err);
     }
   }
 
