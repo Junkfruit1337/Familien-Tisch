@@ -240,6 +240,7 @@ export async function updateDienstBeschreibung(id: string, beschreibung: string)
 // ---------- Tagesroutinen & Körperpflege-Nachschlagewerk (Fahrplan §3, Batch 4) ----------
 
 export async function listTagesroutinen() {
+  await requirePerson();
   return prisma.tagesroutine.findMany({ orderBy: [{ kategorie: "asc" }, { reihenfolge: "asc" }] });
 }
 
@@ -269,6 +270,7 @@ export async function deleteTagesroutine(id: string) {
 }
 
 export async function listKoerperpflegeplan() {
+  await requirePerson();
   return prisma.koerperpflegetag.findMany({ orderBy: { wochentag: "asc" } });
 }
 
@@ -289,6 +291,7 @@ export async function setKoerperpflegetag(wochentag: number, text: string) {
 // gefahrlos möglich und wirkt sich sofort (auch rückwirkend) auf die Anzeige aus.
 
 export async function listDienstkatalog() {
+  await requirePerson();
   return prisma.dienstDefinition.findMany({ orderBy: [{ schichtNummer: "asc" }, { reihenfolge: "asc" }] });
 }
 
